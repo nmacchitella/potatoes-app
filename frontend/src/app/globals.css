@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #F59E0B;
+  --dark: hsl(30, 10%, 12%);
+  --dark-lighter: hsl(30, 10%, 16%);
+  --accent: #F59E0B;
+  --text-primary: #faf9f5;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background-color: var(--dark);
+  color: var(--text-primary);
+}
+
+html {
+  height: 100vh;
+  height: 100dvh;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(30, 10%, 16%);
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(30, 10%, 30%);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(30, 10%, 35%);
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary hover:bg-primary-hover text-white font-medium py-2 px-4 rounded-lg transition-all shadow-sm hover:shadow;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent border border-gray-600 hover:border-gray-500 hover:bg-dark-hover text-white font-medium py-1.5 px-3 rounded-lg transition-all;
+  }
+
+  .btn-danger {
+    @apply bg-transparent border border-red-500/50 hover:bg-red-500/10 hover:border-red-500 text-red-400 hover:text-red-300 font-medium py-1.5 px-3 rounded-lg transition-all;
+  }
+
+  .input-field {
+    @apply w-full bg-dark-hover border-2 border-gray-600/80 rounded-lg px-4 py-2.5 placeholder-gray-500 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/40 focus:bg-dark-lighter transition-all;
+    color: #faf9f5;
+  }
+
+  .card {
+    @apply bg-dark-lighter rounded-xl p-4 shadow-sm border border-gray-800/50;
+  }
+}

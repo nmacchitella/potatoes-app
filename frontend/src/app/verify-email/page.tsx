@@ -1,0 +1,84 @@
+'use client';
+
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { authApi } from '@/lib/api';
+import Link from 'next/link';
+
+function VerifyEmailContent() {
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const token = searchParams.get('token');
+
+    const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
+    const [message, setMessage] = useState('Verifying your email...');
+
+    useEffect(() => {
+        if (!token) {
+            setStatus('error');
+            setMessage('Invalid verification link.');
+            return;
+        }
+
+        const verify = async () => {
+            try {
+                await authApi.verifyEmail(token);
+                setStatus('success');
+                setMessage('Email verified successfully! You can now login.');
+            } catch (err: any) {
+                setStatus('error');
+                setMessage(err.response?.data?.detail || 'Verification failed. The link may be expired.');
+            }
+        };
+
+        verify();
+    }, [token]);
+
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-dark-bg px-4">
+            <div className="max-w-md w-full bg-dark-card p-8 rounded-lg border border-gray-800 text-center">
+                <h1 className="text-2xl font-bold text-text-primary mb-4">Email Verification</h1>
+
+                <div className="mb-6">
+                    {status === 'verifying' && (
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+                    )}
+                    {status === 'success' && (
+                        <div className="text-green-500 text-5xl mb-2">✓</div>
+                    )}
+                    {status === 'error' && (
+                        <div className="text-red-500 text-5xl mb-2">✕</div>
+                    )}
+                </div>
+
+                <p className="text-gray-300 mb-8">{message}</p>
+
+                {status === 'success' && (
+                    <Link
+                        href="/login"
+                        className="btn-primary w-full block text-center py-2"
+                    >
+                        Go to Login
+                    </Link>
+                )}
+
+                {status === 'error' && (
+                    <Link
+                        href="/login"
+                        className="text-primary hover:underline"
+                    >
+                        Back to Login
+                    </Link>
+                )}
+            </div>
+        </div>
+    );
+}
+
+export default function VerifyEmailPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen bg-dark-bg"></div>}>
+            <VerifyEmailContent />
+        </Suspense>
+    );
+}
