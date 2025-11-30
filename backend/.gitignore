@@ -26,3 +26,6 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Seed data (large CSV files)
+seed_data/

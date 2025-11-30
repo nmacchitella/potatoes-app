@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     mail_starttls: str = "True"
     mail_ssl_tls: str = "False"
 
+    # Gemini API
+    gemini_api_key: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = 'utf-8'
