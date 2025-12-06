@@ -6,8 +6,20 @@ primary_region = "iad"
   dockerfile = "Dockerfile"
 
 [env]
+  # Database (using mounted volume for persistence)
+  DATABASE_URL = "sqlite:////data/potatoes.db"
+
+  # Security
   ALGORITHM = "HS256"
   ACCESS_TOKEN_EXPIRE_MINUTES = "15"
+  REFRESH_TOKEN_EXPIRE_DAYS = "7"
+
+  # URLs
+  FRONTEND_URL = "https://potatoes-frontend.fly.dev"
+  BACKEND_URL = "https://potatoes-backend.fly.dev"
+
+  # Logging
+  LOG_LEVEL = "INFO"
 
 [http_service]
   internal_port = 8000
@@ -17,7 +29,7 @@ primary_region = "iad"
   min_machines_running = 0
 
 [[vm]]
-  memory = '256mb'
+  memory = '512mb'
   cpu_kind = 'shared'
   cpus = 1
 

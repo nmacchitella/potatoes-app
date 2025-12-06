@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { AuthProvider } from '@/components/AuthProvider';
 
 export const metadata: Metadata = {
   title: 'Potatoes - Family Kitchen',
@@ -32,7 +33,9 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
       </head>
-      <body className="bg-cream text-charcoal">{children}</body>
+      <body className="bg-cream text-charcoal">
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

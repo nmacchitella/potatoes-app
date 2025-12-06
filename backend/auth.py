@@ -168,7 +168,8 @@ def create_token_pair(user: models.User, db: Session) -> dict:
     return {
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "expires_in": settings.access_token_expire_minutes * 60  # seconds
     }
 
 

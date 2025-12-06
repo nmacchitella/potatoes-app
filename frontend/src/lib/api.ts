@@ -9,6 +9,15 @@ import type {
   UserSearchResult, UserProfilePublic, FollowResponse, Notification,
   SearchResponse, FullSearchResponse,
 } from '@/types';
+import {
+  getAccessToken,
+  getRefreshToken,
+  setAccessToken,
+  setRefreshToken,
+  clearTokens,
+  isTokenExpiringSoon,
+  getSecondsUntilExpiry,
+} from './auth-storage';
 
 // ============================================================================
 // ERROR HANDLING UTILITIES
@@ -69,15 +78,12 @@ const api = axios.create({
   },
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// ============================================================================
+// TOKEN REFRESH LOGIC
+// ============================================================================
 
 let isRefreshing = false;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 let failedQueue: Array<{
   resolve: (value?: string | null) => void;
   reject: (reason?: unknown) => void;
@@ -94,6 +100,124 @@ const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue = [];
 };
 
+/**
+ * Perform token refresh
+ * @returns New access token or null if refresh failed
+ */
+async function performTokenRefresh(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+
+  if (!refreshToken) {
+    return null;
+  }
+
+  try {
+    const response = await axios.post(`${API_URL}/auth/refresh`, {
+      refresh_token: refreshToken
+    });
+
+    const { access_token, refresh_token: new_refresh_token, expires_in } = response.data;
+
+    setAccessToken(access_token, expires_in);
+    setRefreshToken(new_refresh_token);
+
+    api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+
+    // Schedule next proactive refresh
+    scheduleProactiveRefresh(expires_in);
+
+    return access_token;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Schedule proactive token refresh before expiry
+ * Refreshes 60 seconds before token expires
+ */
+function scheduleProactiveRefresh(expiresIn?: number) {
+  // Clear existing timer
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+
+  // Calculate when to refresh (60 seconds before expiry)
+  const secondsUntilRefresh = expiresIn
+    ? Math.max(expiresIn - 60, 10) // At least 10 seconds
+    : Math.max(getSecondsUntilExpiry() - 60, 10);
+
+  if (secondsUntilRefresh <= 0) {
+    return; // Token already expired or no expiry info
+  }
+
+  refreshTimer = setTimeout(async () => {
+    if (!isRefreshing && getRefreshToken()) {
+      isRefreshing = true;
+      await performTokenRefresh();
+      isRefreshing = false;
+    }
+  }, secondsUntilRefresh * 1000);
+}
+
+/**
+ * Initialize auth state on app load
+ * Attempts to refresh tokens if access token is expired but refresh token exists
+ */
+export async function initializeAuth(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+
+  const accessToken = getAccessToken();
+  const refreshToken = getRefreshToken();
+
+  // No tokens at all
+  if (!refreshToken) {
+    clearTokens();
+    return false;
+  }
+
+  // Access token exists and not expiring soon
+  if (accessToken && !isTokenExpiringSoon(120)) { // 2 minute buffer
+    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+    scheduleProactiveRefresh();
+    return true;
+  }
+
+  // Try to refresh
+  isRefreshing = true;
+  const newToken = await performTokenRefresh();
+  isRefreshing = false;
+
+  if (newToken) {
+    return true;
+  }
+
+  // Refresh failed, clear everything
+  clearTokens();
+  return false;
+}
+
+/**
+ * Stop proactive refresh (call on logout)
+ */
+export function stopProactiveRefresh() {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+// Request interceptor - add token to requests
+api.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Response interceptor - handle 401 and refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -114,45 +238,25 @@ api.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
-      const refreshToken = localStorage.getItem('refresh_token');
+      const newToken = await performTokenRefresh();
 
-      if (!refreshToken) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
-        return Promise.reject(error);
-      }
-
-      try {
-        const response = await axios.post(`${API_URL}/auth/refresh`, {
-          refresh_token: refreshToken
-        });
-
-        const { access_token, refresh_token: new_refresh_token } = response.data;
-
-        localStorage.setItem('access_token', access_token);
-        localStorage.setItem('refresh_token', new_refresh_token);
-
-        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
-
-        processQueue(null, access_token);
+      if (newToken) {
+        processQueue(null, newToken);
         isRefreshing = false;
-
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return api(originalRequest);
-      } catch (refreshError) {
-        processQueue(refreshError, null);
-        isRefreshing = false;
-
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
-        return Promise.reject(refreshError);
       }
+
+      // Refresh failed
+      processQueue(error, null);
+      isRefreshing = false;
+      clearTokens();
+      stopProactiveRefresh();
+
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      return Promise.reject(error);
     }
 
     return Promise.reject(error);

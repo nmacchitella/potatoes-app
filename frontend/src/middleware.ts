@@ -19,15 +19,24 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get('access_token')?.value;
+  const accessToken = request.cookies.get('access_token')?.value;
+  const refreshToken = request.cookies.get('refresh_token')?.value;
 
-  if (!token) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('returnUrl', pathname);
-    return NextResponse.redirect(loginUrl);
+  // Has valid access token - proceed
+  if (accessToken) {
+    return NextResponse.next();
   }
 
-  return NextResponse.next();
+  // No access token but has refresh token - let client handle refresh
+  // The AuthProvider will attempt to refresh on load
+  if (refreshToken) {
+    return NextResponse.next();
+  }
+
+  // No tokens at all - redirect to login
+  const loginUrl = new URL('/login', request.url);
+  loginUrl.searchParams.set('returnUrl', pathname);
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
