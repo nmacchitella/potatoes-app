@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth
-from database import get_db, get_settings
+from database import get_db
+from config import settings
 import auth
 import models
 import httpx
 from datetime import timedelta
 
 router = APIRouter(prefix="/auth/google", tags=["google-auth"])
-settings = get_settings()
 
 # Initialize OAuth
 oauth = OAuth()

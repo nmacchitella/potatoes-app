@@ -21,7 +21,7 @@ import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 
-from database import get_settings
+from config import settings
 
 
 @dataclass
@@ -377,8 +377,6 @@ async def parse_with_gemini(text: str, url: str, allow_multiple: bool = False) -
     Use Gemini to parse recipe text into structured format.
     Returns a list of recipes (usually 1, but can be multiple for YouTube videos).
     """
-    settings = get_settings()
-
     if not settings.gemini_api_key:
         raise ValueError("Gemini API key not configured")
 
@@ -529,11 +527,17 @@ Return ONLY the JSON, no other text."""
             for ing in recipe_data.get('ingredients', [])
         ]
 
+        def safe_int(val):
+            """Convert to int, rounding floats if necessary."""
+            if val is None:
+                return None
+            return round(val) if isinstance(val, (int, float)) else None
+
         instructions = [
             ImportedInstruction(
-                step_number=inst.get('step_number', idx + 1),
+                step_number=safe_int(inst.get('step_number')) or (idx + 1),
                 instruction_text=inst.get('instruction_text', ''),
-                duration_minutes=inst.get('duration_minutes'),
+                duration_minutes=safe_int(inst.get('duration_minutes')),
             )
             for idx, inst in enumerate(recipe_data.get('instructions', []))
         ]
@@ -545,14 +549,127 @@ Return ONLY the JSON, no other text."""
             instructions=instructions,
             yield_quantity=recipe_data.get('yield_quantity') or 4,
             yield_unit=recipe_data.get('yield_unit') or 'servings',
-            prep_time_minutes=recipe_data.get('prep_time_minutes'),
-            cook_time_minutes=recipe_data.get('cook_time_minutes'),
+            prep_time_minutes=safe_int(recipe_data.get('prep_time_minutes')),
+            cook_time_minutes=safe_int(recipe_data.get('cook_time_minutes')),
             difficulty=recipe_data.get('difficulty'),
             source_url=url,
             tags=recipe_data.get('tags', []),
         ))
 
     return recipes if recipes else [ImportedRecipe(title="Untitled Recipe", source_url=url)]
+
+
+def extract_metadata_from_json_ld(data: dict) -> dict:
+    """
+    Extract useful metadata from JSON-LD that we want to preserve
+    (image URL, author/source name) even when using LLM parsing.
+    """
+    # Get image
+    image = data.get('image')
+    if isinstance(image, list):
+        image = image[0] if image else None
+    if isinstance(image, dict):
+        image = image.get('url')
+
+    # Extract source name from author
+    author = data.get('author')
+    source_name = None
+    if isinstance(author, dict):
+        source_name = author.get('name')
+    elif isinstance(author, list) and author:
+        source_name = author[0].get('name') if isinstance(author[0], dict) else str(author[0])
+    elif isinstance(author, str):
+        source_name = author
+
+    return {
+        'cover_image_url': image,
+        'source_name': source_name,
+    }
+
+
+def json_ld_to_text(data: dict) -> str:
+    """
+    Convert JSON-LD recipe data to readable text for LLM parsing.
+    This ensures we get consistent, granular parsing even from structured data.
+    """
+    parts = []
+
+    # Title
+    if data.get('name'):
+        parts.append(f"Recipe: {data.get('name')}")
+
+    # Description
+    if data.get('description'):
+        parts.append(f"\nDescription: {data.get('description')}")
+
+    # Yield
+    if data.get('recipeYield'):
+        yield_val = data.get('recipeYield')
+        if isinstance(yield_val, list):
+            yield_val = yield_val[0]
+        parts.append(f"\nYield: {yield_val}")
+
+    # Times
+    if data.get('prepTime'):
+        parts.append(f"Prep time: {data.get('prepTime')}")
+    if data.get('cookTime'):
+        parts.append(f"Cook time: {data.get('cookTime')}")
+    if data.get('totalTime'):
+        parts.append(f"Total time: {data.get('totalTime')}")
+
+    # Ingredients
+    if data.get('recipeIngredient'):
+        parts.append("\nIngredients:")
+        for ing in data.get('recipeIngredient', []):
+            if isinstance(ing, str):
+                parts.append(f"- {ing}")
+            elif isinstance(ing, dict):
+                parts.append(f"- {ing.get('name', str(ing))}")
+
+    # Instructions
+    if data.get('recipeInstructions'):
+        parts.append("\nInstructions:")
+        instructions = data.get('recipeInstructions', [])
+
+        # Handle HowToSection (grouped instructions)
+        if instructions and isinstance(instructions[0], dict) and instructions[0].get('@type') == 'HowToSection':
+            step_num = 1
+            for section in instructions:
+                section_name = section.get('name', '')
+                if section_name:
+                    parts.append(f"\n{section_name}:")
+                for step in section.get('itemListElement', []):
+                    text = step.get('text', '') if isinstance(step, dict) else str(step)
+                    parts.append(f"{step_num}. {text}")
+                    step_num += 1
+        else:
+            for idx, inst in enumerate(instructions):
+                if isinstance(inst, str):
+                    parts.append(f"{idx + 1}. {inst}")
+                elif isinstance(inst, dict):
+                    text = inst.get('text', '')
+                    if not text:
+                        text = inst.get('itemListElement', '')
+                        if isinstance(text, dict):
+                            text = text.get('text', '')
+                    parts.append(f"{idx + 1}. {text}")
+
+    # Categories/tags
+    if data.get('recipeCategory'):
+        cats = data.get('recipeCategory')
+        if isinstance(cats, list):
+            parts.append(f"\nCategories: {', '.join(cats)}")
+        else:
+            parts.append(f"\nCategory: {cats}")
+
+    if data.get('recipeCuisine'):
+        cuisine = data.get('recipeCuisine')
+        if isinstance(cuisine, list):
+            parts.append(f"Cuisine: {', '.join(cuisine)}")
+        else:
+            parts.append(f"Cuisine: {cuisine}")
+
+    return '\n'.join(parts)
 
 
 async def import_recipe_from_url(url: str) -> List[ImportedRecipe]:
@@ -564,9 +681,8 @@ async def import_recipe_from_url(url: str) -> List[ImportedRecipe]:
     - Parses with Gemini (can return multiple recipes)
 
     For regular URLs:
-    1. Fetches the page content
-    2. Tries to extract JSON-LD schema.org/Recipe data
-    3. Falls back to Gemini LLM parsing if no structured data found
+    - Always uses Gemini LLM for parsing to ensure consistent granularity
+    - Extracts metadata (image, source) from JSON-LD when available
 
     Returns a list of ImportedRecipe objects.
     """
@@ -586,17 +702,35 @@ async def import_recipe_from_url(url: str) -> List[ImportedRecipe]:
     # Regular URL handling
     html, final_url = await fetch_url_content(url)
 
-    # Try JSON-LD first
+    # Check for JSON-LD data - we'll use it as the source text for better parsing
+    # and extract metadata (image, author) that we want to preserve
     json_ld = extract_json_ld_recipe(html)
-    if json_ld:
-        return [convert_json_ld_to_recipe(json_ld, final_url)]
+    metadata = {}
 
-    # Fall back to LLM parsing
-    text = extract_page_text(html)
+    if json_ld:
+        # Extract metadata we want to keep
+        metadata = extract_metadata_from_json_ld(json_ld)
+        # Convert JSON-LD to text for LLM parsing (more consistent results)
+        text = json_ld_to_text(json_ld)
+    else:
+        # Fall back to extracting page text
+        text = extract_page_text(html)
+
     if len(text) < 100:
         raise ValueError("Could not extract sufficient content from the page")
 
-    return await parse_with_gemini(text, final_url, allow_multiple=False)
+    # Always use Gemini for parsing to ensure consistent granularity
+    recipes = await parse_with_gemini(text, final_url, allow_multiple=False)
+
+    # Apply metadata from JSON-LD if available
+    if metadata:
+        for recipe in recipes:
+            if metadata.get('cover_image_url') and not recipe.cover_image_url:
+                recipe.cover_image_url = metadata['cover_image_url']
+            if metadata.get('source_name') and not recipe.source_name:
+                recipe.source_name = metadata['source_name']
+
+    return recipes
 
 
 def recipe_to_dict(recipe: ImportedRecipe) -> dict:

@@ -4,7 +4,16 @@ Seed Script
 Populates the database with:
 - System tags (cuisines, diets, meal types, etc.)
 - Creates default collections for new users
+
+Run from backend directory:
+    python scripts/seed.py
 """
+
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from database import SessionLocal, engine, Base
 from models import Tag, Collection, User

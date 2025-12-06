@@ -21,6 +21,61 @@ from schemas import (
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
 
+def normalize_ingredient_name(name: str) -> str:
+    """Normalize ingredient name for matching: lowercase, stripped, single spaces."""
+    return " ".join(name.lower().strip().split())
+
+
+def find_or_create_ingredient(
+    db: Session,
+    name: str,
+    user_id: str,
+    category: Optional[str] = None
+) -> Ingredient:
+    """
+    Find an existing ingredient or create a new one.
+
+    Search order:
+    1. System/global ingredients (normalized name match)
+    2. User's custom ingredients (normalized name match)
+    3. Create new user-specific ingredient if not found
+
+    Returns the Ingredient entity.
+    """
+    normalized = normalize_ingredient_name(name)
+
+    # Check for system ingredient first
+    existing_system = db.query(Ingredient).filter(
+        Ingredient.is_system == True,
+        Ingredient.normalized_name == normalized
+    ).first()
+
+    if existing_system:
+        return existing_system
+
+    # Check for user's custom ingredient
+    existing_user = db.query(Ingredient).filter(
+        Ingredient.user_id == user_id,
+        Ingredient.normalized_name == normalized
+    ).first()
+
+    if existing_user:
+        return existing_user
+
+    # Create new user-specific ingredient
+    ingredient = Ingredient(
+        name=name.strip(),
+        normalized_name=normalized,
+        category=category or "other",
+        is_system=False,
+        user_id=user_id,
+    )
+    db.add(ingredient)
+    db.flush()  # Get the ID without committing
+
+    return ingredient
+
+
 @router.get("", response_model=List[IngredientSchema])
 async def list_ingredients(
     search: Optional[str] = Query(None, description="Search ingredient names"),
@@ -40,9 +95,10 @@ async def list_ingredients(
         )
     )
 
-    # Search by name if provided
+    # Search by normalized name if provided
     if search:
-        query = query.filter(Ingredient.name.ilike(f"%{search}%"))
+        normalized_search = normalize_ingredient_name(search)
+        query = query.filter(Ingredient.normalized_name.ilike(f"%{normalized_search}%"))
 
     # Filter by category if provided
     if category:
@@ -50,9 +106,10 @@ async def list_ingredients(
 
     # Order: exact matches first, then alphabetically
     if search:
+        normalized_search = normalize_ingredient_name(search)
         # Prioritize exact starts
         query = query.order_by(
-            Ingredient.name.ilike(f"{search}%").desc(),
+            Ingredient.normalized_name.ilike(f"{normalized_search}%").desc(),
             Ingredient.is_system.desc(),
             Ingredient.name
         )
@@ -71,34 +128,14 @@ async def create_ingredient(
 ):
     """
     Create a new custom ingredient (user-specific).
-    If a system ingredient with the same name exists, return it instead.
+    If a system or user ingredient with the same normalized name exists, return it instead.
     """
-    # Check if system ingredient exists (case-insensitive)
-    existing_system = db.query(Ingredient).filter(
-        Ingredient.is_system == True,
-        Ingredient.name.ilike(ingredient_data.name)
-    ).first()
-
-    if existing_system:
-        return existing_system
-
-    # Check if user already has this ingredient
-    existing_user = db.query(Ingredient).filter(
-        Ingredient.user_id == current_user.id,
-        Ingredient.name.ilike(ingredient_data.name)
-    ).first()
-
-    if existing_user:
-        return existing_user
-
-    # Create user-specific ingredient
-    ingredient = Ingredient(
-        name=ingredient_data.name.strip(),
-        category=ingredient_data.category or "other",
-        is_system=False,
+    ingredient = find_or_create_ingredient(
+        db=db,
+        name=ingredient_data.name,
         user_id=current_user.id,
+        category=ingredient_data.category
     )
-    db.add(ingredient)
     db.commit()
     db.refresh(ingredient)
 
@@ -117,7 +154,7 @@ async def list_ingredient_categories(
     return sorted([c[0] for c in categories if c[0]])
 
 
-# Measurement Units endpoints
+# Measurement Units endpoint - MUST be before /{ingredient_id} to avoid route conflict
 @router.get("/units", response_model=List[MeasurementUnitSchema])
 async def list_measurement_units(
     search: Optional[str] = Query(None, description="Search unit names"),
@@ -142,3 +179,24 @@ async def list_measurement_units(
     query = query.order_by(MeasurementUnit.type, MeasurementUnit.name)
 
     return query.all()
+
+
+@router.get("/{ingredient_id}", response_model=IngredientSchema)
+async def get_ingredient(
+    ingredient_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a single ingredient by ID."""
+    ingredient = db.query(Ingredient).filter(
+        Ingredient.id == ingredient_id,
+        or_(
+            Ingredient.is_system == True,
+            Ingredient.user_id == current_user.id
+        )
+    ).first()
+
+    if not ingredient:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+
+    return ingredient

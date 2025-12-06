@@ -42,7 +42,7 @@ class User(Base):
     is_verified = Column(Boolean, default=False, nullable=False)
 
     # Profile fields
-    is_public = Column(Boolean, default=False, nullable=False)
+    is_public = Column(Boolean, default=True, nullable=False)
     username = Column(String, unique=True, nullable=True, index=True)
     bio = Column(String, nullable=True)
     profile_image_url = Column(String, nullable=True)
@@ -52,8 +52,9 @@ class User(Base):
     notifications = relationship("Notification", back_populates="recipient", cascade="all, delete-orphan")
     following = relationship("UserFollow", foreign_keys="UserFollow.follower_id", back_populates="follower", cascade="all, delete-orphan")
     followers = relationship("UserFollow", foreign_keys="UserFollow.following_id", back_populates="following_user", cascade="all, delete-orphan")
-    recipes = relationship("Recipe", back_populates="author", cascade="all, delete-orphan")
+    recipes = relationship("Recipe", back_populates="author", foreign_keys="Recipe.author_id", cascade="all, delete-orphan")
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
+    settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -128,7 +129,7 @@ class Recipe(Base):
     prep_time_minutes = Column(Integer, nullable=True)
     cook_time_minutes = Column(Integer, nullable=True)
     difficulty = Column(String(20), nullable=True)  # easy, medium, hard
-    privacy_level = Column(String(20), default="private")  # private, public
+    privacy_level = Column(String(20), default="public")  # private, public
     source_url = Column(String(500), nullable=True)
     source_name = Column(String(200), nullable=True)
     cover_image_url = Column(String(500), nullable=True)
@@ -137,8 +138,13 @@ class Recipe(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Clone/Fork tracking
+    forked_from_recipe_id = Column(String, ForeignKey("recipes.id", ondelete='SET NULL'), nullable=True)
+    forked_from_user_id = Column(String, ForeignKey("users.id", ondelete='SET NULL'), nullable=True)
+
     # Relationships
-    author = relationship("User", back_populates="recipes")
+    author = relationship("User", back_populates="recipes", foreign_keys=[author_id])
+    forked_from_user = relationship("User", foreign_keys=[forked_from_user_id])
     ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan", order_by="RecipeIngredient.sort_order")
     instructions = relationship("RecipeInstruction", back_populates="recipe", cascade="all, delete-orphan", order_by="RecipeInstruction.step_number")
     tags = relationship("Tag", secondary=recipe_tags, back_populates="recipes")
@@ -150,11 +156,12 @@ class RecipeIngredient(Base):
 
     id = Column(String, primary_key=True, default=generate_uuid)
     recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=False)
+    ingredient_id = Column(String, ForeignKey("ingredients.id", ondelete='SET NULL'), nullable=True)  # Link to master ingredient
     sort_order = Column(Integer, nullable=False, default=0)
     quantity = Column(Float, nullable=True)
     quantity_max = Column(Float, nullable=True)  # For ranges like "1-2 cups"
     unit = Column(String(50), nullable=True)
-    name = Column(String(200), nullable=False)
+    name = Column(String(200), nullable=False)  # Display name (kept for flexibility)
     preparation = Column(String(200), nullable=True)  # e.g., "diced", "minced"
     is_optional = Column(Boolean, default=False)
     is_staple = Column(Boolean, default=False)
@@ -163,6 +170,7 @@ class RecipeIngredient(Base):
 
     # Relationships
     recipe = relationship("Recipe", back_populates="ingredients")
+    ingredient = relationship("Ingredient", back_populates="recipe_ingredients")
 
 
 class RecipeInstruction(Base):
@@ -193,11 +201,12 @@ class Tag(Base):
 
 
 class Ingredient(Base):
-    """Master ingredients list for autocomplete suggestions"""
+    """Master ingredients list for autocomplete and ingredient linking"""
     __tablename__ = "ingredients"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    name = Column(String(200), nullable=False, index=True)
+    name = Column(String(200), nullable=False)  # Display name (original casing)
+    normalized_name = Column(String(200), nullable=False, index=True)  # Lowercase for matching/deduplication
     category = Column(String(50), nullable=True)  # produce, meat, dairy, pantry, spices, etc.
     is_system = Column(Boolean, default=False)  # System-seeded vs user-added
     user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=True)  # NULL = system/global, set = user-specific
@@ -205,6 +214,7 @@ class Ingredient(Base):
 
     # Relationships
     user = relationship("User")
+    recipe_ingredients = relationship("RecipeIngredient", back_populates="ingredient")
 
 
 class MeasurementUnit(Base):
@@ -227,7 +237,7 @@ class Collection(Base):
     description = Column(Text, nullable=True)
     cover_image_url = Column(String(500), nullable=True)
     is_default = Column(Boolean, default=False)
-    privacy_level = Column(String(20), default="private")  # private, public
+    privacy_level = Column(String(20), default="public")  # private, public
     sort_order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -235,3 +245,18 @@ class Collection(Base):
     # Relationships
     user = relationship("User", back_populates="collections")
     recipes = relationship("Recipe", secondary=collection_recipes, back_populates="collections")
+
+
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), primary_key=True)
+    preferred_unit_system = Column(String(20), default="metric")  # imperial, metric
+    default_servings = Column(Integer, default=4)
+    email_new_follower = Column(Boolean, default=True)
+    email_follow_request = Column(Boolean, default=True)
+    email_recipe_saved = Column(Boolean, default=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationship
+    user = relationship("User", back_populates="settings")

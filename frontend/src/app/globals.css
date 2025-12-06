@@ -1,15 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=Lora:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --primary: #F59E0B;
-  --dark: hsl(30, 10%, 12%);
-  --dark-lighter: hsl(30, 10%, 16%);
-  --accent: #F59E0B;
-  --text-primary: #faf9f5;
+  --cream: #F5F1E8;
+  --cream-dark: #EBE6DB;
+  --charcoal: #1A1A1A;
+  --gold: #C6A664;
+  --gold-dark: #B8954D;
+  --warm-gray: #6B6560;
+  --border: #E5E0D5;
 }
 
 * {
@@ -22,8 +24,8 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  background-color: var(--dark);
-  color: var(--text-primary);
+  background-color: var(--cream);
+  color: var(--charcoal);
 }
 
 html {
@@ -34,11 +36,17 @@ html {
 body {
   min-height: 100vh;
   min-height: 100dvh;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-family: 'Lora', Georgia, serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-weight: 400;
-  letter-spacing: -0.01em;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 /* Scrollbar styling */
@@ -48,37 +56,50 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(30, 10%, 16%);
+  background: var(--cream-dark);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(30, 10%, 30%);
+  background: var(--warm-gray);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(30, 10%, 35%);
+  background: var(--charcoal);
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-primary hover:bg-primary-hover text-white font-medium py-2 px-4 rounded-lg transition-all shadow-sm hover:shadow;
+    @apply bg-gold hover:bg-gold-dark text-white font-medium py-2.5 px-6 rounded-full transition-all uppercase tracking-wide text-sm;
   }
 
   .btn-secondary {
-    @apply bg-transparent border border-gray-600 hover:border-gray-500 hover:bg-dark-hover text-white font-medium py-1.5 px-3 rounded-lg transition-all;
+    @apply bg-transparent border border-charcoal hover:bg-charcoal hover:text-cream text-charcoal font-medium py-2 px-5 rounded-full transition-all uppercase tracking-wide text-sm;
   }
 
   .btn-danger {
-    @apply bg-transparent border border-red-500/50 hover:bg-red-500/10 hover:border-red-500 text-red-400 hover:text-red-300 font-medium py-1.5 px-3 rounded-lg transition-all;
+    @apply bg-transparent border border-red-500/50 hover:bg-red-500 hover:text-white text-red-600 font-medium py-2 px-5 rounded-full transition-all uppercase tracking-wide text-sm;
   }
 
   .input-field {
-    @apply w-full bg-dark-hover border-2 border-gray-600/80 rounded-lg px-4 py-2.5 placeholder-gray-500 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/40 focus:bg-dark-lighter transition-all;
-    color: #faf9f5;
+    @apply w-full bg-white border border-border rounded-lg px-4 py-3 text-charcoal placeholder-warm-gray-light focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all font-body;
   }
 
   .card {
-    @apply bg-dark-lighter rounded-xl p-4 shadow-sm border border-gray-800/50;
+    @apply bg-white rounded-xl p-6 border border-border;
   }
+
+  .label {
+    @apply uppercase tracking-wider text-xs text-warm-gray font-sans font-medium;
+  }
+
+  .link {
+    @apply text-gold hover:text-gold-dark underline underline-offset-4 transition-colors;
+  }
+}
+
+/* Selection color */
+::selection {
+  background-color: var(--gold);
+  color: white;
 }

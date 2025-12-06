@@ -147,6 +147,29 @@ cd backend
 python create_admin.py admin@example.com
 ```
 
+### Seed Test Users
+
+```bash
+cd backend
+source venv/bin/activate
+python seed_users.py
+```
+
+This creates 5 test users with sample recipes and follow relationships:
+
+| Email | Username | Privacy | Password |
+|-------|----------|---------|----------|
+| alice@example.com | @alicecooks | PUBLIC | password123 |
+| bob@example.com | @chefbob | PUBLIC | password123 |
+| carol@example.com | @carolskitchen | PRIVATE | password123 |
+| david@example.com | @davidcooks | PRIVATE | password123 |
+| emma@example.com | @emmaeats | PUBLIC | password123 |
+
+Pre-configured relationships:
+- Alice follows Bob (confirmed) and Carol (pending)
+- Bob and Emma follow Alice (confirmed)
+- Emma follows Bob (confirmed)
+
 ### Database Reset
 
 ```bash

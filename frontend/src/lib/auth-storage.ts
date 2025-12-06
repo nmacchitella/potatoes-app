@@ -3,11 +3,14 @@
  * Stores tokens in both localStorage (for client-side) and cookies (for middleware)
  */
 
-const ACCESS_TOKEN_KEY = 'access_token';
-const REFRESH_TOKEN_KEY = 'refresh_token';
+import { AUTH_CONFIG } from './constants';
 
-const ACCESS_TOKEN_MAX_AGE = 15 * 60; // 15 minutes
-const REFRESH_TOKEN_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
+const {
+  ACCESS_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
+  ACCESS_TOKEN_MAX_AGE_SECONDS: ACCESS_TOKEN_MAX_AGE,
+  REFRESH_TOKEN_MAX_AGE_SECONDS: REFRESH_TOKEN_MAX_AGE,
+} = AUTH_CONFIG;
 
 function setCookie(name: string, value: string, maxAge: number) {
   if (typeof document === 'undefined') return;

@@ -3,25 +3,109 @@
 import Link from 'next/link';
 import type { RecipeSummary } from '@/types';
 
+type RecipeCardVariant = 'default' | 'compact';
+
 interface RecipeCardProps {
   recipe: RecipeSummary;
   showAuthor?: boolean;
+  variant?: RecipeCardVariant;
 }
 
-export function RecipeCard({ recipe, showAuthor = false }: RecipeCardProps) {
+const difficultyColor = {
+  easy: 'text-green-400',
+  medium: 'text-yellow-400',
+  hard: 'text-red-400',
+} as const;
+
+/**
+ * RecipeCard - Displays a recipe preview
+ *
+ * Variants:
+ * - default: Full card with description, used in grids
+ * - compact: Smaller card for carousels, shows tags instead of description
+ */
+export function RecipeCard({ recipe, showAuthor = false, variant = 'default' }: RecipeCardProps) {
   const totalTime = (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0);
 
-  const difficultyColor = {
-    easy: 'text-green-400',
-    medium: 'text-yellow-400',
-    hard: 'text-red-400',
-  };
+  if (variant === 'compact') {
+    return (
+      <Link
+        href={`/recipes/${recipe.id}`}
+        className="flex-shrink-0 w-64 bg-dark-card rounded-lg border border-dark-border hover:border-primary/50 transition-colors overflow-hidden group"
+      >
+        {/* Cover Image */}
+        <div className="h-36 bg-dark-hover overflow-hidden">
+          {recipe.cover_image_url ? (
+            <img
+              src={recipe.cover_image_url}
+              alt={recipe.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-600">
+              <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </div>
+          )}
+        </div>
 
+        {/* Content */}
+        <div className="p-3">
+          <h3 className="font-medium text-sm line-clamp-1 group-hover:text-primary transition-colors">
+            {recipe.title}
+          </h3>
+
+          {showAuthor && recipe.author && (
+            <p className="text-xs text-gray-500 mt-1">
+              by {recipe.author.name}
+            </p>
+          )}
+
+          {/* Meta info */}
+          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+            {totalTime > 0 && (
+              <span className="flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {totalTime} min
+              </span>
+            )}
+            {recipe.difficulty && (
+              <span className={`capitalize ${difficultyColor[recipe.difficulty]}`}>
+                {recipe.difficulty}
+              </span>
+            )}
+          </div>
+
+          {/* Tags */}
+          {recipe.tags && recipe.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {recipe.tags.slice(0, 2).map(tag => (
+                <span
+                  key={tag.id}
+                  className="px-1.5 py-0.5 bg-dark-hover rounded text-xs text-gray-400"
+                >
+                  {tag.name}
+                </span>
+              ))}
+              {recipe.tags.length > 2 && (
+                <span className="text-xs text-gray-500">+{recipe.tags.length - 2}</span>
+              )}
+            </div>
+          )}
+        </div>
+      </Link>
+    );
+  }
+
+  // Default variant - full card
   return (
     <Link href={`/recipes/${recipe.id}`}>
       <div className="card hover:border-primary/50 transition-all cursor-pointer group">
         {/* Cover Image */}
-        <div className="aspect-video bg-dark-hover rounded-lg mb-4 overflow-hidden">
+        <div className="aspect-video bg-dark-hover rounded-lg mb-4 overflow-hidden relative">
           {recipe.cover_image_url ? (
             <img
               src={recipe.cover_image_url}
@@ -32,6 +116,11 @@ export function RecipeCard({ recipe, showAuthor = false }: RecipeCardProps) {
             <div className="w-full h-full flex items-center justify-center text-4xl">
               🍽️
             </div>
+          )}
+          {recipe.status === 'draft' && (
+            <span className="absolute top-2 left-2 px-2 py-0.5 bg-yellow-500 text-white text-xs font-medium rounded">
+              Draft
+            </span>
           )}
         </div>
 
@@ -82,15 +171,6 @@ export function RecipeCard({ recipe, showAuthor = false }: RecipeCardProps) {
               )}
             </div>
             <span className="text-sm text-gray-400 truncate">{recipe.author.name}</span>
-          </div>
-        )}
-
-        {/* Privacy indicator */}
-        {!showAuthor && recipe.privacy_level === 'public' && (
-          <div className="mt-3 pt-3 border-t border-dark-hover">
-            <span className="text-xs text-gray-500">
-              🌐 Public
-            </span>
           </div>
         )}
       </div>

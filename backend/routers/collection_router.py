@@ -53,12 +53,17 @@ async def create_collection(
         Collection.user_id == current_user.id
     ).scalar() or 0
 
+    # Determine privacy level: use provided value or default based on user's public status
+    privacy_level = collection_data.privacy_level
+    if privacy_level is None:
+        privacy_level = "public" if current_user.is_public else "private"
+
     collection = Collection(
         user_id=current_user.id,
         name=collection_data.name,
         description=collection_data.description,
         cover_image_url=collection_data.cover_image_url,
-        privacy_level=collection_data.privacy_level,
+        privacy_level=privacy_level,
         sort_order=max_order + 1,
     )
     db.add(collection)
@@ -78,7 +83,8 @@ async def get_collection(
 ):
     """Get a collection with its recipes."""
     collection = db.query(Collection).options(
-        joinedload(Collection.recipes).joinedload(Recipe.author)
+        joinedload(Collection.recipes).joinedload(Recipe.author),
+        joinedload(Collection.recipes).joinedload(Recipe.tags)
     ).filter(
         Collection.id == collection_id,
         Collection.user_id == current_user.id

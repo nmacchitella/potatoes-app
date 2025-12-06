@@ -11,7 +11,7 @@ from typing import List
 
 from database import get_db
 from auth import get_current_user
-from models import User, Notification
+from models import User, Notification, UserFollow
 from schemas import Notification as NotificationSchema, NotificationMarkRead
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -37,7 +37,37 @@ async def get_notifications(
     query = query.offset(offset).limit(limit)
 
     notifications = query.all()
-    return notifications
+
+    # For follow_request notifications, check if they're still actionable
+    result = []
+    for notif in notifications:
+        notif_dict = {
+            "id": notif.id,
+            "user_id": notif.user_id,
+            "type": notif.type,
+            "title": notif.title,
+            "message": notif.message,
+            "link": notif.link,
+            "data": notif.data,
+            "is_read": notif.is_read,
+            "created_at": notif.created_at,
+            "is_actionable": None,
+        }
+
+        if notif.type == "follow_request" and notif.data:
+            follower_id = notif.data.get("follower_id")
+            if follower_id:
+                # Check if the follow request is still pending
+                follow = db.query(UserFollow).filter(
+                    UserFollow.follower_id == follower_id,
+                    UserFollow.following_id == current_user.id
+                ).first()
+                # Only actionable if follow exists and is still pending
+                notif_dict["is_actionable"] = follow is not None and follow.status == "pending"
+
+        result.append(notif_dict)
+
+    return result
 
 
 @router.get("/unread-count")

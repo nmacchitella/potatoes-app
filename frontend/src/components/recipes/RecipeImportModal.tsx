@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { recipeApi } from '@/lib/api';
+import { recipeApi, getErrorMessage } from '@/lib/api';
 import type { RecipeImportResponse, RecipeImportMultiResponse } from '@/types';
 
 interface RecipeImportModalProps {
@@ -68,9 +68,8 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
       } else {
         setError('No recipes found at this URL.');
       }
-    } catch (err: any) {
-      const message = err.response?.data?.detail || 'Failed to import recipe. Please try a different URL.';
-      setError(message);
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to import recipe. Please try a different URL.'));
     } finally {
       setLoading(false);
     }

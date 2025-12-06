@@ -5,7 +5,16 @@ Populates the database with:
 - Common measurement units
 - Ingredients extracted from CSV dataset
 - 10 sample recipes from CSV dataset
+
+Run from backend directory:
+    python scripts/seed_recipes.py
 """
+
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import csv
 import ast
@@ -14,7 +23,44 @@ import random
 from database import SessionLocal, engine, Base
 from models import Ingredient, MeasurementUnit, Recipe, RecipeIngredient, RecipeInstruction, User, Tag
 
-CSV_PATH = "seed_data/Food Ingredients and Recipe Dataset with Image Name Mapping.csv"
+
+def normalize_ingredient_name(name: str) -> str:
+    """Normalize ingredient name for matching: lowercase, stripped, single spaces."""
+    return " ".join(name.lower().strip().split())
+
+
+def find_or_create_system_ingredient(db, name: str, category: str = "other") -> Ingredient:
+    """
+    Find an existing system ingredient or create a new one.
+    Used for seeding - creates system ingredients (not user-specific).
+    """
+    normalized = normalize_ingredient_name(name)
+
+    # Check for existing system ingredient
+    existing = db.query(Ingredient).filter(
+        Ingredient.is_system == True,
+        Ingredient.normalized_name == normalized
+    ).first()
+
+    if existing:
+        return existing
+
+    # Create new system ingredient
+    ingredient = Ingredient(
+        name=name.strip(),
+        normalized_name=normalized,
+        category=category,
+        is_system=True,
+        user_id=None,
+    )
+    db.add(ingredient)
+    db.flush()
+
+    return ingredient
+
+
+# Path relative to backend directory
+CSV_PATH = Path(__file__).parent.parent / "seed_data" / "Food Ingredients and Recipe Dataset with Image Name Mapping.csv"
 
 # Common measurement units
 MEASUREMENT_UNITS = [
@@ -168,13 +214,15 @@ def seed_ingredients(db):
 
     for category, ingredients in COMMON_INGREDIENTS.items():
         for ing_name in ingredients:
+            normalized = normalize_ingredient_name(ing_name)
             existing = db.query(Ingredient).filter(
-                Ingredient.name == ing_name
+                Ingredient.normalized_name == normalized
             ).first()
 
             if not existing:
                 ingredient = Ingredient(
                     name=ing_name,
+                    normalized_name=normalized,
                     category=category,
                     is_system=True,
                 )
@@ -273,8 +321,15 @@ def seed_sample_recipes(db, count: int = 10):
                 # Add ingredients
                 for idx, ing_str in enumerate(ingredients_list[:20]):  # Limit to 20 ingredients
                     parsed = parse_ingredient_string(ing_str)
+                    # Find or create master ingredient entity
+                    master_ingredient = find_or_create_system_ingredient(
+                        db=db,
+                        name=parsed["name"],
+                        category="other"
+                    )
                     recipe_ing = RecipeIngredient(
                         recipe_id=recipe.id,
+                        ingredient_id=master_ingredient.id,
                         sort_order=idx,
                         quantity=parsed["quantity"],
                         unit=parsed["unit"],

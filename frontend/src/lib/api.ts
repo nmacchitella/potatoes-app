@@ -1,12 +1,46 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import type {
   AuthResponse, LoginRequest, RegisterRequest, User, UserProfileUpdate,
+  UserSettings, UserSettingsUpdate,
   Recipe, RecipeWithScale, RecipeSummary, RecipeListResponse, RecipeListParams,
   RecipeCreateInput, RecipeUpdateInput, RecipeImportResponse, RecipeImportMultiResponse,
   Collection, CollectionWithRecipes, CollectionCreateInput, CollectionUpdateInput,
   Tag, ParsedIngredient, Ingredient, MeasurementUnit,
   UserSearchResult, UserProfilePublic, FollowResponse, Notification,
+  SearchResponse, FullSearchResponse,
 } from '@/types';
+
+// ============================================================================
+// ERROR HANDLING UTILITIES
+// ============================================================================
+
+/** API error response structure from backend */
+interface ApiErrorResponse {
+  detail?: string;
+  message?: string;
+}
+
+/** Type guard to check if error is an Axios error */
+export function isAxiosError(error: unknown): error is AxiosError<ApiErrorResponse> {
+  return axios.isAxiosError(error);
+}
+
+/**
+ * Extract error message from an error object
+ * Handles Axios errors, Error objects, and unknown errors
+ */
+export function getErrorMessage(error: unknown, fallback = 'An error occurred'): string {
+  if (isAxiosError(error)) {
+    return error.response?.data?.detail || error.response?.data?.message || error.message || fallback;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return fallback;
+}
 
 const getApiUrl = (): string => {
   if (typeof window === 'undefined') {
@@ -44,9 +78,12 @@ api.interceptors.request.use((config) => {
 });
 
 let isRefreshing = false;
-let failedQueue: Array<{ resolve: (value?: any) => void; reject: (reason?: any) => void }> = [];
+let failedQueue: Array<{
+  resolve: (value?: string | null) => void;
+  reject: (reason?: unknown) => void;
+}> = [];
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach(prom => {
     if (error) {
       prom.reject(error);
@@ -169,22 +206,34 @@ export const authApi = {
   },
 
   verifyEmail: async (token: string): Promise<{ message: string }> => {
-    const response = await api.post<{ message: string }>(`/auth/verify-email?token=${token}`);
+    const response = await api.post<{ message: string }>('/auth/verify-email', null, { params: { token } });
     return response.data;
   },
 
   resendVerification: async (email: string): Promise<{ message: string }> => {
-    const response = await api.post<{ message: string }>(`/auth/resend-verification?email=${email}`);
+    const response = await api.post<{ message: string }>('/auth/resend-verification', null, { params: { email } });
     return response.data;
   },
 
   forgotPassword: async (email: string): Promise<{ message: string }> => {
-    const response = await api.post<{ message: string }>(`/auth/forgot-password?email=${email}`);
+    const response = await api.post<{ message: string }>('/auth/forgot-password', null, { params: { email } });
     return response.data;
   },
 
   resetPassword: async (token: string, newPassword: string): Promise<{ message: string }> => {
-    const response = await api.post<{ message: string }>(`/auth/reset-password?token=${token}&new_password=${newPassword}`);
+    const response = await api.post<{ message: string }>('/auth/reset-password', null, {
+      params: { token, new_password: newPassword }
+    });
+    return response.data;
+  },
+
+  getSettings: async (): Promise<UserSettings> => {
+    const response = await api.get<UserSettings>('/auth/settings');
+    return response.data;
+  },
+
+  updateSettings: async (data: UserSettingsUpdate): Promise<UserSettings> => {
+    const response = await api.patch<UserSettings>('/auth/settings', data);
     return response.data;
   },
 };
@@ -238,6 +287,11 @@ export const recipeApi = {
 
   importFromUrl: async (url: string): Promise<RecipeImportMultiResponse> => {
     const response = await api.post<RecipeImportMultiResponse>('/recipes/import', { url });
+    return response.data;
+  },
+
+  getCollections: async (id: string): Promise<Collection[]> => {
+    const response = await api.get<Collection[]>(`/recipes/${id}/collections`);
     return response.data;
   },
 };
@@ -411,6 +465,11 @@ export const ingredientApi = {
     return response.data;
   },
 
+  get: async (id: string): Promise<Ingredient> => {
+    const response = await api.get<Ingredient>(`/ingredients/${id}`);
+    return response.data;
+  },
+
   create: async (name: string, category?: string): Promise<Ingredient> => {
     const response = await api.post<Ingredient>('/ingredients', { name, category });
     return response.data;
@@ -424,6 +483,33 @@ export const ingredientApi = {
   getUnits: async (search?: string, type?: string): Promise<MeasurementUnit[]> => {
     const response = await api.get<MeasurementUnit[]>('/ingredients/units', {
       params: { search, type }
+    });
+    return response.data;
+  },
+};
+
+// ============================================================================
+// SEARCH API
+// ============================================================================
+
+export const searchApi = {
+  autocomplete: async (query: string, limit?: number): Promise<SearchResponse> => {
+    const response = await api.get<SearchResponse>('/search', {
+      params: { q: query, limit }
+    });
+    return response.data;
+  },
+
+  full: async (query: string, page?: number, pageSize?: number, category?: string): Promise<FullSearchResponse> => {
+    const response = await api.get<FullSearchResponse>('/search/full', {
+      params: { q: query, page, page_size: pageSize, category }
+    });
+    return response.data;
+  },
+
+  getRecipesByIngredient: async (ingredientId: string, page?: number, pageSize?: number): Promise<RecipeListResponse> => {
+    const response = await api.get<RecipeListResponse>(`/search/ingredients/${ingredientId}/recipes`, {
+      params: { page, page_size: pageSize }
     });
     return response.data;
   },

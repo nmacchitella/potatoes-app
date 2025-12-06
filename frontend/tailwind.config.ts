@@ -6,23 +6,36 @@ const config: Config = {
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
     './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
-  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        'primary': '#F59E0B',        // Amber/golden - main accent
-        'primary-hover': '#D97706',
-        'dark': 'hsl(30, 10%, 12%)',
-        'dark-lighter': 'hsl(30, 10%, 16%)',
-        'dark-hover': 'hsl(30, 10%, 20%)',
-        'accent': '#F59E0B',
-        'text-primary': '#faf9f5',
-        'dark-bg': 'hsl(30, 10%, 12%)',
-        'dark-card': 'hsl(30, 10%, 16%)',
-        'dark-text': '#faf9f5',
+        // Garnish-inspired palette
+        'cream': '#F5F1E8',
+        'cream-dark': '#EBE6DB',
+        'charcoal': '#1A1A1A',
+        'charcoal-light': '#2D2D2D',
+        'gold': '#C6A664',
+        'gold-dark': '#B8954D',
+        'gold-light': '#D4BA82',
+        'warm-gray': '#6B6560',
+        'warm-gray-light': '#9A948D',
+        // Semantic aliases
+        'primary': '#C6A664',
+        'primary-hover': '#B8954D',
+        'background': '#F5F1E8',
+        'surface': '#FFFFFF',
+        'text-primary': '#1A1A1A',
+        'text-secondary': '#6B6560',
+        'border': '#E5E0D5',
       },
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        serif: ['Playfair Display', 'Georgia', 'serif'],
+        body: ['Lora', 'Georgia', 'serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+      },
+      fontSize: {
+        'display': ['4rem', { lineHeight: '1.1', fontWeight: '400' }],
+        'display-sm': ['2.5rem', { lineHeight: '1.2', fontWeight: '400' }],
       },
     },
   },

@@ -6,8 +6,9 @@ Handles user follows, profiles, and social feed.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_, func
+from sqlalchemy import or_
 from typing import List, Optional
+import math
 
 from database import get_db
 from auth import get_current_user, get_current_user_optional
@@ -16,7 +17,11 @@ from schemas import (
     UserSearchResult, UserProfilePublic, FollowResponse,
     RecipeSummary, RecipeListResponse,
 )
-import math
+from services.notification_service import (
+    notify_follow_request,
+    notify_new_follower,
+    notify_follow_accepted,
+)
 
 router = APIRouter(prefix="/users", tags=["social"])
 
@@ -67,14 +72,14 @@ async def get_user_profile(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Get a user's public profile by username."""
+    """Get a user's public profile by username or user ID."""
+    # Try to find by username first, then by ID
     user = db.query(User).filter(User.username == username).first()
+    if not user:
+        # Try finding by ID
+        user = db.query(User).filter(User.id == username).first()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Check if user is public or if current user is viewing their own profile
-    if not user.is_public and (not current_user or current_user.id != user.id):
         raise HTTPException(status_code=404, detail="User not found")
 
     # Get follower/following counts
@@ -123,19 +128,48 @@ async def get_user_recipes(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Get a user's public recipes."""
+    # Try to find by username first, then by ID
     user = db.query(User).filter(User.username == username).first()
+    if not user:
+        user = db.query(User).filter(User.id == username).first()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Only show public recipes for other users
+    # Check if current user can view this user's recipes
+    can_view = False
+    if current_user and current_user.id == user.id:
+        # Viewing own profile - show all recipes
+        can_view = True
+    elif user.is_public:
+        # Public profile - show public recipes
+        can_view = True
+    elif current_user:
+        # Private profile - check if following
+        follow = db.query(UserFollow).filter(
+            UserFollow.follower_id == current_user.id,
+            UserFollow.following_id == user.id,
+            UserFollow.status == 'confirmed'
+        ).first()
+        can_view = follow is not None
+
+    if not can_view:
+        return RecipeListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1
+        )
+
+    # Build query based on permissions
     query = db.query(Recipe).filter(
         Recipe.author_id == user.id,
         Recipe.deleted_at.is_(None),
         Recipe.status == 'published'
     )
 
-    # If viewing own profile, show all recipes
+    # If viewing own profile, show all recipes including drafts
     if current_user and current_user.id == user.id:
         query = db.query(Recipe).filter(
             Recipe.author_id == user.id,
@@ -145,7 +179,7 @@ async def get_user_recipes(
         query = query.filter(Recipe.privacy_level == 'public')
 
     total = query.count()
-    query = query.options(joinedload(Recipe.author))
+    query = query.options(joinedload(Recipe.author), joinedload(Recipe.tags))
     query = query.order_by(Recipe.created_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
 
@@ -205,6 +239,13 @@ async def follow_user(
         status=status,
     )
     db.add(follow)
+
+    # Create notification
+    if status == 'pending':
+        notify_follow_request(db, current_user, target_user)
+    else:
+        notify_new_follower(db, current_user, target_user)
+
     db.commit()
 
     return FollowResponse(
@@ -346,7 +387,15 @@ async def accept_follow_request(
     if not follow:
         raise HTTPException(status_code=404, detail="Follow request not found")
 
+    # Get the requester user
+    requester = db.query(User).filter(User.id == user_id).first()
+
     follow.status = 'confirmed'
+
+    # Notify the requester that their request was accepted
+    if requester:
+        notify_follow_accepted(db, requester, current_user)
+
     db.commit()
 
     return FollowResponse(
@@ -414,7 +463,7 @@ async def get_feed(
     )
 
     total = query.count()
-    query = query.options(joinedload(Recipe.author))
+    query = query.options(joinedload(Recipe.author), joinedload(Recipe.tags))
     query = query.order_by(Recipe.created_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
 

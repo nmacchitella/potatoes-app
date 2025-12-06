@@ -1,32 +1,34 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from database import engine, Base, get_settings
-from routers import auth_router, google_auth, recipe_router, collection_router, tag_router, social_router, notification_router, ingredient_router
+from database import engine, Base
+from config import settings, logger
+from routers import auth_router, google_auth, recipe_router, collection_router, tag_router, social_router, notification_router, ingredient_router, search_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
+logger.info(f"Starting {settings.app_name}")
+
 app = FastAPI(
-    title="Potatoes API",
+    title=settings.app_name,
     description="FamilyKitchen - Collaborative meal planning and recipe management",
     version="1.0.0",
     root_path="",
     servers=[
         {"url": "https://potatoes-backend.fly.dev", "description": "Production"},
-        {"url": "http://localhost:8000", "description": "Development"}
+        {"url": settings.backend_url, "description": "Development"}
     ]
 )
 
 # Add session middleware
-settings = get_settings()
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
     session_cookie="session",
     max_age=3600,
     same_site="lax",
-    https_only=False  # Set to True in production
+    https_only=not settings.debug
 )
 
 # Configure CORS
@@ -38,6 +40,7 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "https://potatoes-frontend.fly.dev",
         "https://potatoes-frontend-dev.fly.dev",
+        *settings.cors_origins,
     ],
     allow_origin_regex=r"^http://192\.168\.\d{1,3}\.\d{1,3}:3000$",
     allow_credentials=True,
@@ -54,6 +57,7 @@ app.include_router(tag_router.router, prefix="/api")
 app.include_router(social_router.router, prefix="/api")
 app.include_router(notification_router.router, prefix="/api")
 app.include_router(ingredient_router.router, prefix="/api")
+app.include_router(search_router.router, prefix="/api")
 
 
 @app.get("/")

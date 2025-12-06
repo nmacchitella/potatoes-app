@@ -56,7 +56,7 @@ export default function FollowButton({
       <button
         onClick={handleUnfollow}
         disabled={loading}
-        className={`${sizeClasses} bg-dark-hover text-gray-300 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50`}
+        className={`${sizeClasses} border border-border text-warm-gray rounded-lg hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors disabled:opacity-50`}
       >
         {loading ? '...' : 'Following'}
       </button>
@@ -68,7 +68,7 @@ export default function FollowButton({
       <button
         onClick={handleUnfollow}
         disabled={loading}
-        className={`${sizeClasses} bg-dark-hover text-gray-400 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition-colors disabled:opacity-50`}
+        className={`${sizeClasses} border border-border text-warm-gray rounded-lg hover:bg-red-50 hover:text-red-500 hover:border-red-200 transition-colors disabled:opacity-50`}
       >
         {loading ? '...' : 'Requested'}
       </button>
@@ -79,7 +79,7 @@ export default function FollowButton({
     <button
       onClick={handleFollow}
       disabled={loading}
-      className={`${sizeClasses} bg-primary text-black rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50 font-medium`}
+      className={`${sizeClasses} bg-gold text-white rounded-lg hover:bg-gold/90 transition-colors disabled:opacity-50 font-medium`}
     >
       {loading ? '...' : 'Follow'}
     </button>

@@ -137,20 +137,20 @@ export function IngredientAutocomplete({
       {showSuggestions && (suggestions.length > 0 || value.length >= 2) && (
         <div
           ref={suggestionsRef}
-          className="absolute z-50 w-full mt-1 bg-dark-card border border-dark-hover rounded-lg shadow-lg max-h-60 overflow-y-auto"
+          className="absolute z-50 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto"
         >
           {suggestions.map((ingredient, index) => (
             <button
               key={ingredient.id}
               type="button"
               onClick={() => handleSelect(ingredient)}
-              className={`w-full px-4 py-2 text-left text-sm hover:bg-dark-hover transition-colors flex justify-between items-center ${
-                index === highlightedIndex ? 'bg-dark-hover' : ''
+              className={`w-full px-4 py-2 text-left text-sm text-charcoal hover:bg-cream transition-colors flex justify-between items-center ${
+                index === highlightedIndex ? 'bg-cream' : ''
               }`}
             >
               <span>{ingredient.name}</span>
               {ingredient.category && (
-                <span className="text-xs text-gray-500">{ingredient.category}</span>
+                <span className="text-xs text-warm-gray">{ingredient.category}</span>
               )}
             </button>
           ))}
@@ -159,8 +159,8 @@ export function IngredientAutocomplete({
             <button
               type="button"
               onClick={handleCreateNew}
-              className={`w-full px-4 py-2 text-left text-sm text-primary hover:bg-dark-hover transition-colors border-t border-dark-hover ${
-                highlightedIndex === suggestions.length ? 'bg-dark-hover' : ''
+              className={`w-full px-4 py-2 text-left text-sm text-gold hover:bg-cream transition-colors border-t border-border ${
+                highlightedIndex === suggestions.length ? 'bg-cream' : ''
               }`}
             >
               + Add "{value}" as new ingredient
@@ -168,7 +168,7 @@ export function IngredientAutocomplete({
           )}
 
           {suggestions.length === 0 && value.length >= 2 && exactMatch && (
-            <div className="px-4 py-2 text-sm text-gray-500">
+            <div className="px-4 py-2 text-sm text-warm-gray">
               No matching ingredients
             </div>
           )}
@@ -281,20 +281,20 @@ export function UnitAutocomplete({
       {showSuggestions && filteredUnits.length > 0 && (
         <div
           ref={suggestionsRef}
-          className="absolute z-50 w-full mt-1 bg-dark-card border border-dark-hover rounded-lg shadow-lg max-h-48 overflow-y-auto"
+          className="absolute z-50 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto"
         >
           {filteredUnits.map((unit, index) => (
             <button
               key={unit.id}
               type="button"
               onClick={() => handleSelect(unit)}
-              className={`w-full px-4 py-2 text-left text-sm hover:bg-dark-hover transition-colors ${
-                index === highlightedIndex ? 'bg-dark-hover' : ''
+              className={`w-full px-4 py-2 text-left text-sm text-charcoal hover:bg-cream transition-colors ${
+                index === highlightedIndex ? 'bg-cream' : ''
               }`}
             >
               <span>{unit.name}</span>
               {unit.abbreviation && (
-                <span className="text-gray-500 ml-2">({unit.abbreviation})</span>
+                <span className="text-warm-gray ml-2">({unit.abbreviation})</span>
               )}
             </button>
           ))}

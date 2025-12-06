@@ -224,12 +224,10 @@ export default function NewRecipePage() {
       const data = await recipeApi.importFromUrl(importUrl);
 
       if (data.recipes.length === 1) {
-        // Single recipe - populate form
         setFormData(importResponseToFormData(data.recipes[0]));
         setIsImportedMode(true);
         setImportUrl('');
       } else if (data.recipes.length > 1) {
-        // Multiple recipes - create tabs
         const tabs = data.recipes.map(recipe => importResponseToFormData(recipe));
         setRecipeTabs(tabs);
         setActiveTabIndex(0);
@@ -250,14 +248,12 @@ export default function NewRecipePage() {
     const newTabs = recipeTabs.filter((_, idx) => idx !== indexToRemove);
 
     if (newTabs.length === 0) {
-      // No more tabs - reset to initial state
       setRecipeTabs([]);
       setFormData(createEmptyFormData());
       setIsImportedMode(false);
       setActiveTabIndex(0);
     } else {
       setRecipeTabs(newTabs);
-      // Adjust active tab if needed
       if (activeTabIndex >= newTabs.length) {
         setActiveTabIndex(newTabs.length - 1);
       } else if (indexToRemove < activeTabIndex) {
@@ -296,14 +292,12 @@ export default function NewRecipePage() {
         tag_ids: data.selectedTagIds,
       });
 
-      // If we have multiple tabs, remove this one and show success
       if (recipeTabs.length > 1) {
         setImportMessage(`"${data.title}" saved!`);
         setTimeout(() => setImportMessage(''), 3000);
         handleDismissTab(activeTabIndex);
         setSaving(false);
       } else {
-        // Single recipe - navigate to it
         router.push(`/recipes/${recipe.id}`);
       }
     } catch (err: any) {
@@ -317,9 +311,9 @@ export default function NewRecipePage() {
     currentFormData.instructions.some(i => i.instruction_text);
 
   return (
-    <div className="min-h-screen bg-dark-bg p-4 md:p-8">
+    <div className="min-h-screen bg-cream py-8 px-4 md:px-8">
       {importMessage && (
-        <div className="fixed top-4 right-4 z-50 bg-green-500/90 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2">
+        <div className="fixed top-4 right-4 z-50 bg-gold text-white px-4 py-3 rounded-full shadow-lg flex items-center gap-2">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
@@ -327,48 +321,34 @@ export default function NewRecipePage() {
         </div>
       )}
 
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <Link href="/recipes" className="text-gray-400 hover:text-primary text-sm mb-1 inline-block">
-              &larr; Back to Recipes
-            </Link>
-            <h1 className="text-2xl font-bold">
+        <div className="mb-8">
+          <Link href="/recipes" className="text-warm-gray hover:text-gold text-sm uppercase tracking-wider mb-4 inline-block">
+            &larr; Back to Recipes
+          </Link>
+          <div className="flex items-end justify-between">
+            <h1 className="font-serif text-4xl text-charcoal">
               {isImportedMode ? 'Review Recipe' : 'New Recipe'}
-              {recipeTabs.length > 1 && ` (${activeTabIndex + 1}/${recipeTabs.length})`}
             </h1>
-          </div>
-          <div className="hidden md:flex gap-2">
-            <button
-              onClick={() => handleSubmit('draft')}
-              disabled={saving || !currentFormData.title}
-              className="btn-secondary text-sm disabled:opacity-50"
-            >
-              Save Draft
-            </button>
-            <button
-              onClick={() => handleSubmit('published')}
-              disabled={saving || !canSave}
-              className="btn-primary text-sm disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Publish'}
-            </button>
+            {recipeTabs.length > 1 && (
+              <span className="text-warm-gray text-sm">{activeTabIndex + 1} of {recipeTabs.length}</span>
+            )}
           </div>
         </div>
 
         {error && (
-          <div className="bg-red-500/20 text-red-400 p-3 rounded-lg mb-4 text-sm">
+          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg mb-6 text-sm">
             {error}
           </div>
         )}
 
-        {/* Import from URL - inline (only show when not in imported mode) */}
+        {/* Import from URL */}
         {!isImportedMode && (
           <>
-            <div className="card mb-4">
-              <h3 className="font-medium mb-3">Import from URL</h3>
-              <div className="flex gap-2">
+            <div className="card mb-6">
+              <h3 className="font-serif text-xl text-charcoal mb-4">Import from URL</h3>
+              <div className="flex gap-3">
                 <input
                   type="url"
                   value={importUrl}
@@ -378,13 +358,13 @@ export default function NewRecipePage() {
                   }}
                   onKeyDown={e => e.key === 'Enter' && !importing && handleInlineImport()}
                   placeholder="Paste a recipe link or YouTube video URL..."
-                  className="input-field flex-1 py-2 text-sm"
+                  className="input-field flex-1"
                   disabled={importing}
                 />
                 <button
                   onClick={handleInlineImport}
                   disabled={importing || !importUrl.trim()}
-                  className="btn-primary px-4 disabled:opacity-50"
+                  className="btn-primary disabled:opacity-50"
                 >
                   {importing ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
@@ -394,37 +374,37 @@ export default function NewRecipePage() {
                 </button>
               </div>
               {importError && (
-                <p className="text-red-400 text-sm mt-2">{importError}</p>
+                <p className="text-red-600 text-sm mt-3">{importError}</p>
               )}
               {importing && (
-                <p className="text-gray-400 text-sm mt-2">Importing recipe... This may take a few seconds.</p>
+                <p className="text-warm-gray text-sm mt-3">Importing recipe... This may take a few seconds.</p>
               )}
             </div>
 
             {/* OR divider */}
-            <div className="flex items-center gap-4 my-6">
-              <div className="flex-1 border-t border-dark-border" />
-              <span className="text-gray-500 text-sm font-medium">OR</span>
-              <div className="flex-1 border-t border-dark-border" />
+            <div className="flex items-center gap-4 my-8">
+              <div className="flex-1 border-t border-border" />
+              <span className="text-warm-gray text-sm uppercase tracking-wider">or create manually</span>
+              <div className="flex-1 border-t border-border" />
             </div>
           </>
         )}
 
-        {/* Recipe Tabs (only show when multiple recipes) */}
+        {/* Recipe Tabs */}
         {recipeTabs.length > 1 && (
-          <div className="flex gap-1 mb-4 overflow-x-auto pb-2">
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
             {recipeTabs.map((tab, index) => (
               <div
                 key={index}
-                className={`flex items-center gap-2 px-3 py-2 rounded-t-lg border-b-2 cursor-pointer transition-colors min-w-0 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-full cursor-pointer transition-colors ${
                   index === activeTabIndex
-                    ? 'bg-dark-card border-primary text-white'
-                    : 'bg-dark-bg border-transparent text-gray-400 hover:text-white hover:bg-dark-card/50'
+                    ? 'bg-gold text-white'
+                    : 'bg-white border border-border text-charcoal hover:border-gold'
                 }`}
               >
                 <button
                   onClick={() => setActiveTabIndex(index)}
-                  className="truncate max-w-[150px] text-sm font-medium text-left"
+                  className="truncate max-w-[120px] text-sm"
                   title={tab.title || `Recipe ${index + 1}`}
                 >
                   {tab.title || `Recipe ${index + 1}`}
@@ -434,7 +414,7 @@ export default function NewRecipePage() {
                     e.stopPropagation();
                     handleDismissTab(index);
                   }}
-                  className="text-gray-500 hover:text-red-400 flex-shrink-0"
+                  className={`flex-shrink-0 ${index === activeTabIndex ? 'text-white/70 hover:text-white' : 'text-warm-gray hover:text-red-500'}`}
                   title="Dismiss this recipe"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -446,16 +426,16 @@ export default function NewRecipePage() {
           </div>
         )}
 
-        <div className="space-y-4">
-          {/* Basics Section */}
+        <div className="space-y-6">
+          {/* Details Section */}
           <div className="card">
             <button
               onClick={() => toggleSection('basics')}
               className="w-full flex items-center justify-between text-left"
             >
-              <h2 className="font-semibold">Details</h2>
+              <h2 className="font-serif text-2xl text-charcoal">Details</h2>
               <svg
-                className={`w-5 h-5 transition-transform ${expandedSections.basics ? 'rotate-180' : ''}`}
+                className={`w-5 h-5 text-warm-gray transition-transform ${expandedSections.basics ? 'rotate-180' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -465,78 +445,66 @@ export default function NewRecipePage() {
             </button>
 
             {expandedSections.basics && (
-              <div className="mt-4 space-y-4">
-                {/* Title */}
+              <div className="mt-6 space-y-5">
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Title *</label>
+                  <label className="label mb-2 block">Title *</label>
                   <input
                     type="text"
                     value={currentFormData.title}
                     onChange={e => updateCurrentForm('title', e.target.value)}
                     placeholder="Recipe name"
-                    className="input-field w-full py-2"
-                  />
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Description</label>
-                  <textarea
-                    value={currentFormData.description}
-                    onChange={e => updateCurrentForm('description', e.target.value)}
-                    placeholder="Brief description..."
-                    rows={4}
                     className="input-field w-full"
                   />
                 </div>
 
-                {/* Compact row: Servings, Difficulty, Times */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div>
+                  <label className="label mb-2 block">Description</label>
+                  <textarea
+                    value={currentFormData.description}
+                    onChange={e => updateCurrentForm('description', e.target.value)}
+                    placeholder="Brief description..."
+                    rows={3}
+                    className="input-field w-full"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Servings</label>
+                    <label className="label mb-2 block">Servings</label>
                     <input
                       type="number"
                       value={currentFormData.yieldQuantity}
                       onChange={e => updateCurrentForm('yieldQuantity', Number(e.target.value))}
                       min="1"
-                      className="input-field w-full py-1.5 text-sm"
+                      className="input-field w-full"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Unit</label>
-                    <input
-                      type="text"
-                      value={currentFormData.yieldUnit}
-                      onChange={e => updateCurrentForm('yieldUnit', e.target.value)}
-                      className="input-field w-full py-1.5 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Prep (min)</label>
+                    <label className="label mb-2 block">Prep (min)</label>
                     <input
                       type="number"
                       value={currentFormData.prepTime}
                       onChange={e => updateCurrentForm('prepTime', e.target.value ? Number(e.target.value) : '')}
                       min="0"
-                      className="input-field w-full py-1.5 text-sm"
+                      className="input-field w-full"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Cook (min)</label>
+                    <label className="label mb-2 block">Cook (min)</label>
                     <input
                       type="number"
                       value={currentFormData.cookTime}
                       onChange={e => updateCurrentForm('cookTime', e.target.value ? Number(e.target.value) : '')}
                       min="0"
-                      className="input-field w-full py-1.5 text-sm"
+                      className="input-field w-full"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Difficulty</label>
+                    <label className="label mb-2 block">Difficulty</label>
                     <select
                       value={currentFormData.difficulty}
                       onChange={e => updateCurrentForm('difficulty', e.target.value as any)}
-                      className="input-field w-full py-1.5 text-sm"
+                      className="input-field w-full"
                     >
                       <option value="">-</option>
                       <option value="easy">Easy</option>
@@ -546,45 +514,44 @@ export default function NewRecipePage() {
                   </div>
                 </div>
 
-                {/* Privacy & Tags row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Privacy</label>
-                    <div className="flex gap-3">
-                      <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                    <label className="label mb-2 block">Privacy</label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
                           name="privacy"
                           checked={currentFormData.privacyLevel === 'private'}
                           onChange={() => updateCurrentForm('privacyLevel', 'private')}
-                          className="text-primary"
+                          className="accent-gold"
                         />
-                        Private
+                        <span className="text-charcoal">Private</span>
                       </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                      <label className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="radio"
                           name="privacy"
                           checked={currentFormData.privacyLevel === 'public'}
                           onChange={() => updateCurrentForm('privacyLevel', 'public')}
-                          className="text-primary"
+                          className="accent-gold"
                         />
-                        Public
+                        <span className="text-charcoal">Public</span>
                       </label>
                     </div>
                   </div>
                   <div className="relative">
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Tags</label>
-                    <div className="flex flex-wrap gap-1 mb-1">
+                    <label className="label mb-2 block">Tags</label>
+                    <div className="flex flex-wrap gap-2 mb-2">
                       {currentFormData.selectedTagIds.map(id => {
                         const tag = availableTags.find(t => t.id === id);
                         return tag ? (
                           <span
                             key={id}
-                            className="inline-flex items-center gap-1 bg-primary/20 text-primary px-2 py-0.5 rounded text-xs"
+                            className="inline-flex items-center gap-1 bg-gold/10 text-gold border border-gold/30 px-3 py-1 rounded-full text-sm"
                           >
                             {tag.name}
-                            <button onClick={() => toggleTag(id)} className="hover:text-white">&times;</button>
+                            <button onClick={() => toggleTag(id)} className="hover:text-gold-dark">&times;</button>
                           </span>
                         ) : null;
                       })}
@@ -596,10 +563,10 @@ export default function NewRecipePage() {
                       onFocus={() => setShowTagDropdown(true)}
                       onBlur={() => setTimeout(() => setShowTagDropdown(false), 200)}
                       placeholder="Search tags..."
-                      className="input-field w-full py-1.5 text-sm"
+                      className="input-field w-full"
                     />
                     {showTagDropdown && filteredTags.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-dark-card border border-dark-border rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-32 overflow-y-auto">
                         {filteredTags.slice(0, 8).map(tag => (
                           <button
                             key={tag.id}
@@ -607,7 +574,7 @@ export default function NewRecipePage() {
                               toggleTag(tag.id);
                               setTagSearch('');
                             }}
-                            className="w-full text-left px-3 py-1.5 text-sm hover:bg-dark-hover"
+                            className="w-full text-left px-4 py-2 text-sm text-charcoal hover:bg-cream transition-colors"
                           >
                             {tag.name}
                           </button>
@@ -617,42 +584,30 @@ export default function NewRecipePage() {
                   </div>
                 </div>
 
-                {/* Cover image (only for imported) and source */}
-                {isImportedMode && currentFormData.coverImageUrl ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {isImportedMode && currentFormData.coverImageUrl && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Cover Image URL</label>
+                      <label className="label mb-2 block">Cover Image URL</label>
                       <input
                         type="url"
                         value={currentFormData.coverImageUrl}
                         onChange={e => updateCurrentForm('coverImageUrl', e.target.value)}
                         placeholder="https://..."
-                        className="input-field w-full py-1.5 text-sm"
+                        className="input-field w-full"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-400 mb-1">Source URL</label>
+                      <label className="label mb-2 block">Source URL</label>
                       <input
                         type="url"
                         value={currentFormData.sourceUrl}
                         onChange={e => updateCurrentForm('sourceUrl', e.target.value)}
                         placeholder="Original recipe link"
-                        className="input-field w-full py-1.5 text-sm"
+                        className="input-field w-full"
                       />
                     </div>
                   </div>
-                ) : currentFormData.sourceUrl ? (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-400 mb-1">Source URL</label>
-                    <input
-                      type="url"
-                      value={currentFormData.sourceUrl}
-                      onChange={e => updateCurrentForm('sourceUrl', e.target.value)}
-                      placeholder="Original recipe link"
-                      className="input-field w-full py-1.5 text-sm"
-                    />
-                  </div>
-                ) : null}
+                )}
               </div>
             )}
           </div>
@@ -663,9 +618,9 @@ export default function NewRecipePage() {
               onClick={() => toggleSection('ingredients')}
               className="w-full flex items-center justify-between text-left"
             >
-              <h2 className="font-semibold">Ingredients</h2>
+              <h2 className="font-serif text-2xl text-charcoal">Ingredients</h2>
               <svg
-                className={`w-5 h-5 transition-transform ${expandedSections.ingredients ? 'rotate-180' : ''}`}
+                className={`w-5 h-5 text-warm-gray transition-transform ${expandedSections.ingredients ? 'rotate-180' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -675,19 +630,19 @@ export default function NewRecipePage() {
             </button>
 
             {expandedSections.ingredients && (
-              <div className="mt-4 space-y-2">
-                <div className="flex justify-end mb-2">
+              <div className="mt-6 space-y-3">
+                <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={() => setPasteMode(!pasteMode)}
-                    className="text-xs text-primary hover:underline"
+                    className="text-sm text-gold hover:text-gold-dark"
                   >
                     {pasteMode ? 'Manual entry' : 'Paste list'}
                   </button>
                 </div>
 
                 {pasteMode ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <textarea
                       value={pasteText}
                       onChange={e => setPasteText(e.target.value)}
@@ -699,7 +654,7 @@ export default function NewRecipePage() {
                       type="button"
                       onClick={handleParseIngredients}
                       disabled={parsing || !pasteText.trim()}
-                      className="btn-primary text-sm"
+                      className="btn-primary disabled:opacity-50"
                     >
                       {parsing ? 'Parsing...' : 'Parse'}
                     </button>
@@ -707,13 +662,13 @@ export default function NewRecipePage() {
                 ) : (
                   <>
                     {currentFormData.ingredients.map((ing, index) => (
-                      <div key={index} className="flex gap-1.5 items-center">
+                      <div key={index} className="flex gap-2 items-center">
                         <input
                           type="number"
                           value={ing.quantity || ''}
                           onChange={e => updateIngredient(index, 'quantity', e.target.value ? Number(e.target.value) : undefined)}
                           placeholder="Qty"
-                          className="input-field w-16 py-1.5 text-sm"
+                          className="input-field w-20"
                           step="0.25"
                           min="0"
                         />
@@ -721,27 +676,27 @@ export default function NewRecipePage() {
                           value={ing.unit || ''}
                           onChange={value => updateIngredient(index, 'unit', value)}
                           placeholder="Unit"
-                          className="w-20 py-1.5 text-sm"
+                          className="w-24"
                         />
                         <IngredientAutocomplete
                           value={ing.name}
                           onChange={value => updateIngredient(index, 'name', value)}
                           placeholder="Ingredient"
-                          className="flex-1 py-1.5 text-sm"
+                          className="flex-1"
                         />
                         <input
                           type="text"
                           value={ing.preparation || ''}
                           onChange={e => updateIngredient(index, 'preparation', e.target.value)}
                           placeholder="Prep"
-                          className="input-field w-24 py-1.5 text-sm hidden md:block"
+                          className="input-field w-28 hidden md:block"
                         />
                         <button
                           type="button"
                           onClick={() => removeIngredient(index)}
-                          className="text-gray-500 hover:text-red-400 p-1"
+                          className="text-warm-gray hover:text-red-500 p-2"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
@@ -750,7 +705,7 @@ export default function NewRecipePage() {
                     <button
                       type="button"
                       onClick={addIngredient}
-                      className="text-primary hover:underline text-sm"
+                      className="text-gold hover:text-gold-dark text-sm font-medium"
                     >
                       + Add ingredient
                     </button>
@@ -766,9 +721,9 @@ export default function NewRecipePage() {
               onClick={() => toggleSection('instructions')}
               className="w-full flex items-center justify-between text-left"
             >
-              <h2 className="font-semibold">Instructions</h2>
+              <h2 className="font-serif text-2xl text-charcoal">Method</h2>
               <svg
-                className={`w-5 h-5 transition-transform ${expandedSections.instructions ? 'rotate-180' : ''}`}
+                className={`w-5 h-5 text-warm-gray transition-transform ${expandedSections.instructions ? 'rotate-180' : ''}`}
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -778,25 +733,25 @@ export default function NewRecipePage() {
             </button>
 
             {expandedSections.instructions && (
-              <div className="mt-4 space-y-3">
+              <div className="mt-6 space-y-4">
                 {currentFormData.instructions.map((inst, index) => (
-                  <div key={index} className="flex gap-3 items-start">
-                    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-black text-sm font-bold flex items-center justify-center mt-1">
+                  <div key={index} className="flex gap-4 items-start">
+                    <span className="flex-shrink-0 w-8 h-8 rounded-full bg-gold text-white text-sm font-medium flex items-center justify-center">
                       {index + 1}
                     </span>
                     <textarea
                       value={inst.instruction_text}
                       onChange={e => updateInstruction(index, e.target.value)}
                       placeholder="Describe this step..."
-                      rows={3}
-                      className="input-field flex-1 text-sm"
+                      rows={2}
+                      className="input-field flex-1"
                     />
                     <button
                       type="button"
                       onClick={() => removeInstruction(index)}
-                      className="text-gray-500 hover:text-red-400 p-1 mt-1"
+                      className="text-warm-gray hover:text-red-500 p-2"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
@@ -805,7 +760,7 @@ export default function NewRecipePage() {
                 <button
                   type="button"
                   onClick={addInstruction}
-                  className="text-primary hover:underline text-sm"
+                  className="text-gold hover:text-gold-dark text-sm font-medium"
                 >
                   + Add step
                 </button>
@@ -813,8 +768,8 @@ export default function NewRecipePage() {
             )}
           </div>
 
-          {/* Bottom save buttons (all screen sizes) */}
-          <div className="flex gap-2 pt-4">
+          {/* Save buttons */}
+          <div className="flex gap-3 pt-4">
             <button
               onClick={() => handleSubmit('draft')}
               disabled={saving || !currentFormData.title}

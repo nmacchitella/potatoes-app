@@ -21,6 +21,7 @@ class UserLogin(BaseModel):
 class User(UserBase):
     id: str
     is_admin: bool = False
+    is_verified: bool = False
     created_at: datetime
     username: Optional[str] = None
     bio: Optional[str] = None
@@ -87,6 +88,7 @@ class Notification(NotificationBase):
     user_id: str
     is_read: bool
     created_at: datetime
+    is_actionable: Optional[bool] = None  # For follow_request: True if still pending
 
     class Config:
         from_attributes = True
@@ -168,6 +170,31 @@ class UserProfilePublic(BaseModel):
         from_attributes = True
 
 
+# User Settings Schemas
+class UserSettingsBase(BaseModel):
+    preferred_unit_system: str = "metric"  # imperial, metric
+    default_servings: int = 4
+    email_new_follower: bool = True
+    email_follow_request: bool = True
+    email_recipe_saved: bool = False
+
+
+class UserSettingsUpdate(BaseModel):
+    preferred_unit_system: Optional[str] = None
+    default_servings: Optional[int] = None
+    email_new_follower: Optional[bool] = None
+    email_follow_request: Optional[bool] = None
+    email_recipe_saved: Optional[bool] = None
+
+
+class UserSettings(UserSettingsBase):
+    user_id: str
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ============================================================================
 # RECIPE SCHEMAS
 # ============================================================================
@@ -198,6 +225,7 @@ class RecipeIngredientCreate(RecipeIngredientBase):
 
 class RecipeIngredient(RecipeIngredientBase):
     id: str
+    ingredient_id: Optional[str] = None  # Link to master Ingredient entity
     sort_order: int
 
     class Config:
@@ -247,7 +275,7 @@ class CollectionBase(BaseModel):
     name: str
     description: Optional[str] = None
     cover_image_url: Optional[str] = None
-    privacy_level: str = "private"
+    privacy_level: Optional[str] = None  # None = use user's default (public user -> public, private user -> private)
 
 
 class CollectionCreate(CollectionBase):
@@ -262,9 +290,13 @@ class CollectionUpdate(BaseModel):
     sort_order: Optional[int] = None
 
 
-class Collection(CollectionBase):
+class Collection(BaseModel):
     id: str
     user_id: str
+    name: str
+    description: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    privacy_level: str  # Always has a value from database
     is_default: bool
     sort_order: int
     created_at: datetime
@@ -288,7 +320,7 @@ class RecipeBase(BaseModel):
     prep_time_minutes: Optional[int] = None
     cook_time_minutes: Optional[int] = None
     difficulty: Optional[str] = None
-    privacy_level: str = "private"
+    privacy_level: Optional[str] = None  # None = use user's default (public user -> public, private user -> private)
     source_url: Optional[str] = None
     source_name: Optional[str] = None
     cover_image_url: Optional[str] = None
@@ -343,8 +375,30 @@ class RecipeSummary(BaseModel):
     cook_time_minutes: Optional[int] = None
     difficulty: Optional[str] = None
     privacy_level: str
+    status: str  # draft or published
     author: RecipeAuthor
+    tags: List["Tag"] = []
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ForkedFromInfo(BaseModel):
+    """Info about the original recipe this was cloned from"""
+    recipe_id: Optional[str] = None
+    user_id: Optional[str] = None
+    user_name: Optional[str] = None
+    user_username: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ClonedByMeInfo(BaseModel):
+    """Info about if/when the current user cloned this recipe"""
+    cloned_recipe_id: str
+    cloned_at: datetime
 
     class Config:
         from_attributes = True
@@ -361,6 +415,7 @@ class Recipe(RecipeBase):
     tags: List[Tag] = []
     created_at: datetime
     updated_at: datetime
+    forked_from: Optional[ForkedFromInfo] = None
 
     class Config:
         from_attributes = True
@@ -370,6 +425,7 @@ class RecipeWithScale(Recipe):
     """Recipe with scaled ingredients"""
     scale_factor: float = 1.0
     scaled_yield_quantity: float = 4
+    cloned_by_me: Optional[ClonedByMeInfo] = None
 
 
 # --- Master Ingredient Schemas (for autocomplete) ---
@@ -384,6 +440,7 @@ class IngredientCreate(IngredientBase):
 
 class Ingredient(IngredientBase):
     id: str
+    normalized_name: str
     is_system: bool = False
     user_id: Optional[str] = None
     created_at: datetime

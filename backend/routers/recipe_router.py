@@ -9,23 +9,30 @@ CRUD operations for recipes, including:
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_
+from sqlalchemy import or_
 from typing import List, Optional
 from datetime import datetime
 import math
 
 from database import get_db
 from auth import get_current_user, get_current_user_optional
-from models import User, Recipe, RecipeIngredient, RecipeInstruction, Tag, Collection, recipe_tags
+from models import User, Recipe, Tag, Collection
 from schemas import (
     RecipeCreate, RecipeUpdate, Recipe as RecipeSchema,
-    RecipeSummary, RecipeListResponse, RecipeWithScale,
+    RecipeSummary, RecipeListResponse, RecipeWithScale, ForkedFromInfo, ClonedByMeInfo,
     IngredientParseRequest, IngredientParseResponse, ParsedIngredient,
-    RecipeIngredientCreate, RecipeInstructionCreate,
     RecipeImportRequest, RecipeImportResponse, RecipeImportMultiResponse,
+    Collection as CollectionSchema,
 )
 from services.ingredient_parser import parse_ingredients_block, to_dict
 from services.recipe_import import import_recipe_from_url, recipe_to_dict, is_youtube_url
+from services.recipe_service import (
+    create_recipe_ingredients,
+    create_recipe_instructions,
+    update_recipe_ingredients,
+    update_recipe_instructions,
+    clone_recipe_content,
+)
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
@@ -83,7 +90,7 @@ async def list_recipes(
     total = query.count()
 
     # Apply pagination and ordering
-    query = query.options(joinedload(Recipe.author))
+    query = query.options(joinedload(Recipe.author), joinedload(Recipe.tags))
     query = query.order_by(Recipe.updated_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
 
@@ -105,6 +112,11 @@ async def create_recipe(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new recipe."""
+    # Determine privacy level: use provided value or default based on user's public status
+    privacy_level = recipe_data.privacy_level
+    if privacy_level is None:
+        privacy_level = "public" if current_user.is_public else "private"
+
     # Create recipe
     recipe = Recipe(
         author_id=current_user.id,
@@ -115,7 +127,7 @@ async def create_recipe(
         prep_time_minutes=recipe_data.prep_time_minutes,
         cook_time_minutes=recipe_data.cook_time_minutes,
         difficulty=recipe_data.difficulty,
-        privacy_level=recipe_data.privacy_level,
+        privacy_level=privacy_level,
         source_url=recipe_data.source_url,
         source_name=recipe_data.source_name,
         cover_image_url=recipe_data.cover_image_url,
@@ -124,33 +136,9 @@ async def create_recipe(
     db.add(recipe)
     db.flush()  # Get recipe ID
 
-    # Add ingredients
-    for idx, ing_data in enumerate(recipe_data.ingredients):
-        ingredient = RecipeIngredient(
-            recipe_id=recipe.id,
-            sort_order=ing_data.sort_order if ing_data.sort_order else idx,
-            quantity=ing_data.quantity,
-            quantity_max=ing_data.quantity_max,
-            unit=ing_data.unit,
-            name=ing_data.name,
-            preparation=ing_data.preparation,
-            is_optional=ing_data.is_optional,
-            is_staple=ing_data.is_staple,
-            ingredient_group=ing_data.ingredient_group,
-            notes=ing_data.notes,
-        )
-        db.add(ingredient)
-
-    # Add instructions
-    for idx, inst_data in enumerate(recipe_data.instructions):
-        instruction = RecipeInstruction(
-            recipe_id=recipe.id,
-            step_number=inst_data.step_number if inst_data.step_number else idx + 1,
-            instruction_text=inst_data.instruction_text,
-            duration_minutes=inst_data.duration_minutes,
-            instruction_group=inst_data.instruction_group,
-        )
-        db.add(instruction)
+    # Add ingredients and instructions using service
+    create_recipe_ingredients(db, recipe.id, recipe_data.ingredients, current_user.id)
+    create_recipe_instructions(db, recipe.id, recipe_data.instructions)
 
     # Add tags
     if recipe_data.tag_ids:
@@ -184,6 +172,7 @@ async def get_recipe(
         joinedload(Recipe.ingredients),
         joinedload(Recipe.instructions),
         joinedload(Recipe.tags),
+        joinedload(Recipe.forked_from_user),
     ).filter(
         Recipe.id == recipe_id,
         Recipe.deleted_at.is_(None)
@@ -206,6 +195,28 @@ async def get_recipe(
     response.scale_factor = scale_factor
     response.scaled_yield_quantity = scaled_yield
 
+    # Add forked_from info if this is a cloned recipe
+    if recipe.forked_from_recipe_id and recipe.forked_from_user:
+        response.forked_from = ForkedFromInfo(
+            recipe_id=recipe.forked_from_recipe_id,
+            user_id=recipe.forked_from_user_id,
+            user_name=recipe.forked_from_user.name,
+            user_username=recipe.forked_from_user.username,
+        )
+
+    # Check if current user has cloned this recipe (for viewing other's recipes)
+    if current_user and recipe.author_id != current_user.id:
+        cloned_recipe = db.query(Recipe).filter(
+            Recipe.author_id == current_user.id,
+            Recipe.forked_from_recipe_id == recipe_id,
+            Recipe.deleted_at.is_(None)
+        ).first()
+        if cloned_recipe:
+            response.cloned_by_me = ClonedByMeInfo(
+                cloned_recipe_id=cloned_recipe.id,
+                cloned_at=cloned_recipe.created_at,
+            )
+
     # Scale ingredient quantities in the response
     if scale_factor != 1.0:
         for ing in response.ingredients:
@@ -215,6 +226,47 @@ async def get_recipe(
                 ing.quantity_max = round(ing.quantity_max * scale_factor, 3)
 
     return response
+
+
+@router.get("/{recipe_id}/collections", response_model=List[CollectionSchema])
+async def get_recipe_collections(
+    recipe_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Get collections that contain this recipe.
+
+    For other users' recipes, only returns public collections.
+    For your own recipes, returns all your collections containing this recipe.
+    """
+    recipe = db.query(Recipe).filter(
+        Recipe.id == recipe_id,
+        Recipe.deleted_at.is_(None)
+    ).first()
+
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    # Check permissions for private recipes
+    if recipe.privacy_level == "private":
+        if not current_user or recipe.author_id != current_user.id:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+
+    # Get collections containing this recipe
+    collections_query = db.query(Collection).filter(
+        Collection.recipes.contains(recipe)
+    )
+
+    # If viewing someone else's recipe, only show public collections
+    if not current_user or recipe.author_id != current_user.id:
+        collections_query = collections_query.filter(Collection.privacy_level == 'public')
+    else:
+        # If viewing own recipe, show own collections
+        collections_query = collections_query.filter(Collection.user_id == current_user.id)
+
+    collections = collections_query.all()
+
+    return [CollectionSchema.model_validate(c) for c in collections]
 
 
 @router.put("/{recipe_id}", response_model=RecipeSchema)
@@ -239,46 +291,12 @@ async def update_recipe(
 
     # Handle ingredients separately
     if "ingredients" in update_data:
-        # Delete existing ingredients
-        db.query(RecipeIngredient).filter(
-            RecipeIngredient.recipe_id == recipe_id
-        ).delete()
-
-        # Add new ingredients
-        for idx, ing_data in enumerate(recipe_data.ingredients):
-            ingredient = RecipeIngredient(
-                recipe_id=recipe.id,
-                sort_order=ing_data.sort_order if ing_data.sort_order else idx,
-                quantity=ing_data.quantity,
-                quantity_max=ing_data.quantity_max,
-                unit=ing_data.unit,
-                name=ing_data.name,
-                preparation=ing_data.preparation,
-                is_optional=ing_data.is_optional,
-                is_staple=ing_data.is_staple,
-                ingredient_group=ing_data.ingredient_group,
-                notes=ing_data.notes,
-            )
-            db.add(ingredient)
+        update_recipe_ingredients(db, recipe.id, recipe_data.ingredients, current_user.id)
         del update_data["ingredients"]
 
     # Handle instructions separately
     if "instructions" in update_data:
-        # Delete existing instructions
-        db.query(RecipeInstruction).filter(
-            RecipeInstruction.recipe_id == recipe_id
-        ).delete()
-
-        # Add new instructions
-        for idx, inst_data in enumerate(recipe_data.instructions):
-            instruction = RecipeInstruction(
-                recipe_id=recipe.id,
-                step_number=inst_data.step_number if inst_data.step_number else idx + 1,
-                instruction_text=inst_data.instruction_text,
-                duration_minutes=inst_data.duration_minutes,
-                instruction_group=inst_data.instruction_group,
-            )
-            db.add(instruction)
+        update_recipe_instructions(db, recipe.id, recipe_data.instructions)
         del update_data["instructions"]
 
     # Handle tags separately
@@ -359,7 +377,7 @@ async def clone_recipe(
     # Create clone
     clone = Recipe(
         author_id=current_user.id,
-        title=f"{original.title} (Copy)",
+        title=original.title,
         description=original.description,
         yield_quantity=original.yield_quantity,
         yield_unit=original.yield_unit,
@@ -368,43 +386,17 @@ async def clone_recipe(
         difficulty=original.difficulty,
         privacy_level="private",  # Clone is always private initially
         source_url=original.source_url,
-        source_name=original.source_name or original.author.name,
+        source_name=original.source_name,
         cover_image_url=original.cover_image_url,
         status="published",
+        forked_from_recipe_id=original.id,
+        forked_from_user_id=original.author_id,
     )
     db.add(clone)
     db.flush()
 
-    # Clone ingredients
-    for ing in original.ingredients:
-        new_ing = RecipeIngredient(
-            recipe_id=clone.id,
-            sort_order=ing.sort_order,
-            quantity=ing.quantity,
-            quantity_max=ing.quantity_max,
-            unit=ing.unit,
-            name=ing.name,
-            preparation=ing.preparation,
-            is_optional=ing.is_optional,
-            is_staple=ing.is_staple,
-            ingredient_group=ing.ingredient_group,
-            notes=ing.notes,
-        )
-        db.add(new_ing)
-
-    # Clone instructions
-    for inst in original.instructions:
-        new_inst = RecipeInstruction(
-            recipe_id=clone.id,
-            step_number=inst.step_number,
-            instruction_text=inst.instruction_text,
-            duration_minutes=inst.duration_minutes,
-            instruction_group=inst.instruction_group,
-        )
-        db.add(new_inst)
-
-    # Copy tags
-    clone.tags = list(original.tags)
+    # Clone ingredients, instructions, and tags using service
+    clone_recipe_content(db, original, clone, current_user.id)
 
     db.commit()
     db.refresh(clone)
@@ -499,7 +491,7 @@ async def get_public_feed(
 
     total = query.count()
 
-    query = query.options(joinedload(Recipe.author))
+    query = query.options(joinedload(Recipe.author), joinedload(Recipe.tags))
     query = query.order_by(Recipe.created_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
 

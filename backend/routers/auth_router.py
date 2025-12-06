@@ -2,13 +2,13 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from database import get_db, get_settings
+from database import get_db
+from config import settings
 import schemas
 import auth
 from services.email_service import EmailService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-settings = get_settings()
 
 
 @router.post("/register", response_model=schemas.User)
@@ -242,6 +242,73 @@ def update_user_profile(
         follower_count=0,
         following_count=0
     )
+
+
+@router.get("/settings", response_model=schemas.UserSettings)
+def get_user_settings(
+    current_user: schemas.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current user's settings."""
+    settings = db.query(auth.models.UserSettings).filter(
+        auth.models.UserSettings.user_id == current_user.id
+    ).first()
+
+    # Create default settings if not exist
+    if not settings:
+        settings = auth.models.UserSettings(user_id=current_user.id)
+        db.add(settings)
+        db.commit()
+        db.refresh(settings)
+
+    return settings
+
+
+@router.patch("/settings", response_model=schemas.UserSettings)
+def update_user_settings(
+    settings_update: schemas.UserSettingsUpdate,
+    current_user: schemas.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user settings."""
+    settings = db.query(auth.models.UserSettings).filter(
+        auth.models.UserSettings.user_id == current_user.id
+    ).first()
+
+    # Create default settings if not exist
+    if not settings:
+        settings = auth.models.UserSettings(user_id=current_user.id)
+        db.add(settings)
+
+    # Update fields that are provided
+    if settings_update.preferred_unit_system is not None:
+        if settings_update.preferred_unit_system not in ['metric', 'imperial']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unit system must be 'metric' or 'imperial'"
+            )
+        settings.preferred_unit_system = settings_update.preferred_unit_system
+
+    if settings_update.default_servings is not None:
+        if settings_update.default_servings < 1 or settings_update.default_servings > 100:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Default servings must be between 1 and 100"
+            )
+        settings.default_servings = settings_update.default_servings
+
+    if settings_update.email_new_follower is not None:
+        settings.email_new_follower = settings_update.email_new_follower
+
+    if settings_update.email_follow_request is not None:
+        settings.email_follow_request = settings_update.email_follow_request
+
+    if settings_update.email_recipe_saved is not None:
+        settings.email_recipe_saved = settings_update.email_recipe_saved
+
+    db.commit()
+    db.refresh(settings)
+    return settings
 
 
 @router.post("/verify-email")

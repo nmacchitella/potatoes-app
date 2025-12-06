@@ -3,6 +3,7 @@ export interface User {
   email: string;
   name: string;
   is_admin: boolean;
+  is_verified: boolean;
   created_at: string;
   username?: string;
   bio?: string;
@@ -17,6 +18,24 @@ export interface UserProfileUpdate {
   username?: string;
   bio?: string;
   is_public?: boolean;
+}
+
+export interface UserSettings {
+  user_id: string;
+  preferred_unit_system: 'metric' | 'imperial';
+  default_servings: number;
+  email_new_follower: boolean;
+  email_follow_request: boolean;
+  email_recipe_saved: boolean;
+  updated_at: string;
+}
+
+export interface UserSettingsUpdate {
+  preferred_unit_system?: 'metric' | 'imperial';
+  default_servings?: number;
+  email_new_follower?: boolean;
+  email_follow_request?: boolean;
+  email_recipe_saved?: boolean;
 }
 
 export interface LoginRequest {
@@ -46,6 +65,7 @@ export interface Notification {
   is_read: boolean;
   metadata?: Record<string, any>;
   created_at: string;
+  is_actionable?: boolean | null; // For follow_request: true if still pending
 }
 
 export interface UserSearchResult {
@@ -148,24 +168,39 @@ export interface RecipeSummary {
   cook_time_minutes?: number;
   difficulty?: 'easy' | 'medium' | 'hard';
   privacy_level: 'private' | 'public';
+  status: 'draft' | 'published';
   author: RecipeAuthor;
+  tags: Tag[];
   created_at: string;
+}
+
+export interface ForkedFromInfo {
+  recipe_id?: string;
+  user_id?: string;
+  user_name?: string;
+  user_username?: string;
+}
+
+export interface ClonedByMeInfo {
+  cloned_recipe_id: string;
+  cloned_at: string;
 }
 
 export interface Recipe extends RecipeSummary {
   author_id: string;
-  status: 'draft' | 'published';
   source_url?: string;
   source_name?: string;
+  notes?: string;
   ingredients: RecipeIngredient[];
   instructions: RecipeInstruction[];
-  tags: Tag[];
   updated_at: string;
+  forked_from?: ForkedFromInfo;
 }
 
 export interface RecipeWithScale extends Recipe {
   scale_factor: number;
   scaled_yield_quantity: number;
+  cloned_by_me?: ClonedByMeInfo;
 }
 
 export interface RecipeCreateInput {
@@ -180,6 +215,7 @@ export interface RecipeCreateInput {
   source_url?: string;
   source_name?: string;
   cover_image_url?: string;
+  notes?: string;
   status?: 'draft' | 'published';
   ingredients?: RecipeIngredientInput[];
   instructions?: RecipeInstructionInput[];
@@ -314,4 +350,69 @@ export interface RecipeImportResponse {
 export interface RecipeImportMultiResponse {
   recipes: RecipeImportResponse[];
   source_type: 'webpage' | 'youtube';
+}
+
+// ============================================================================
+// SEARCH TYPES
+// ============================================================================
+
+export interface SearchRecipeResult {
+  id: string;
+  title: string;
+  description?: string;
+  cover_image_url?: string;
+  author_name: string;
+  is_own: boolean;
+}
+
+export interface SearchTagResult {
+  id: string;
+  name: string;
+  category?: string;
+  recipe_count: number;
+}
+
+export interface SearchCollectionResult {
+  id: string;
+  name: string;
+  description?: string;
+  recipe_count: number;
+}
+
+export interface SearchUserResult {
+  id: string;
+  name: string;
+  username?: string;
+  profile_image_url?: string;
+}
+
+export interface SearchIngredientResult {
+  id: string;
+  name: string;
+  category?: string;
+  recipe_count: number;
+}
+
+export interface SearchResponse {
+  my_recipes: SearchRecipeResult[];
+  discover_recipes: SearchRecipeResult[];
+  tags: SearchTagResult[];
+  collections: SearchCollectionResult[];
+  users: SearchUserResult[];
+  ingredients: SearchIngredientResult[];
+  query: string;
+}
+
+export interface FullSearchResponse {
+  recipes: SearchRecipeResult[];
+  recipes_total: number;
+  tags: SearchTagResult[];
+  tags_total: number;
+  collections: SearchCollectionResult[];
+  collections_total: number;
+  users: SearchUserResult[];
+  users_total: number;
+  ingredients: SearchIngredientResult[];
+  ingredients_total: number;
+  query: string;
 }

@@ -2,12 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import NotificationBell from '@/components/notifications/NotificationBell';
+import GlobalSearch, { CommandPalette } from '@/components/search/GlobalSearch';
 
 export default function Navbar() {
-  const pathname = usePathname();
   const { user, logout } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -23,38 +22,18 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const isActive = (path: string) => pathname === path;
-
-  const navLinks = [
-    { href: '/', label: 'Home' },
-    { href: '/recipes', label: 'Recipes' },
-    { href: '/feed', label: 'Feed' },
-  ];
-
   return (
-    <nav className="bg-dark-card border-b border-dark-hover sticky top-0 z-40">
-      <div className="max-w-6xl mx-auto px-4">
+    <nav className="bg-cream border-b border-border sticky top-0 z-40">
+      <div className="max-w-7xl mx-auto px-4 md:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 text-xl font-bold">
-            <span>Potatoes</span>
+          <Link href="/" className="font-serif text-2xl text-charcoal hover:text-gold transition-colors">
+            Potatoes
           </Link>
 
-          {/* Nav Links */}
-          <div className="hidden md:flex items-center gap-6">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`transition-colors ${
-                  isActive(link.href)
-                    ? 'text-primary font-medium'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+          {/* Global Search */}
+          <div className="flex-1 flex justify-center px-4">
+            <GlobalSearch />
           </div>
 
           {/* Right Side */}
@@ -67,7 +46,7 @@ export default function Navbar() {
                 onClick={() => setMenuOpen(!menuOpen)}
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
               >
-                <div className="w-8 h-8 rounded-full bg-dark-hover flex items-center justify-center overflow-hidden">
+                <div className="w-9 h-9 rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden">
                   {user?.profile_image_url ? (
                     <img
                       src={user.profile_image_url}
@@ -75,13 +54,13 @@ export default function Navbar() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <span className="text-sm">
+                    <span className="text-sm font-serif text-charcoal">
                       {user?.name?.charAt(0).toUpperCase() || '?'}
                     </span>
                   )}
                 </div>
                 <svg
-                  className={`w-4 h-4 text-gray-400 transition-transform ${
+                  className={`w-4 h-4 text-warm-gray transition-transform ${
                     menuOpen ? 'rotate-180' : ''
                   }`}
                   fill="none"
@@ -98,43 +77,39 @@ export default function Navbar() {
               </button>
 
               {menuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-dark-card rounded-lg shadow-xl border border-dark-hover py-1">
-                  <div className="px-4 py-2 border-b border-dark-hover">
-                    <p className="font-medium truncate">{user?.name}</p>
-                    <p className="text-sm text-gray-400 truncate">
-                      {user?.username ? `@${user.username}` : user?.email}
-                    </p>
-                  </div>
-
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-border py-1">
                   <Link
                     href={`/profile/${user?.username || user?.id}`}
-                    className="block px-4 py-2 text-sm hover:bg-dark-hover transition-colors"
+                    className="block px-4 py-3 border-b border-border hover:bg-cream transition-colors"
                     onClick={() => setMenuOpen(false)}
                   >
-                    Your Profile
+                    <p className="font-medium text-charcoal truncate">{user?.name}</p>
+                    <p className="text-sm text-warm-gray truncate">
+                      {user?.username ? `@${user.username}` : user?.email}
+                    </p>
+                  </Link>
+
+                  <Link
+                    href="/recipes"
+                    className="block px-4 py-2 text-sm text-charcoal hover:bg-cream transition-colors"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    My Recipes
                   </Link>
                   <Link
                     href="/settings"
-                    className="block px-4 py-2 text-sm hover:bg-dark-hover transition-colors"
+                    className="block px-4 py-2 text-sm text-charcoal hover:bg-cream transition-colors"
                     onClick={() => setMenuOpen(false)}
                   >
                     Settings
                   </Link>
-                  <Link
-                    href="/collections"
-                    className="block px-4 py-2 text-sm hover:bg-dark-hover transition-colors"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    Collections
-                  </Link>
-
-                  <div className="border-t border-dark-hover mt-1 pt-1">
+                  <div className="border-t border-border mt-1 pt-1">
                     <button
                       onClick={() => {
                         logout();
                         setMenuOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-dark-hover transition-colors"
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-cream transition-colors"
                     >
                       Log out
                     </button>
@@ -146,24 +121,8 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Nav */}
-      <div className="md:hidden border-t border-dark-hover">
-        <div className="flex justify-around py-2">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`px-4 py-2 text-sm transition-colors ${
-                isActive(link.href)
-                  ? 'text-primary font-medium'
-                  : 'text-gray-400'
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
-      </div>
+      {/* Command Palette (⌘K) */}
+      <CommandPalette />
     </nav>
   );
 }
