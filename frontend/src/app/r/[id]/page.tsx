@@ -99,8 +99,16 @@ export default function PublicRecipePage() {
 
   const handleShare = async () => {
     const url = window.location.href;
-    if (navigator.share) {
-      try { await navigator.share({ title: recipe?.title, url }); } catch {}
+
+    // Only use native share on mobile devices
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile && navigator.share) {
+      try {
+        await navigator.share({ title: recipe?.title, url });
+      } catch {
+        // User cancelled or error - fall through to copy
+      }
     } else {
       await navigator.clipboard.writeText(url);
       setToastMessage('Link copied!');
