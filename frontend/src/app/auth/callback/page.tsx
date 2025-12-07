@@ -29,8 +29,8 @@ function AuthCallbackContent() {
         const user = await authApi.getCurrentUser();
         setUser(user);
 
-        // Redirect to home
-        router.push('/');
+        // Redirect to recipes page
+        router.push('/recipes');
       } catch (error) {
         console.error('Error during OAuth callback:', error);
         router.push('/login?error=oauth_failed');

@@ -27,7 +27,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href="/" className="font-serif text-2xl text-charcoal hover:text-gold transition-colors">
+          <Link href="/recipes" className="font-serif text-2xl text-charcoal hover:text-gold transition-colors">
             Potatoes
           </Link>
 

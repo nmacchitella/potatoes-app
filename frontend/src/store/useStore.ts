@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { User, UserProfileUpdate } from '@/types';
-import { authApi } from '@/lib/api';
+import { authApi, stopProactiveRefresh } from '@/lib/api';
 import {
   setAccessToken as saveAccessToken,
   setRefreshToken as saveRefreshToken,
@@ -21,7 +21,7 @@ interface AppState {
   setToken: (token: string | null) => void;
   setRefreshToken: (refreshToken: string | null) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 
   // Data Actions
   fetchUserProfile: () => Promise<void>;
@@ -58,7 +58,19 @@ export const useStore = create<AppState>((set, get) => ({
     set({ token: accessToken, refreshToken });
   },
 
-  logout: () => {
+  logout: async () => {
+    // Get refresh token before clearing
+    const refreshToken = getRefreshToken();
+
+    // Stop proactive refresh timer
+    stopProactiveRefresh();
+
+    // Revoke refresh token on backend (fire and forget)
+    if (refreshToken) {
+      authApi.logout(refreshToken);
+    }
+
+    // Clear local tokens
     clearTokens();
     set({
       user: null,

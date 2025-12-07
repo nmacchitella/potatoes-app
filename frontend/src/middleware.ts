@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// Routes that don't require authentication
 const publicRoutes = [
+  '/',                      // Landing page (handles its own redirect for logged-in users)
   '/login',
   '/verify-email',
   '/forgot-password',
@@ -10,12 +12,21 @@ const publicRoutes = [
   '/auth/callback',
 ];
 
+// Route prefixes that are public (share pages, etc.)
+const publicPrefixes = [
+  '/r/',                    // Public recipe share links (/r/[id])
+];
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Check exact match for public routes
   const isPublicRoute = publicRoutes.includes(pathname);
 
-  if (isPublicRoute) {
+  // Check prefix match for public route prefixes (e.g., /r/abc123)
+  const isPublicPrefix = publicPrefixes.some(prefix => pathname.startsWith(prefix));
+
+  if (isPublicRoute || isPublicPrefix) {
     return NextResponse.next();
   }
 

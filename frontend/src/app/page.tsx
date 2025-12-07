@@ -1,92 +1,53 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useStore } from '@/store/useStore';
-import { recipeApi } from '@/lib/api';
-import Navbar from '@/components/layout/Navbar';
-import { Carousel } from '@/components/layout/Carousel';
-import { RecipeCard } from '@/components/recipes/RecipeCard';
-import type { RecipeSummary } from '@/types';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { getAccessToken, getRefreshToken } from '@/lib/auth-storage';
 
 export default function HomePage() {
-  const { user, fetchUserProfile } = useStore();
-  const [myRecipes, setMyRecipes] = useState<RecipeSummary[]>([]);
-  const [trendingRecipes, setTrendingRecipes] = useState<RecipeSummary[]>([]);
-  const [loadingMy, setLoadingMy] = useState(true);
-  const [loadingTrending, setLoadingTrending] = useState(true);
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    fetchUserProfile();
-  }, [fetchUserProfile]);
+    // Check if user has tokens (logged in)
+    const accessToken = getAccessToken();
+    const refreshToken = getRefreshToken();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch user's recipes
-        setLoadingMy(true);
-        const myRes = await recipeApi.list({ page_size: 10 });
-        setMyRecipes(myRes.items);
-      } catch (error) {
-        console.error('Failed to fetch my recipes:', error);
-      } finally {
-        setLoadingMy(false);
-      }
+    if (accessToken || refreshToken) {
+      // User is logged in, redirect to recipes
+      router.replace('/recipes');
+    } else {
+      // User is not logged in, show landing page
+      setChecking(false);
+    }
+  }, [router]);
 
-      try {
-        // Fetch public/trending recipes
-        setLoadingTrending(true);
-        const trendingRes = await recipeApi.getPublicFeed(1, 10);
-        setTrendingRecipes(trendingRes.items);
-      } catch (error) {
-        console.error('Failed to fetch trending recipes:', error);
-      } finally {
-        setLoadingTrending(false);
-      }
-    };
+  // Show nothing while checking auth state
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
+        <div className="text-text-primary text-xl">Loading...</div>
+      </div>
+    );
+  }
 
-    fetchData();
-  }, []);
-
+  // Landing page for logged-out users
   return (
-    <div className="min-h-screen bg-dark-bg">
-      <Navbar />
-      <div className="px-4 md:px-8 py-6">
-        <div className="max-w-7xl mx-auto">
-          {/* Welcome Header */}
-          <div className="mb-4">
-            <h1 className="text-2xl font-bold">Welcome back, {user?.name || 'Chef'}!</h1>
-            <p className="text-gray-400 text-sm">What would you like to cook today?</p>
-          </div>
-
-          {/* My Recipes Carousel */}
-          <Carousel
-            title="My Recipes"
-            loading={loadingMy}
-            emptyMessage="You haven't created any recipes yet. Start by adding your first recipe!"
-            viewAllLink="/recipes"
-          >
-            {myRecipes.map(recipe => (
-              <RecipeCard key={recipe.id} recipe={recipe} variant="compact" />
-            ))}
-          </Carousel>
-
-          {/* Trending/Discover Carousel */}
-          <Carousel
-            title="Discover Recipes"
-            loading={loadingTrending}
-            emptyMessage="No public recipes to discover yet. Be the first to share!"
-            viewAllLink="/feed"
-          >
-            {trendingRecipes.map(recipe => (
-              <RecipeCard key={recipe.id} recipe={recipe} variant="compact" showAuthor />
-            ))}
-          </Carousel>
-
-          {/* Footer */}
-          <div className="mt-8 text-center text-gray-500 text-sm">
-            <p>Potatoes - Family Kitchen v1.0</p>
-          </div>
-        </div>
+    <div className="min-h-screen bg-dark-bg flex flex-col items-center justify-center px-4">
+      <h1 className="text-6xl md:text-8xl font-bold text-text-primary mb-4 tracking-tight">
+        Potatoes
+      </h1>
+      <p className="text-xl md:text-2xl text-gray-400 mb-12 font-light">
+        Your family kitchen, organized.
+      </p>
+      <div className="flex gap-4">
+        <Link
+          href="/login"
+          className="px-8 py-3 bg-primary hover:bg-primary-hover text-white font-medium rounded-lg transition-colors"
+        >
+          Get Started
+        </Link>
       </div>
     </div>
   );

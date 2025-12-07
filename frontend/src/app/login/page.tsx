@@ -10,7 +10,7 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { token, setTokens, setUser, logout } = useStore();
-  const returnUrl = searchParams.get('returnUrl') || '/';
+  const returnUrl = searchParams.get('returnUrl') || '/recipes';
 
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);

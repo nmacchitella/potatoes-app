@@ -274,6 +274,14 @@ export const authApi = {
     return response.data;
   },
 
+  logout: async (refreshToken: string): Promise<void> => {
+    try {
+      await api.post('/auth/logout', { refresh_token: refreshToken });
+    } catch {
+      // Silently fail - we'll clear local tokens regardless
+    }
+  },
+
   getCurrentUser: async (): Promise<User> => {
     const response = await api.get<User>('/auth/me');
     return response.data;
