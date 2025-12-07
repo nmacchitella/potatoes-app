@@ -186,16 +186,10 @@ export default function PublicRecipePage() {
 
             <div className="space-y-3">
               <Link
-                href={`/register?redirect=/recipes/${recipeId}`}
+                href={`/login?returnUrl=/recipes/${recipeId}`}
                 className="block w-full bg-gold hover:bg-gold-dark text-white text-center font-medium py-3 rounded-full transition-colors"
               >
-                Create free account
-              </Link>
-              <Link
-                href={`/login?redirect=/recipes/${recipeId}`}
-                className="block w-full border border-border hover:border-gold text-charcoal text-center font-medium py-3 rounded-full transition-colors"
-              >
-                Sign in
+                Sign in or create account
               </Link>
             </div>
           </div>
@@ -336,22 +330,14 @@ export default function PublicRecipePage() {
           <div className="mt-12 bg-gradient-to-r from-gold/10 to-gold/5 rounded-xl p-6 text-center">
             <h3 className="font-serif text-xl text-charcoal mb-2">Love this recipe?</h3>
             <p className="text-warm-gray text-sm mb-4">
-              Create a free account to save recipes, build collections, and discover more dishes.
+              Sign in to save recipes, build collections, and discover more dishes.
             </p>
-            <div className="flex justify-center gap-3">
-              <Link
-                href={`/register?redirect=/recipes/${recipeId}`}
-                className="bg-gold hover:bg-gold-dark text-white font-medium px-6 py-2 rounded-full text-sm transition-colors"
-              >
-                Get started free
-              </Link>
-              <Link
-                href={`/login?redirect=/recipes/${recipeId}`}
-                className="border border-border hover:border-gold text-charcoal font-medium px-6 py-2 rounded-full text-sm transition-colors"
-              >
-                Sign in
-              </Link>
-            </div>
+            <Link
+              href={`/login?returnUrl=/recipes/${recipeId}`}
+              className="inline-block bg-gold hover:bg-gold-dark text-white font-medium px-6 py-2 rounded-full text-sm transition-colors"
+            >
+              Sign in or create account
+            </Link>
           </div>
         )}
       </main>
@@ -377,14 +363,9 @@ function PublicNavbar() {
                 My Recipes
               </Link>
             ) : (
-              <>
-                <Link href="/login" className="text-sm text-charcoal hover:text-gold transition-colors">
-                  Sign in
-                </Link>
-                <Link href="/register" className="btn-primary text-sm py-2 px-4">
-                  Sign up
-                </Link>
-              </>
+              <Link href="/login" className="btn-primary text-sm py-2 px-4">
+                Sign in
+              </Link>
             )}
           </div>
         </div>
