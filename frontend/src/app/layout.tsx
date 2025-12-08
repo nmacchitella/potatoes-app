@@ -3,15 +3,17 @@ import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 
 export const metadata: Metadata = {
-  title: 'Potatoes - Family Kitchen',
-  description: 'Collaborative meal planning and recipe management for families',
+  title: 'Potatoes - Recipe Collection',
+  description: 'Your personal recipe collection app',
+  manifest: '/manifest.json',
   icons: {
-    icon: [
-      {
-        url: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🥔</text></svg>',
-        type: 'image/svg+xml',
-      },
-    ],
+    icon: '/icon-192.png',
+    apple: '/icon-192.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Potatoes',
   },
 };
 
@@ -20,7 +22,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: '#F5F1E8',
+  themeColor: '#C9A227',
 };
 
 export default function RootLayout({
