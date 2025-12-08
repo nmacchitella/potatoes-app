@@ -4,8 +4,8 @@
   "description": "Your personal recipe collection app",
   "start_url": "/recipes",
   "display": "standalone",
-  "background_color": "#FAF8F5",
-  "theme_color": "#C9A227",
+  "background_color": "#000000",
+  "theme_color": "#000000",
   "orientation": "portrait-primary",
   "icons": [
     {
