@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi, collectionApi, socialApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import RecipeSearchModal from '@/components/search/RecipeSearchModal';
 import type { RecipeSummary, Collection, Tag, SharedCollection, CollectionShare, UserSearchResult, SearchRecipeResult } from '@/types';
 
@@ -509,8 +510,9 @@ function RecipesPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
 
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
         <div className="flex gap-8">

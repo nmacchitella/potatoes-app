@@ -5,6 +5,7 @@ import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ingredientApi, searchApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { Ingredient, RecipeSummary } from '@/types';
 
 export default function IngredientPage() {
@@ -63,8 +64,9 @@ export default function IngredientPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-cream">
+      <div className="min-h-screen bg-cream has-bottom-nav">
         <Navbar />
+        <MobileNavWrapper />
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold border-t-transparent" />
         </div>
@@ -74,8 +76,9 @@ export default function IngredientPage() {
 
   if (error || !ingredient) {
     return (
-      <div className="min-h-screen bg-cream">
+      <div className="min-h-screen bg-cream has-bottom-nav">
         <Navbar />
+        <MobileNavWrapper />
         <div className="max-w-4xl mx-auto px-4 md:px-8 py-12 text-center">
           <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cream-dark flex items-center justify-center">
             <svg className="w-8 h-8 text-warm-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -93,8 +96,9 @@ export default function IngredientPage() {
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
 
       <main className="max-w-4xl mx-auto px-4 md:px-8 py-8">
         {/* Header */}

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi, tagApi, collectionApi } from '@/lib/api';
 import { IngredientAutocomplete, UnitAutocomplete } from '@/components/recipes/IngredientAutocomplete';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { RecipeIngredientInput, RecipeInstructionInput, Tag, ParsedIngredient, RecipeImportResponse, Collection } from '@/types';
 
 // Form data structure for each recipe tab
@@ -90,6 +91,11 @@ function NewRecipeContent() {
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState('');
   const [importMessage, setImportMessage] = useState('');
+
+  // Paste recipe state
+  const [recipePasteText, setRecipePasteText] = useState('');
+  const [recipeParsing, setRecipeParsing] = useState(false);
+  const [recipePasteError, setRecipePasteError] = useState('');
 
   // Multi-recipe tabs state
   const [recipeTabs, setRecipeTabs] = useState<RecipeFormData[]>([]);
@@ -256,6 +262,44 @@ function NewRecipeContent() {
     }
   };
 
+  const handlePasteRecipe = async () => {
+    if (!recipePasteText.trim()) {
+      setRecipePasteError('Please paste some recipe text');
+      return;
+    }
+
+    if (recipePasteText.trim().length < 50) {
+      setRecipePasteError('Please provide more recipe text (at least 50 characters)');
+      return;
+    }
+
+    setRecipeParsing(true);
+    setRecipePasteError('');
+
+    try {
+      const data = await recipeApi.parseFromText(recipePasteText);
+
+      if (data.recipes.length === 1) {
+        setFormData(importResponseToFormData(data.recipes[0]));
+        setIsImportedMode(true);
+        setRecipePasteText('');
+      } else if (data.recipes.length > 1) {
+        const tabs = data.recipes.map(recipe => importResponseToFormData(recipe));
+        setRecipeTabs(tabs);
+        setActiveTabIndex(0);
+        setIsImportedMode(true);
+        setRecipePasteText('');
+      } else {
+        setRecipePasteError('Could not extract a recipe from the text. Please try with more details.');
+      }
+    } catch (err: any) {
+      const message = err.response?.data?.detail || 'Failed to parse recipe. Please try again.';
+      setRecipePasteError(message);
+    } finally {
+      setRecipeParsing(false);
+    }
+  };
+
   const handleDismissTab = (indexToRemove: number) => {
     const newTabs = recipeTabs.filter((_, idx) => idx !== indexToRemove);
 
@@ -338,7 +382,8 @@ function NewRecipeContent() {
     currentFormData.instructions.some(i => i.instruction_text);
 
   return (
-    <div className="min-h-screen bg-cream py-8 px-4 md:px-8">
+    <div className="min-h-screen bg-cream py-8 px-4 md:px-8 has-bottom-nav">
+      <MobileNavWrapper />
       {importMessage && (
         <div className="fixed top-4 right-4 z-50 bg-gold text-white px-4 py-3 rounded-full shadow-lg flex items-center gap-2">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -406,6 +451,48 @@ function NewRecipeContent() {
               )}
               {importing && (
                 <p className="text-warm-gray text-sm mt-3">Importing recipe... This may take a few seconds.</p>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-border my-6" />
+
+            {/* Paste Recipe */}
+            <div className="mb-6">
+              <h3 className="font-serif text-xl text-charcoal mb-4">Paste Recipe</h3>
+              <p className="text-warm-gray text-sm mb-3">
+                Paste recipe text from any source and we'll extract the details automatically.
+              </p>
+              <textarea
+                value={recipePasteText}
+                onChange={e => {
+                  setRecipePasteText(e.target.value);
+                  setRecipePasteError('');
+                }}
+                placeholder="Paste your recipe here... Include the title, ingredients, and instructions."
+                rows={6}
+                className="input-field w-full font-mono text-sm mb-3"
+                disabled={recipeParsing}
+              />
+              <button
+                onClick={handlePasteRecipe}
+                disabled={recipeParsing || !recipePasteText.trim()}
+                className="btn-primary disabled:opacity-50"
+              >
+                {recipeParsing ? (
+                  <span className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    Parsing...
+                  </span>
+                ) : (
+                  'Parse Recipe'
+                )}
+              </button>
+              {recipePasteError && (
+                <p className="text-red-600 text-sm mt-3">{recipePasteError}</p>
+              )}
+              {recipeParsing && (
+                <p className="text-warm-gray text-sm mt-3">Analyzing your recipe... This may take a few seconds.</p>
               )}
             </div>
 

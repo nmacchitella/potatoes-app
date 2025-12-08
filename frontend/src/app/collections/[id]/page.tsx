@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { collectionApi, recipeApi, socialApi } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { CollectionWithRecipes, RecipeSummary, CollectionShare, UserSearchResult } from '@/types';
 
 export default function CollectionDetailPage() {
@@ -221,8 +222,9 @@ export default function CollectionDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-cream">
+      <div className="min-h-screen bg-cream has-bottom-nav">
         <Navbar />
+        <MobileNavWrapper />
         <div className="flex justify-center py-24">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold border-t-transparent" />
         </div>
@@ -232,8 +234,9 @@ export default function CollectionDetailPage() {
 
   if (error || !collection) {
     return (
-      <div className="min-h-screen bg-cream">
+      <div className="min-h-screen bg-cream has-bottom-nav">
         <Navbar />
+        <MobileNavWrapper />
         <div className="max-w-6xl mx-auto px-4 md:px-8 py-8">
           <div className="text-center py-16">
             <h2 className="font-serif text-2xl text-charcoal mb-4">Collection not found</h2>
@@ -247,8 +250,9 @@ export default function CollectionDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
 
       <main className="max-w-6xl mx-auto px-4 md:px-8 py-8">
         {/* Header */}

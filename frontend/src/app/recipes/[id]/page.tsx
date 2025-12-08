@@ -7,6 +7,7 @@ import { recipeApi, collectionApi, tagApi, getErrorMessage } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import { abbreviateUnit, formatQuantity } from '@/lib/constants';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { RecipeWithScale, Collection, RecipeIngredient, RecipeInstruction, Tag } from '@/types';
 
 /**
@@ -361,8 +362,9 @@ export default function RecipeDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-cream">
+      <div className="min-h-screen bg-cream has-bottom-nav">
         <Navbar />
+        <MobileNavWrapper />
         <div className="max-w-6xl mx-auto px-4 md:px-8 py-6">
           <div className="animate-pulse">
             <div className="h-6 bg-cream-dark rounded w-1/4 mb-4" />
@@ -382,8 +384,9 @@ export default function RecipeDetailPage() {
   const selectedTags = availableTags.filter(t => editTagIds.includes(t.id));
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
 
       <main className="max-w-6xl mx-auto px-4 md:px-8 py-6 pb-24">
         {/* Breadcrumb & Actions */}

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { socialApi, recipeApi, collectionApi } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import RecipeCard from '@/components/recipes/RecipeCard';
 import FollowButton from '@/components/social/FollowButton';
 import type { User, UserSearchResult, RecipeSummary, Collection } from '@/types';
@@ -81,8 +82,9 @@ export default function MyProfilePage() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-cream">
+      <div className="min-h-screen bg-cream has-bottom-nav">
         <Navbar />
+        <MobileNavWrapper />
         <div className="p-8">
           <div className="max-w-4xl mx-auto text-center py-12">
             <p className="text-warm-gray">Loading...</p>
@@ -100,8 +102,9 @@ export default function MyProfilePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
       <div className="p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           {/* Profile Header */}

@@ -403,6 +403,11 @@ export const recipeApi = {
     return response.data;
   },
 
+  parseFromText: async (text: string): Promise<RecipeImportMultiResponse> => {
+    const response = await api.post<RecipeImportMultiResponse>('/recipes/parse-text', { text });
+    return response.data;
+  },
+
   getCollections: async (id: string): Promise<Collection[]> => {
     const response = await api.get<Collection[]>(`/recipes/${id}/collections`);
     return response.data;

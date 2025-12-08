@@ -22,10 +22,11 @@ from schemas import (
     RecipeSummary, RecipeListResponse, RecipeWithScale, ForkedFromInfo, ClonedByMeInfo,
     IngredientParseRequest, IngredientParseResponse, ParsedIngredient,
     RecipeImportRequest, RecipeImportResponse, RecipeImportMultiResponse,
+    RecipeParseTextRequest,
     Collection as CollectionSchema,
 )
 from services.ingredient_parser import parse_ingredients_block, to_dict
-from services.recipe_import import import_recipe_from_url, recipe_to_dict, is_youtube_url
+from services.recipe_import import import_recipe_from_url, recipe_to_dict, is_youtube_url, parse_with_gemini
 from services.recipe_service import (
     create_recipe_ingredients,
     create_recipe_instructions,
@@ -464,6 +465,38 @@ async def import_recipe(
         raise HTTPException(
             status_code=400,
             detail=f"Failed to import recipe: {str(e)}"
+        )
+
+
+@router.post("/parse-text", response_model=RecipeImportMultiResponse)
+async def parse_recipe_text(
+    request: RecipeParseTextRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Parse recipe text into structured format using AI.
+
+    Takes raw recipe text (e.g., copied from a website, book, or note)
+    and uses Gemini to extract structured recipe data.
+
+    Returns a list of parsed recipes that can be reviewed and saved.
+    """
+    if len(request.text.strip()) < 50:
+        raise HTTPException(
+            status_code=400,
+            detail="Please provide more recipe text (at least 50 characters)"
+        )
+
+    try:
+        recipes = await parse_with_gemini(request.text, "", allow_multiple=True)
+        return RecipeImportMultiResponse(
+            recipes=[RecipeImportResponse(**recipe_to_dict(r)) for r in recipes],
+            source_type="text"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to parse recipe: {str(e)}"
         )
 
 

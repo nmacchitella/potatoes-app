@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { socialApi } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import FollowButton from '@/components/social/FollowButton';
 import RecipeCard from '@/components/recipes/RecipeCard';
 import type { UserProfilePublic, RecipeSummary } from '@/types';
@@ -88,8 +89,9 @@ export default function PublicProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-cream">
+      <div className="min-h-screen bg-cream has-bottom-nav">
         <Navbar />
+        <MobileNavWrapper />
         <div className="p-8">
           <div className="max-w-4xl mx-auto">
             <div className="animate-pulse">
@@ -109,8 +111,9 @@ export default function PublicProfilePage() {
 
   if (error || !profile) {
     return (
-      <div className="min-h-screen bg-cream">
+      <div className="min-h-screen bg-cream has-bottom-nav">
         <Navbar />
+        <MobileNavWrapper />
         <div className="p-8">
           <div className="max-w-4xl mx-auto">
             <div className="bg-white rounded-lg border border-border p-12 text-center">
@@ -128,8 +131,9 @@ export default function PublicProfilePage() {
   const canViewRecipes = profile.is_public || profile.follow_status === 'confirmed';
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
       <div className="p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           {/* Profile Header */}

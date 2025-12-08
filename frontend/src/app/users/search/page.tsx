@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { socialApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import UserCard from '@/components/social/UserCard';
 import type { UserSearchResult } from '@/types';
 
@@ -37,8 +38,9 @@ export default function UserSearchPage() {
   }, [query]);
 
   return (
-    <div className="min-h-screen bg-dark-bg">
+    <div className="min-h-screen bg-dark-bg has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
       <div className="p-8">
         <div className="max-w-2xl mx-auto">
           <h1 className="text-3xl font-bold mb-8">Find People</h1>

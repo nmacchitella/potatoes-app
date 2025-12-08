@@ -555,6 +555,10 @@ class RecipeImportRequest(BaseModel):
     url: str
 
 
+class RecipeParseTextRequest(BaseModel):
+    text: str
+
+
 class ImportedIngredient(BaseModel):
     name: str
     quantity: Optional[float] = None

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { authApi } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { UserSettings } from '@/types';
 
 export default function SettingsPage() {
@@ -191,8 +192,9 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
 
       <main className="max-w-2xl mx-auto px-4 md:px-8 py-8">
         <div className="mb-8">

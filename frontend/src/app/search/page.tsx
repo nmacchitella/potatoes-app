@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { searchApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { FullSearchResponse } from '@/types';
 
 type CategoryFilter = 'all' | 'recipes' | 'ingredients' | 'tags' | 'collections' | 'users';
@@ -71,8 +72,9 @@ function SearchContent() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
 
       <main className="max-w-4xl mx-auto px-4 md:px-8 py-8">
         {/* Header */}
@@ -360,8 +362,9 @@ function SearchContent() {
 export default function SearchPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-cream">
+      <div className="min-h-screen bg-cream has-bottom-nav">
         <Navbar />
+        <MobileNavWrapper />
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-gold border-t-transparent" />
         </div>

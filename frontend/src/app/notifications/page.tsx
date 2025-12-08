@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { notificationApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { Notification } from '@/types';
 
 const getTimeAgo = (date: string): string => {
@@ -84,8 +85,9 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
-    <div className="min-h-screen bg-dark-bg">
+    <div className="min-h-screen bg-dark-bg has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
       <div className="p-8">
         <div className="max-w-2xl mx-auto">
           {/* Header */}

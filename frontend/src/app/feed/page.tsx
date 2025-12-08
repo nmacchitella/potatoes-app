@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { recipeApi, tagApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { RecipeSummary, Tag } from '@/types';
 
 type CategoryFilter = 'all' | 'recipes' | 'tags';
@@ -61,8 +62,9 @@ export default function FeedPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
+      <MobileNavWrapper />
 
       <main className="max-w-4xl mx-auto px-4 md:px-8 py-8">
         {/* Header */}
