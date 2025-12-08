@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { recipeApi, collectionApi, socialApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import RecipeSearchModal from '@/components/search/RecipeSearchModal';
-import type { RecipeSummary, Collection, Tag, SharedCollection, CollectionShare, UserSearchResult } from '@/types';
+import type { RecipeSummary, Collection, Tag, SharedCollection, CollectionShare, UserSearchResult, SearchRecipeResult } from '@/types';
 
 function RecipesPageContent() {
   const searchParams = useSearchParams();
@@ -488,7 +488,7 @@ function RecipesPageContent() {
   }, [isAddRecipesModalOpen, selectedCollection]);
 
   // Handler for adding a recipe to collection (used by RecipeSearchModal)
-  const handleAddRecipeToCollection = async (recipe: RecipeSummary) => {
+  const handleAddRecipeToCollection = async (recipe: SearchRecipeResult) => {
     if (!selectedCollection) return;
     try {
       await collectionApi.addRecipe(selectedCollection, recipe.id);
@@ -499,8 +499,9 @@ function RecipesPageContent() {
           ? { ...c, recipe_count: c.recipe_count + 1 }
           : c
       ));
-      // Add to displayed recipes if viewing this collection
-      setAllRecipes(prev => [...prev, recipe]);
+      // Fetch the full recipe data to add to display
+      const fullRecipe = await recipeApi.get(recipe.id);
+      setAllRecipes(prev => [...prev, fullRecipe]);
     } catch (error: any) {
       alert(error.response?.data?.detail || 'Failed to add recipe to collection');
       throw error; // Re-throw so the modal knows it failed

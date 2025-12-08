@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { collectionApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import RecipeSearchModal from '@/components/search/RecipeSearchModal';
-import type { Collection, RecipeSummary, SharedCollection } from '@/types';
+import type { Collection, RecipeSummary, SharedCollection, SearchRecipeResult } from '@/types';
 
 export default function CollectionsPage() {
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -95,7 +95,7 @@ export default function CollectionsPage() {
     }
   };
 
-  const handleAddRecipe = async (recipe: RecipeSummary) => {
+  const handleAddRecipe = async (recipe: SearchRecipeResult) => {
     if (!selectedCollection) return;
     try {
       await collectionApi.addRecipe(selectedCollection.id, recipe.id);

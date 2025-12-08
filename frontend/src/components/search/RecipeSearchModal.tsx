@@ -3,12 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchApi } from '@/lib/api';
-import type { RecipeSummary } from '@/types';
+import type { SearchRecipeResult } from '@/types';
 
 interface RecipeSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectRecipe: (recipe: RecipeSummary) => void;
+  onSelectRecipe: (recipe: SearchRecipeResult) => void;
   excludeRecipeIds?: Set<string>;
   title?: string;
 }
@@ -22,8 +22,8 @@ export default function RecipeSearchModal({
 }: RecipeSearchModalProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [myRecipes, setMyRecipes] = useState<RecipeSummary[]>([]);
-  const [discoverRecipes, setDiscoverRecipes] = useState<RecipeSummary[]>([]);
+  const [myRecipes, setMyRecipes] = useState<SearchRecipeResult[]>([]);
+  const [discoverRecipes, setDiscoverRecipes] = useState<SearchRecipeResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [addingRecipe, setAddingRecipe] = useState<string | null>(null);
@@ -115,7 +115,7 @@ export default function RecipeSearchModal({
     onClose();
   };
 
-  const handleSelectRecipe = async (recipe: RecipeSummary) => {
+  const handleSelectRecipe = async (recipe: SearchRecipeResult) => {
     setAddingRecipe(recipe.id);
     try {
       await onSelectRecipe(recipe);
