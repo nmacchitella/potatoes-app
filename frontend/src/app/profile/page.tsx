@@ -38,7 +38,7 @@ export default function MyProfilePage() {
     setLoading(true);
     try {
       const [recipesRes, collectionsRes, followersRes, followingRes, requestsRes] = await Promise.all([
-        recipeApi.list({ page_size: 50 }),
+        recipeApi.list({ page: 1, page_size: 50 }),
         collectionApi.list(),
         socialApi.getFollowers(),
         socialApi.getFollowing(),

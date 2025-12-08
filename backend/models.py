@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKey, String, DateTime, JSON, Integer, Float, Text, Table
+from sqlalchemy import Boolean, Column, ForeignKey, String, DateTime, JSON, Integer, Float, Text, Table, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -245,6 +245,28 @@ class Collection(Base):
     # Relationships
     user = relationship("User", back_populates="collections")
     recipes = relationship("Recipe", secondary=collection_recipes, back_populates="collections")
+    shares = relationship("CollectionShare", back_populates="collection", cascade="all, delete-orphan")
+
+
+class CollectionShare(Base):
+    """Tracks which users a collection is shared with and their permission level."""
+    __tablename__ = "collection_shares"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    collection_id = Column(String, ForeignKey("collections.id", ondelete='CASCADE'), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)  # shared with
+    permission = Column(String(20), default="viewer")  # viewer, editor
+    invited_by_id = Column(String, ForeignKey("users.id", ondelete='SET NULL'), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('collection_id', 'user_id', name='uq_collection_user'),
+    )
+
+    # Relationships
+    collection = relationship("Collection", back_populates="shares")
+    user = relationship("User", foreign_keys=[user_id], backref="shared_collections")
+    invited_by = relationship("User", foreign_keys=[invited_by_id])
 
 
 class UserSettings(Base):

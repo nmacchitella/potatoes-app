@@ -277,6 +277,44 @@ export interface CollectionUpdateInput extends Partial<CollectionCreateInput> {
   sort_order?: number;
 }
 
+// --- Collection Sharing Types ---
+export interface CollectionShareUser {
+  id: string;
+  name: string;
+  username?: string;
+  profile_image_url?: string;
+}
+
+export interface CollectionShare {
+  id: string;
+  collection_id: string;
+  user_id: string;
+  permission: 'viewer' | 'editor';
+  invited_by_id?: string;
+  created_at: string;
+  user: CollectionShareUser;
+}
+
+export interface CollectionShareCreateInput {
+  user_id: string;
+  permission: 'viewer' | 'editor';
+}
+
+export interface CollectionShareUpdateInput {
+  permission: 'viewer' | 'editor';
+}
+
+export interface SharedCollection {
+  id: string;
+  name: string;
+  description?: string;
+  cover_image_url?: string;
+  recipe_count: number;
+  permission: 'viewer' | 'editor';
+  owner: CollectionShareUser;
+  created_at: string;
+}
+
 // ============================================================================
 // INGREDIENT PARSER TYPES
 // ============================================================================

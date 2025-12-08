@@ -98,41 +98,9 @@ function LoginContent() {
       <div className="hidden lg:flex lg:w-1/2 bg-dark-lighter p-12 flex-col justify-center relative overflow-hidden border-r border-gray-800/50">
         <div className="relative z-10 max-w-lg">
           <h1 className="text-5xl font-bold text-text-primary mb-6 tracking-tight">🥔 Potatoes</h1>
-          <p className="text-2xl text-gray-400 mb-12 font-light">
+          <p className="text-2xl text-gray-400 font-light">
             Your family kitchen, organized.
           </p>
-
-          <div className="space-y-8">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <span className="text-xl">📖</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-medium text-text-primary mb-1">Organize Recipes</h3>
-                <p className="text-gray-400 text-sm">Save and organize your family's favorite recipes in one place.</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <span className="text-xl">📅</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-medium text-text-primary mb-1">Plan Meals Together</h3>
-                <p className="text-gray-400 text-sm">Collaborate with family members on weekly meal plans.</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <span className="text-xl">🛒</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-medium text-text-primary mb-1">Smart Shopping Lists</h3>
-                <p className="text-gray-400 text-sm">Auto-generate shopping lists from your meal plan.</p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

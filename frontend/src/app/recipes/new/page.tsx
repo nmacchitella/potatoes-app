@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { recipeApi, tagApi } from '@/lib/api';
+import { recipeApi, tagApi, collectionApi } from '@/lib/api';
 import { IngredientAutocomplete, UnitAutocomplete } from '@/components/recipes/IngredientAutocomplete';
-import type { RecipeIngredientInput, RecipeInstructionInput, Tag, ParsedIngredient, RecipeImportResponse } from '@/types';
+import type { RecipeIngredientInput, RecipeInstructionInput, Tag, ParsedIngredient, RecipeImportResponse, Collection } from '@/types';
 
 // Form data structure for each recipe tab
 interface RecipeFormData {
@@ -73,10 +73,17 @@ const importResponseToFormData = (data: RecipeImportResponse): RecipeFormData =>
   selectedTagIds: [],
 });
 
-export default function NewRecipePage() {
+function NewRecipeContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTitle = searchParams.get('title') || '';
+  const initialCollection = searchParams.get('collection') || '';
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Collection state
+  const [collections, setCollections] = useState<Collection[]>([]);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string>(initialCollection);
 
   // Import state
   const [importUrl, setImportUrl] = useState('');
@@ -90,6 +97,7 @@ export default function NewRecipePage() {
   const [isImportedMode, setIsImportedMode] = useState(false);
 
   // Collapsible sections
+  const [manualExpanded, setManualExpanded] = useState(!!initialTitle);
   const [expandedSections, setExpandedSections] = useState({
     basics: true,
     ingredients: true,
@@ -102,7 +110,10 @@ export default function NewRecipePage() {
   const [showTagDropdown, setShowTagDropdown] = useState(false);
 
   // Current form state (for single recipe or manual entry)
-  const [formData, setFormData] = useState<RecipeFormData>(createEmptyFormData());
+  const [formData, setFormData] = useState<RecipeFormData>(() => ({
+    ...createEmptyFormData(),
+    title: initialTitle,
+  }));
 
   // Paste mode for ingredients
   const [pasteMode, setPasteMode] = useState(false);
@@ -111,6 +122,7 @@ export default function NewRecipePage() {
 
   useEffect(() => {
     tagApi.list().then(setAvailableTags).catch(console.error);
+    collectionApi.list().then(setCollections).catch(console.error);
   }, []);
 
   // Get current form data (from tabs or single form)
@@ -292,13 +304,28 @@ export default function NewRecipePage() {
         tag_ids: data.selectedTagIds,
       });
 
+      // Add to collection if one is selected
+      if (selectedCollectionId) {
+        try {
+          await collectionApi.addRecipe(selectedCollectionId, recipe.id);
+        } catch (err) {
+          console.error('Failed to add recipe to collection:', err);
+          // Don't block the flow if adding to collection fails
+        }
+      }
+
       if (recipeTabs.length > 1) {
         setImportMessage(`"${data.title}" saved!`);
         setTimeout(() => setImportMessage(''), 3000);
         handleDismissTab(activeTabIndex);
         setSaving(false);
       } else {
-        router.push(`/recipes/${recipe.id}`);
+        // Redirect to collection view if recipe was added to a collection
+        if (selectedCollectionId) {
+          router.push(`/recipes?collection=${selectedCollectionId}`);
+        } else {
+          router.push(`/recipes/${recipe.id}`);
+        }
       }
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Failed to create recipe');
@@ -343,10 +370,11 @@ export default function NewRecipePage() {
           </div>
         )}
 
-        {/* Import from URL */}
+        {/* Import from URL or Create Manually */}
         {!isImportedMode && (
-          <>
-            <div className="card mb-6">
+          <div className="card mb-6">
+            {/* Import from URL */}
+            <div className="mb-6">
               <h3 className="font-serif text-xl text-charcoal mb-4">Import from URL</h3>
               <div className="flex gap-3">
                 <input
@@ -381,57 +409,424 @@ export default function NewRecipePage() {
               )}
             </div>
 
-            {/* OR divider */}
-            <div className="flex items-center gap-4 my-8">
-              <div className="flex-1 border-t border-border" />
-              <span className="text-warm-gray text-sm uppercase tracking-wider">or create manually</span>
-              <div className="flex-1 border-t border-border" />
-            </div>
-          </>
-        )}
+            {/* Divider */}
+            <div className="border-t border-border my-6" />
 
-        {/* Recipe Tabs */}
-        {recipeTabs.length > 1 && (
-          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-            {recipeTabs.map((tab, index) => (
-              <div
-                key={index}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full cursor-pointer transition-colors ${
-                  index === activeTabIndex
-                    ? 'bg-gold text-white'
-                    : 'bg-white border border-border text-charcoal hover:border-gold'
-                }`}
+            {/* Create Manually - Collapsible */}
+            <div>
+              <button
+                onClick={() => setManualExpanded(!manualExpanded)}
+                className="w-full flex items-center justify-between text-left"
               >
-                <button
-                  onClick={() => setActiveTabIndex(index)}
-                  className="truncate max-w-[120px] text-sm"
-                  title={tab.title || `Recipe ${index + 1}`}
+                <h3 className="font-serif text-xl text-charcoal">Create manually</h3>
+                <svg
+                  className={`w-5 h-5 text-warm-gray transition-transform ${manualExpanded ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  {tab.title || `Recipe ${index + 1}`}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDismissTab(index);
-                  }}
-                  className={`flex-shrink-0 ${index === activeTabIndex ? 'text-white/70 hover:text-white' : 'text-warm-gray hover:text-red-500'}`}
-                  title="Dismiss this recipe"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            ))}
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {manualExpanded && (
+                <div className="mt-6 space-y-6">
+                  {/* Details Section */}
+                  <div className="border border-border rounded-lg p-4">
+                    <button
+                      onClick={() => toggleSection('basics')}
+                      className="w-full flex items-center justify-between text-left"
+                    >
+                      <h4 className="font-medium text-charcoal">Details</h4>
+                      <svg
+                        className={`w-4 h-4 text-warm-gray transition-transform ${expandedSections.basics ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {expandedSections.basics && (
+                      <div className="mt-4 space-y-4">
+                        <div>
+                          <label className="label mb-2 block">Title *</label>
+                          <input
+                            type="text"
+                            value={currentFormData.title}
+                            onChange={e => updateCurrentForm('title', e.target.value)}
+                            placeholder="Recipe name"
+                            className="input-field w-full"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="label mb-2 block">Description</label>
+                          <textarea
+                            value={currentFormData.description}
+                            onChange={e => updateCurrentForm('description', e.target.value)}
+                            placeholder="Brief description..."
+                            rows={2}
+                            className="input-field w-full"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div>
+                            <label className="label mb-1 block text-xs">Servings</label>
+                            <input
+                              type="number"
+                              value={currentFormData.yieldQuantity}
+                              onChange={e => updateCurrentForm('yieldQuantity', Number(e.target.value))}
+                              min="1"
+                              className="input-field w-full"
+                            />
+                          </div>
+                          <div>
+                            <label className="label mb-1 block text-xs">Prep (min)</label>
+                            <input
+                              type="number"
+                              value={currentFormData.prepTime}
+                              onChange={e => updateCurrentForm('prepTime', e.target.value ? Number(e.target.value) : '')}
+                              min="0"
+                              className="input-field w-full"
+                            />
+                          </div>
+                          <div>
+                            <label className="label mb-1 block text-xs">Cook (min)</label>
+                            <input
+                              type="number"
+                              value={currentFormData.cookTime}
+                              onChange={e => updateCurrentForm('cookTime', e.target.value ? Number(e.target.value) : '')}
+                              min="0"
+                              className="input-field w-full"
+                            />
+                          </div>
+                          <div>
+                            <label className="label mb-1 block text-xs">Difficulty</label>
+                            <select
+                              value={currentFormData.difficulty}
+                              onChange={e => updateCurrentForm('difficulty', e.target.value as any)}
+                              className="input-field w-full"
+                            >
+                              <option value="">-</option>
+                              <option value="easy">Easy</option>
+                              <option value="medium">Medium</option>
+                              <option value="hard">Hard</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-4">
+                          <div>
+                            <label className="label mb-1 block text-xs">Privacy</label>
+                            <div className="flex gap-3">
+                              <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                                <input
+                                  type="radio"
+                                  name="privacy"
+                                  checked={currentFormData.privacyLevel === 'private'}
+                                  onChange={() => updateCurrentForm('privacyLevel', 'private')}
+                                  className="accent-gold"
+                                />
+                                <span className="text-charcoal">Private</span>
+                              </label>
+                              <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                                <input
+                                  type="radio"
+                                  name="privacy"
+                                  checked={currentFormData.privacyLevel === 'public'}
+                                  onChange={() => updateCurrentForm('privacyLevel', 'public')}
+                                  className="accent-gold"
+                                />
+                                <span className="text-charcoal">Public</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {collections.length > 0 && (
+                            <div className="flex-1 min-w-[150px]">
+                              <label className="label mb-1 block text-xs">Collection</label>
+                              <select
+                                value={selectedCollectionId}
+                                onChange={e => setSelectedCollectionId(e.target.value)}
+                                className="input-field w-full"
+                              >
+                                <option value="">None</option>
+                                {collections.map(collection => (
+                                  <option key={collection.id} value={collection.id}>
+                                    {collection.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="relative">
+                          <label className="label mb-1 block text-xs">Tags</label>
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {currentFormData.selectedTagIds.map(id => {
+                              const tag = availableTags.find(t => t.id === id);
+                              return tag ? (
+                                <span
+                                  key={id}
+                                  className="inline-flex items-center gap-1 bg-gold/10 text-gold border border-gold/30 px-2 py-0.5 rounded-full text-xs"
+                                >
+                                  {tag.name}
+                                  <button onClick={() => toggleTag(id)} className="hover:text-gold-dark">&times;</button>
+                                </span>
+                              ) : null;
+                            })}
+                          </div>
+                          <input
+                            type="text"
+                            value={tagSearch}
+                            onChange={e => setTagSearch(e.target.value)}
+                            onFocus={() => setShowTagDropdown(true)}
+                            onBlur={() => setTimeout(() => setShowTagDropdown(false), 200)}
+                            placeholder="Search tags..."
+                            className="input-field w-full"
+                          />
+                          {showTagDropdown && filteredTags.length > 0 && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                              {filteredTags.slice(0, 8).map(tag => (
+                                <button
+                                  key={tag.id}
+                                  onClick={() => {
+                                    toggleTag(tag.id);
+                                    setTagSearch('');
+                                  }}
+                                  className="w-full text-left px-3 py-1.5 text-sm text-charcoal hover:bg-cream transition-colors"
+                                >
+                                  {tag.name}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ingredients Section */}
+                  <div className="border border-border rounded-lg p-4">
+                    <button
+                      onClick={() => toggleSection('ingredients')}
+                      className="w-full flex items-center justify-between text-left"
+                    >
+                      <h4 className="font-medium text-charcoal">Ingredients</h4>
+                      <svg
+                        className={`w-4 h-4 text-warm-gray transition-transform ${expandedSections.ingredients ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {expandedSections.ingredients && (
+                      <div className="mt-4 space-y-2">
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setPasteMode(!pasteMode)}
+                            className="text-xs text-gold hover:text-gold-dark"
+                          >
+                            {pasteMode ? 'Manual entry' : 'Paste list'}
+                          </button>
+                        </div>
+
+                        {pasteMode ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={pasteText}
+                              onChange={e => setPasteText(e.target.value)}
+                              placeholder="Paste ingredients, one per line..."
+                              rows={6}
+                              className="input-field w-full font-mono text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleParseIngredients}
+                              disabled={parsing || !pasteText.trim()}
+                              className="btn-primary text-sm disabled:opacity-50"
+                            >
+                              {parsing ? 'Parsing...' : 'Parse'}
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            {currentFormData.ingredients.map((ing, index) => (
+                              <div key={index} className="flex gap-1.5 items-center">
+                                <input
+                                  type="number"
+                                  value={ing.quantity || ''}
+                                  onChange={e => updateIngredient(index, 'quantity', e.target.value ? Number(e.target.value) : undefined)}
+                                  placeholder="Qty"
+                                  className="input-field w-16 text-sm"
+                                  step="0.25"
+                                  min="0"
+                                />
+                                <UnitAutocomplete
+                                  value={ing.unit || ''}
+                                  onChange={value => updateIngredient(index, 'unit', value)}
+                                  placeholder="Unit"
+                                  className="w-20"
+                                />
+                                <IngredientAutocomplete
+                                  value={ing.name}
+                                  onChange={value => updateIngredient(index, 'name', value)}
+                                  placeholder="Ingredient"
+                                  className="flex-1"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeIngredient(index)}
+                                  className="text-warm-gray hover:text-red-500 p-1"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={addIngredient}
+                              className="text-gold hover:text-gold-dark text-sm font-medium"
+                            >
+                              + Add ingredient
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Instructions Section */}
+                  <div className="border border-border rounded-lg p-4">
+                    <button
+                      onClick={() => toggleSection('instructions')}
+                      className="w-full flex items-center justify-between text-left"
+                    >
+                      <h4 className="font-medium text-charcoal">Method</h4>
+                      <svg
+                        className={`w-4 h-4 text-warm-gray transition-transform ${expandedSections.instructions ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {expandedSections.instructions && (
+                      <div className="mt-4 space-y-3">
+                        {currentFormData.instructions.map((inst, index) => (
+                          <div key={index} className="flex gap-2 items-start">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold text-white text-xs font-medium flex items-center justify-center">
+                              {index + 1}
+                            </span>
+                            <textarea
+                              value={inst.instruction_text}
+                              onChange={e => updateInstruction(index, e.target.value)}
+                              placeholder="Describe this step..."
+                              rows={2}
+                              className="input-field flex-1 text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeInstruction(index)}
+                              className="text-warm-gray hover:text-red-500 p-1"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={addInstruction}
+                          className="text-gold hover:text-gold-dark text-sm font-medium"
+                        >
+                          + Add step
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Save buttons for manual entry */}
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => router.push('/recipes')}
+                      disabled={saving}
+                      className="btn-secondary flex-1 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleSubmit('published')}
+                      disabled={saving || !canSave}
+                      className="btn-primary flex-1 disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Publish'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        <div className="space-y-6">
-          {/* Details Section */}
-          <div className="card">
-            <button
-              onClick={() => toggleSection('basics')}
-              className="w-full flex items-center justify-between text-left"
+        {/* Imported Recipe Review */}
+        {isImportedMode && (
+          <>
+            {/* Recipe Tabs */}
+            {recipeTabs.length > 1 && (
+              <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                {recipeTabs.map((tab, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-full cursor-pointer transition-colors ${
+                      index === activeTabIndex
+                        ? 'bg-gold text-white'
+                        : 'bg-white border border-border text-charcoal hover:border-gold'
+                    }`}
+                  >
+                    <button
+                      onClick={() => setActiveTabIndex(index)}
+                      className="truncate max-w-[120px] text-sm"
+                      title={tab.title || `Recipe ${index + 1}`}
+                    >
+                      {tab.title || `Recipe ${index + 1}`}
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDismissTab(index);
+                      }}
+                      className={`flex-shrink-0 ${index === activeTabIndex ? 'text-white/70 hover:text-white' : 'text-warm-gray hover:text-red-500'}`}
+                      title="Dismiss this recipe"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-6">
+              {/* Details Section */}
+              <div className="card">
+                <button
+                  onClick={() => toggleSection('basics')}
+                  className="w-full flex items-center justify-between text-left"
             >
               <h2 className="font-serif text-2xl text-charcoal">Details</h2>
               <svg
@@ -583,6 +978,25 @@ export default function NewRecipePage() {
                     )}
                   </div>
                 </div>
+
+                {/* Collection Selector */}
+                {collections.length > 0 && (
+                  <div>
+                    <label className="label mb-2 block">Add to Collection</label>
+                    <select
+                      value={selectedCollectionId}
+                      onChange={e => setSelectedCollectionId(e.target.value)}
+                      className="input-field w-full md:w-1/2"
+                    >
+                      <option value="">None</option>
+                      {collections.map(collection => (
+                        <option key={collection.id} value={collection.id}>
+                          {collection.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {isImportedMode && currentFormData.coverImageUrl && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -771,11 +1185,11 @@ export default function NewRecipePage() {
           {/* Save buttons */}
           <div className="flex gap-3 pt-4">
             <button
-              onClick={() => handleSubmit('draft')}
-              disabled={saving || !currentFormData.title}
+              onClick={() => router.push('/recipes')}
+              disabled={saving}
               className="btn-secondary flex-1 disabled:opacity-50"
             >
-              Save Draft
+              Cancel
             </button>
             <button
               onClick={() => handleSubmit('published')}
@@ -786,7 +1200,21 @@ export default function NewRecipePage() {
             </button>
           </div>
         </div>
+      </>
+    )}
       </div>
     </div>
+  );
+}
+
+export default function NewRecipePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-cream flex items-center justify-center">
+        <div className="text-charcoal text-xl">Loading...</div>
+      </div>
+    }>
+      <NewRecipeContent />
+    </Suspense>
   );
 }

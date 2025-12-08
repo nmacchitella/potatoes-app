@@ -3,9 +3,10 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { recipeApi, collectionApi } from '@/lib/api';
+import { recipeApi, collectionApi, socialApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
-import type { RecipeSummary, Collection, Tag } from '@/types';
+import RecipeSearchModal from '@/components/search/RecipeSearchModal';
+import type { RecipeSummary, Collection, Tag, SharedCollection, CollectionShare, UserSearchResult } from '@/types';
 
 function RecipesPageContent() {
   const searchParams = useSearchParams();
@@ -41,8 +42,26 @@ function RecipesPageContent() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagFilterMode, setTagFilterMode] = useState<'all' | 'any'>('all'); // 'all' = AND, 'any' = OR
 
+  // Shared collections state
+  const [sharedCollections, setSharedCollections] = useState<SharedCollection[]>([]);
+
+  // Sharing modal state
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [shares, setShares] = useState<CollectionShare[]>([]);
+  const [loadingShares, setLoadingShares] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<UserSearchResult[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [sharingUser, setSharingUser] = useState<string | null>(null);
+
+  // Add recipes modal state
+  const [isAddRecipesModalOpen, setIsAddRecipesModalOpen] = useState(false);
+
   const newCollectionInputRef = useRef<HTMLInputElement>(null);
   const editCollectionInputRef = useRef<HTMLInputElement>(null);
+
+  // Track previous URL param to detect actual URL changes vs re-renders
+  const prevUrlCollectionRef = useRef<string | null | undefined>(undefined);
 
   // Load collections on mount
   useEffect(() => {
@@ -51,8 +70,12 @@ function RecipesPageContent() {
 
   const loadCollections = async () => {
     try {
-      const data = await collectionApi.list();
-      setCollections(data);
+      const [ownCollections, shared] = await Promise.all([
+        collectionApi.list(),
+        collectionApi.listSharedWithMe(),
+      ]);
+      setCollections(ownCollections);
+      setSharedCollections(shared);
     } catch (error) {
       console.error('Failed to load collections:', error);
     } finally {
@@ -62,20 +85,42 @@ function RecipesPageContent() {
 
   // Read collection from URL query parameter
   useEffect(() => {
-    if (!loadingCollections && !initialCollectionLoaded) {
+    if (!loadingCollections) {
       const collectionParam = searchParams.get('collection');
-      if (collectionParam && collections.some(c => c.id === collectionParam)) {
-        setSelectedCollection(collectionParam);
-      }
-      setInitialCollectionLoaded(true);
-    }
-  }, [searchParams, collections, loadingCollections, initialCollectionLoaded]);
 
-  // Update URL when collection changes (after initial load)
+      if (!initialCollectionLoaded) {
+        // Initial load: set collection if valid
+        const isOwnCollection = collections.some(c => c.id === collectionParam);
+        const isSharedCollection = sharedCollections.some(c => c.id === collectionParam);
+        if (collectionParam && (isOwnCollection || isSharedCollection)) {
+          setSelectedCollection(collectionParam);
+        }
+        prevUrlCollectionRef.current = collectionParam;
+        setInitialCollectionLoaded(true);
+      } else if (prevUrlCollectionRef.current !== collectionParam) {
+        // URL actually changed externally (e.g., clicking logo to go back to /recipes)
+        prevUrlCollectionRef.current = collectionParam;
+
+        if (!collectionParam) {
+          setSelectedCollection(null);
+        } else {
+          const isOwnCollection = collections.some(c => c.id === collectionParam);
+          const isSharedCollection = sharedCollections.some(c => c.id === collectionParam);
+          if (isOwnCollection || isSharedCollection) {
+            setSelectedCollection(collectionParam);
+          }
+        }
+      }
+    }
+  }, [searchParams, collections, sharedCollections, loadingCollections, initialCollectionLoaded]);
+
+  // Update URL when collection changes from sidebar clicks (not from URL navigation)
   useEffect(() => {
     if (initialCollectionLoaded) {
       const currentParam = searchParams.get('collection');
-      if (selectedCollection !== currentParam) {
+      // Only update URL if state differs AND the change didn't come from URL navigation
+      if (selectedCollection !== currentParam && prevUrlCollectionRef.current === currentParam) {
+        prevUrlCollectionRef.current = selectedCollection;
         const url = selectedCollection
           ? `/recipes?collection=${selectedCollection}`
           : '/recipes';
@@ -317,22 +362,150 @@ function RecipesPageContent() {
   };
 
   const selectedCollectionName = selectedCollection
-    ? collections.find(c => c.id === selectedCollection)?.name
+    ? collections.find(c => c.id === selectedCollection)?.name ||
+      sharedCollections.find(c => c.id === selectedCollection)?.name
     : null;
 
   const managingCollection = managingCollectionId
     ? collections.find(c => c.id === managingCollectionId)
     : null;
 
+  // Determine if selected collection is a shared one (not owned by user)
+  const selectedSharedCollection = selectedCollection
+    ? sharedCollections.find(c => c.id === selectedCollection)
+    : null;
+  const isSharedCollection = !!selectedSharedCollection;
+  const selectedOwnCollection = selectedCollection
+    ? collections.find(c => c.id === selectedCollection)
+    : null;
+  const canShare = selectedOwnCollection || (selectedSharedCollection?.permission === 'editor');
+  const canEditCollection = canShare; // Same permission level allows editing recipes in collection
+
+  // Load shares when modal opens
+  const loadShares = async () => {
+    if (!selectedCollection) return;
+    setLoadingShares(true);
+    try {
+      const data = await collectionApi.listShares(selectedCollection);
+      setShares(data);
+    } catch (error) {
+      console.error('Failed to load shares:', error);
+    } finally {
+      setLoadingShares(false);
+    }
+  };
+
+  const openShareModal = () => {
+    setIsShareModalOpen(true);
+    loadShares();
+  };
+
+  // User search for sharing
+  useEffect(() => {
+    if (!userSearchQuery.trim()) {
+      setUserSearchResults([]);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      setSearchingUsers(true);
+      try {
+        const results = await socialApi.searchUsers(userSearchQuery, 10);
+        // Filter out users who already have access
+        const shareUserIds = new Set(shares.map(s => s.user_id));
+        setUserSearchResults(results.filter(u => !shareUserIds.has(u.id)));
+      } catch (error) {
+        console.error('Failed to search users:', error);
+      } finally {
+        setSearchingUsers(false);
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [userSearchQuery, shares]);
+
+  const handleShareWithUser = async (userId: string, permission: 'viewer' | 'editor' = 'viewer') => {
+    if (!selectedCollection) return;
+    setSharingUser(userId);
+    try {
+      const newShare = await collectionApi.share(selectedCollection, { user_id: userId, permission });
+      setShares(prev => [...prev, newShare]);
+      setUserSearchQuery('');
+      setUserSearchResults([]);
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to share collection');
+    } finally {
+      setSharingUser(null);
+    }
+  };
+
+  const handleUpdatePermission = async (userId: string, permission: 'viewer' | 'editor') => {
+    if (!selectedCollection) return;
+    try {
+      const updated = await collectionApi.updateShare(selectedCollection, userId, { permission });
+      setShares(prev => prev.map(s => s.user_id === userId ? updated : s));
+    } catch (error) {
+      console.error('Failed to update permission:', error);
+    }
+  };
+
+  const handleRemoveShare = async (userId: string) => {
+    if (!selectedCollection) return;
+    if (!confirm('Remove this user from the collection?')) return;
+    try {
+      await collectionApi.removeShare(selectedCollection, userId);
+      setShares(prev => prev.filter(s => s.user_id !== userId));
+    } catch (error) {
+      console.error('Failed to remove share:', error);
+    }
+  };
+
+  const handleLeaveCollection = async () => {
+    if (!selectedCollection) return;
+    if (!confirm('Leave this collection? You will no longer have access to it.')) return;
+    try {
+      await collectionApi.leave(selectedCollection);
+      setSharedCollections(prev => prev.filter(c => c.id !== selectedCollection));
+      setSelectedCollection(null);
+    } catch (error) {
+      console.error('Failed to leave collection:', error);
+    }
+  };
+
   // Get all user recipes for the management panel
   const [allUserRecipes, setAllUserRecipes] = useState<RecipeSummary[]>([]);
   useEffect(() => {
     if (managingCollectionId) {
-      recipeApi.list({ page: 1, page_size: 500 }).then(res => {
+      recipeApi.list({ page: 1, page_size: 100 }).then(res => {
         setAllUserRecipes(res.items);
       });
     }
   }, [managingCollectionId]);
+
+  // Load collection recipe IDs when add recipes modal opens
+  useEffect(() => {
+    if (isAddRecipesModalOpen && selectedCollection) {
+      loadCollectionRecipes(selectedCollection);
+    }
+  }, [isAddRecipesModalOpen, selectedCollection]);
+
+  // Handler for adding a recipe to collection (used by RecipeSearchModal)
+  const handleAddRecipeToCollection = async (recipe: RecipeSummary) => {
+    if (!selectedCollection) return;
+    try {
+      await collectionApi.addRecipe(selectedCollection, recipe.id);
+      setCollectionRecipeIds(prev => new Set([...prev, recipe.id]));
+      // Update collection count
+      setCollections(prev => prev.map(c =>
+        c.id === selectedCollection
+          ? { ...c, recipe_count: c.recipe_count + 1 }
+          : c
+      ));
+      // Add to displayed recipes if viewing this collection
+      setAllRecipes(prev => [...prev, recipe]);
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to add recipe to collection');
+      throw error; // Re-throw so the modal knows it failed
+    }
+  };
 
   return (
     <div className="min-h-screen bg-cream">
@@ -530,6 +703,29 @@ function RecipesPageContent() {
                     + New Collection
                   </button>
                 )}
+
+                {/* Shared with me section */}
+                {sharedCollections.length > 0 && (
+                  <>
+                    <div className="mt-6 mb-2 px-3">
+                      <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">Shared with me</span>
+                    </div>
+                    {sharedCollections.map(collection => (
+                      <button
+                        key={collection.id}
+                        onClick={() => handleCollectionClick(collection.id)}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          selectedCollection === collection.id
+                            ? 'bg-gold/10 text-gold-dark font-medium'
+                            : 'text-charcoal hover:bg-cream-dark'
+                        }`}
+                      >
+                        <span className="truncate block">{collection.name}</span>
+                        <span className="text-[10px] text-warm-gray">by {collection.owner.name}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
               </nav>
             </div>
           </aside>
@@ -539,9 +735,17 @@ function RecipesPageContent() {
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h1 className="font-serif text-2xl text-charcoal">
-                  {selectedCollectionName || 'All Recipes'}
-                </h1>
+                <div className="flex items-center gap-3">
+                  <h1 className="font-serif text-2xl text-charcoal">
+                    {selectedCollectionName || 'All Recipes'}
+                  </h1>
+                  {/* Shared badge for shared collections */}
+                  {isSharedCollection && (
+                    <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
+                      Shared by {selectedSharedCollection?.owner.name}
+                    </span>
+                  )}
+                </div>
                 {!loading && (
                   <p className="text-sm text-warm-gray mt-1">
                     {filteredRecipes.length} recipe{filteredRecipes.length !== 1 ? 's' : ''}
@@ -549,9 +753,46 @@ function RecipesPageContent() {
                   </p>
                 )}
               </div>
-              <Link href="/recipes/new" className="btn-primary">
-                + New Recipe
-              </Link>
+              <div className="flex items-center gap-3">
+                {/* Collection action buttons */}
+                {selectedCollection && (
+                  <>
+                    {canEditCollection && (
+                      <button
+                        onClick={() => setIsAddRecipesModalOpen(true)}
+                        className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg text-charcoal hover:border-gold transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Add Recipes
+                      </button>
+                    )}
+                    {canShare && (
+                      <button
+                        onClick={openShareModal}
+                        className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg text-charcoal hover:border-gold transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                        </svg>
+                        Share
+                      </button>
+                    )}
+                    {isSharedCollection && (
+                      <button
+                        onClick={handleLeaveCollection}
+                        className="flex items-center gap-2 px-3 py-2 text-sm border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        Leave
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Spotlight Filter */}
@@ -716,33 +957,31 @@ function RecipesPageContent() {
                           )}
                         </button>
                       )}
-                      {/* Privacy Badge - hide in manage mode when viewing a collection */}
+                      {/* Privacy Badge - display only (edit via recipe detail page) */}
                       {!(isManageMode && selectedCollection) && (
-                        <button
-                          onClick={(e) => togglePrivacy(recipe, e)}
-                          className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        <span
+                          className={`absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${
                             recipe.privacy_level === 'public'
-                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              ? 'bg-green-100/90 text-green-700'
+                              : 'bg-gray-100/90 text-gray-600'
                           }`}
-                          title={`Click to make ${recipe.privacy_level === 'public' ? 'private' : 'public'}`}
                         >
                           {recipe.privacy_level === 'public' ? (
-                            <span className="flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <span className="flex items-center gap-0.5">
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
                               Public
                             </span>
                           ) : (
-                            <span className="flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <span className="flex items-center gap-0.5">
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                               </svg>
                               Private
                             </span>
                           )}
-                        </button>
+                        </span>
                       )}
                     </div>
                     <h3 className="font-serif text-lg text-charcoal group-hover:text-gold transition-colors mb-1">
@@ -855,18 +1094,197 @@ function RecipesPageContent() {
         </div>
       </div>
 
-      {/* Mobile Collections Drawer Trigger */}
-      <div className="lg:hidden fixed bottom-4 left-4 z-40">
-        <button
-          onClick={() => setIsManageMode(!isManageMode)}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-border rounded-full shadow-lg text-sm text-charcoal"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
-          Collections
-        </button>
-      </div>
+      {/* Floating Action Button - New Recipe */}
+      <Link
+        href={selectedCollection ? `/recipes/new?collection=${selectedCollection}` : "/recipes/new"}
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gold hover:bg-gold-dark text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all duration-200 hover:scale-105"
+        title="New Recipe"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+        </svg>
+      </Link>
+
+      {/* Share Modal */}
+      {isShareModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-md max-h-[80vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="font-serif text-lg text-charcoal">Share Collection</h2>
+              <button
+                onClick={() => {
+                  setIsShareModalOpen(false);
+                  setUserSearchQuery('');
+                  setUserSearchResults([]);
+                }}
+                className="text-warm-gray hover:text-charcoal"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-4 overflow-y-auto flex-1">
+              {/* User Search */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-charcoal mb-2">
+                  Add people
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    placeholder="Search by name or username..."
+                    className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-gold"
+                  />
+                  {searchingUsers && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Search Results */}
+                {userSearchResults.length > 0 && (
+                  <div className="mt-2 border border-border rounded-lg divide-y divide-border">
+                    {userSearchResults.map(user => (
+                      <div key={user.id} className="flex items-center justify-between p-3">
+                        <div className="flex items-center gap-3">
+                          {user.profile_image_url ? (
+                            <img
+                              src={user.profile_image_url}
+                              alt={user.name}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-cream-dark flex items-center justify-center">
+                              <span className="text-xs font-medium text-charcoal">
+                                {user.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-sm font-medium text-charcoal">{user.name}</p>
+                            {user.username && (
+                              <p className="text-xs text-warm-gray">@{user.username}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleShareWithUser(user.id, 'viewer')}
+                            disabled={sharingUser === user.id}
+                            className="px-2 py-1 text-xs border border-border rounded hover:border-gold transition-colors disabled:opacity-50"
+                          >
+                            {sharingUser === user.id ? '...' : 'Viewer'}
+                          </button>
+                          <button
+                            onClick={() => handleShareWithUser(user.id, 'editor')}
+                            disabled={sharingUser === user.id}
+                            className="px-2 py-1 text-xs bg-gold text-white rounded hover:bg-gold-dark transition-colors disabled:opacity-50"
+                          >
+                            {sharingUser === user.id ? '...' : 'Editor'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Current Shares */}
+              <div>
+                <label className="block text-sm font-medium text-charcoal mb-2">
+                  People with access
+                </label>
+                {loadingShares ? (
+                  <div className="flex justify-center py-4">
+                    <div className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : shares.length === 0 ? (
+                  <p className="text-sm text-warm-gray text-center py-4">
+                    No one else has access yet
+                  </p>
+                ) : (
+                  <div className="border border-border rounded-lg divide-y divide-border">
+                    {shares.map(share => (
+                      <div key={share.id} className="flex items-center justify-between p-3">
+                        <div className="flex items-center gap-3">
+                          {share.user.profile_image_url ? (
+                            <img
+                              src={share.user.profile_image_url}
+                              alt={share.user.name}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-cream-dark flex items-center justify-center">
+                              <span className="text-xs font-medium text-charcoal">
+                                {share.user.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-sm font-medium text-charcoal">{share.user.name}</p>
+                            {share.user.username && (
+                              <p className="text-xs text-warm-gray">@{share.user.username}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={share.permission}
+                            onChange={(e) => handleUpdatePermission(share.user_id, e.target.value as 'viewer' | 'editor')}
+                            className="text-xs border border-border rounded px-2 py-1 focus:outline-none focus:border-gold"
+                          >
+                            <option value="viewer">Viewer</option>
+                            <option value="editor">Editor</option>
+                          </select>
+                          <button
+                            onClick={() => handleRemoveShare(share.user_id)}
+                            className="p-1 text-warm-gray hover:text-red-500"
+                            title="Remove access"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-border">
+              <button
+                onClick={() => {
+                  setIsShareModalOpen(false);
+                  setUserSearchQuery('');
+                  setUserSearchResults([]);
+                }}
+                className="w-full py-2 bg-charcoal text-white rounded-lg text-sm hover:bg-charcoal/90 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Recipes Modal */}
+      <RecipeSearchModal
+        isOpen={isAddRecipesModalOpen}
+        onClose={() => setIsAddRecipesModalOpen(false)}
+        onSelectRecipe={handleAddRecipeToCollection}
+        excludeRecipeIds={collectionRecipeIds}
+        title="Add Recipe to Collection"
+      />
     </div>
   );
 }

@@ -2,11 +2,13 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import GlobalSearch, { CommandPalette } from '@/components/search/GlobalSearch';
 
 export default function Navbar() {
+  const router = useRouter();
   const { user, logout } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -105,9 +107,10 @@ export default function Navbar() {
                   </Link>
                   <div className="border-t border-border mt-1 pt-1">
                     <button
-                      onClick={() => {
-                        logout();
+                      onClick={async () => {
+                        await logout();
                         setMenuOpen(false);
+                        router.push('/login');
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-cream transition-colors"
                     >

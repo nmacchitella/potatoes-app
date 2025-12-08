@@ -312,6 +312,55 @@ class CollectionWithRecipes(Collection):
     recipes: List["RecipeSummary"] = []
 
 
+# --- Collection Share Schemas ---
+class CollectionShareCreate(BaseModel):
+    user_id: str
+    permission: str = "viewer"  # viewer, editor
+
+
+class CollectionShareUpdate(BaseModel):
+    permission: str  # viewer, editor
+
+
+class CollectionShareUser(BaseModel):
+    """User info for collection share responses"""
+    id: str
+    name: str
+    username: Optional[str] = None
+    profile_image_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class CollectionShare(BaseModel):
+    id: str
+    collection_id: str
+    user_id: str
+    permission: str
+    invited_by_id: Optional[str] = None
+    created_at: datetime
+    user: CollectionShareUser
+
+    class Config:
+        from_attributes = True
+
+
+class SharedCollection(BaseModel):
+    """Collection info when listing collections shared with me"""
+    id: str
+    name: str
+    description: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    recipe_count: int = 0
+    permission: str  # my permission level
+    owner: CollectionShareUser  # collection owner info
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # --- Recipe Schemas ---
 class RecipeBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)

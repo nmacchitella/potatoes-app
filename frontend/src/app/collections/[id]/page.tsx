@@ -3,18 +3,24 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { collectionApi, recipeApi } from '@/lib/api';
+import { collectionApi, recipeApi, socialApi } from '@/lib/api';
+import { useStore } from '@/store/useStore';
 import Navbar from '@/components/layout/Navbar';
-import type { CollectionWithRecipes, RecipeSummary, RecipeListResponse } from '@/types';
+import type { CollectionWithRecipes, RecipeSummary, CollectionShare, UserSearchResult } from '@/types';
 
 export default function CollectionDetailPage() {
   const params = useParams();
   const router = useRouter();
   const collectionId = params.id as string;
+  const { user } = useStore();
 
   const [collection, setCollection] = useState<CollectionWithRecipes | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Permissions - determined after loading
+  const [isOwner, setIsOwner] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
 
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -27,6 +33,15 @@ export default function CollectionDetailPage() {
   const [totalRecipeCount, setTotalRecipeCount] = useState(0);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
 
+  // Share modal state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shares, setShares] = useState<CollectionShare[]>([]);
+  const [loadingShares, setLoadingShares] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<UserSearchResult[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [newSharePermission, setNewSharePermission] = useState<'viewer' | 'editor'>('viewer');
+
   useEffect(() => {
     loadCollection();
   }, [collectionId]);
@@ -36,11 +51,101 @@ export default function CollectionDetailPage() {
       const data = await collectionApi.get(collectionId);
       setCollection(data);
       setEditForm({ name: data.name, description: data.description || '' });
+
+      // Determine permissions
+      const ownerCheck = user?.id === data.user_id;
+      setIsOwner(ownerCheck);
+      // For now, assume if we can load it and we're not owner, check if we have edit permission
+      // The backend will enforce this, but for UI we assume editor if not owner but can access
+      setCanEdit(ownerCheck); // Will be updated when we load shares
     } catch (error) {
       setError('Collection not found');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Load shares when share modal opens
+  const loadShares = async () => {
+    setLoadingShares(true);
+    try {
+      const data = await collectionApi.listShares(collectionId);
+      setShares(data);
+
+      // Check if current user is an editor (if not owner)
+      if (!isOwner && user) {
+        const myShare = data.find(s => s.user_id === user.id);
+        setCanEdit(myShare?.permission === 'editor');
+      }
+    } catch (error) {
+      console.error('Failed to load shares:', error);
+    } finally {
+      setLoadingShares(false);
+    }
+  };
+
+  // Search users for sharing
+  const searchUsers = async (query: string) => {
+    if (query.length < 2) {
+      setUserSearchResults([]);
+      return;
+    }
+
+    setSearchingUsers(true);
+    try {
+      const results = await socialApi.searchUsers(query, 10);
+      // Filter out the owner and users already shared with
+      const sharedUserIds = new Set(shares.map(s => s.user_id));
+      const filtered = results.filter(u =>
+        u.id !== collection?.user_id && !sharedUserIds.has(u.id)
+      );
+      setUserSearchResults(filtered);
+    } catch (error) {
+      console.error('Failed to search users:', error);
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  // Share with a user
+  const handleShare = async (userId: string) => {
+    try {
+      const newShare = await collectionApi.share(collectionId, {
+        user_id: userId,
+        permission: newSharePermission
+      });
+      setShares([...shares, newShare]);
+      setUserSearchResults(userSearchResults.filter(u => u.id !== userId));
+      setUserSearchQuery('');
+    } catch (error) {
+      console.error('Failed to share collection:', error);
+    }
+  };
+
+  // Update a share's permission
+  const handleUpdateShare = async (userId: string, permission: 'viewer' | 'editor') => {
+    try {
+      const updated = await collectionApi.updateShare(collectionId, userId, { permission });
+      setShares(shares.map(s => s.user_id === userId ? updated : s));
+    } catch (error) {
+      console.error('Failed to update share:', error);
+    }
+  };
+
+  // Remove a share
+  const handleRemoveShare = async (userId: string) => {
+    try {
+      await collectionApi.removeShare(collectionId, userId);
+      setShares(shares.filter(s => s.user_id !== userId));
+    } catch (error) {
+      console.error('Failed to remove share:', error);
+    }
+  };
+
+  // Open share modal
+  const openShareModal = () => {
+    setShowShareModal(true);
+    loadShares();
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -77,7 +182,7 @@ export default function CollectionDetailPage() {
     setShowAddModal(true);
     setLoadingRecipes(true);
     try {
-      const response = await recipeApi.list({ page_size: 100 });
+      const response = await recipeApi.list({ page: 1, page_size: 100 });
       setTotalRecipeCount(response.items.length);
       // Filter out recipes already in the collection
       const collectionRecipeIds = new Set(collection?.recipes.map(r => r.id) || []);
@@ -172,13 +277,26 @@ export default function CollectionDetailPage() {
             </div>
 
             <div className="flex gap-2">
-              <button
-                onClick={openAddRecipesModal}
-                className="btn-primary"
-              >
-                Add Recipes
-              </button>
-              {!collection.is_default && (
+              {(isOwner || canEdit) && (
+                <button
+                  onClick={openAddRecipesModal}
+                  className="btn-primary"
+                >
+                  Add Recipes
+                </button>
+              )}
+              {(isOwner || canEdit) && (
+                <button
+                  onClick={openShareModal}
+                  className="btn-secondary flex items-center gap-1.5"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share
+                </button>
+              )}
+              {!collection.is_default && isOwner && (
                 <button
                   onClick={() => setShowEditModal(true)}
                   className="btn-secondary"
@@ -239,12 +357,14 @@ export default function CollectionDetailPage() {
                   </div>
                 </Link>
 
-                <button
-                  onClick={() => handleRemoveRecipe(recipe.id)}
-                  className="mt-3 text-sm text-warm-gray hover:text-red-500 transition-colors"
-                >
-                  Remove from collection
-                </button>
+                {(isOwner || canEdit) && (
+                  <button
+                    onClick={() => handleRemoveRecipe(recipe.id)}
+                    className="mt-3 text-sm text-warm-gray hover:text-red-500 transition-colors"
+                  >
+                    Remove from collection
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -385,6 +505,165 @@ export default function CollectionDetailPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-charcoal/40 backdrop-blur-sm"
+            onClick={() => setShowShareModal(false)}
+          />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 p-6 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-serif text-2xl text-charcoal">Share Collection</h2>
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="text-warm-gray hover:text-charcoal"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Add people section */}
+            <div className="mb-6">
+              <label className="label mb-2 block">Add people</label>
+              <div className="flex gap-2">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={userSearchQuery}
+                    onChange={(e) => {
+                      setUserSearchQuery(e.target.value);
+                      searchUsers(e.target.value);
+                    }}
+                    placeholder="Search by name or username..."
+                    className="input-field w-full"
+                  />
+                  {/* Search results dropdown */}
+                  {userSearchResults.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-cream-dark rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
+                      {userSearchResults.map(searchUser => (
+                        <button
+                          key={searchUser.id}
+                          onClick={() => handleShare(searchUser.id)}
+                          className="w-full flex items-center gap-3 px-4 py-2 hover:bg-cream transition-colors text-left"
+                        >
+                          {searchUser.profile_image_url ? (
+                            <img
+                              src={searchUser.profile_image_url}
+                              alt={searchUser.name}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-cream-dark flex items-center justify-center">
+                              <span className="text-sm text-warm-gray">
+                                {searchUser.name.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-charcoal truncate">{searchUser.name}</p>
+                            {searchUser.username && (
+                              <p className="text-xs text-warm-gray truncate">@{searchUser.username}</p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {searchingUsers && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-4 w-4 border border-gold border-t-transparent" />
+                    </div>
+                  )}
+                </div>
+                <select
+                  value={newSharePermission}
+                  onChange={(e) => setNewSharePermission(e.target.value as 'viewer' | 'editor')}
+                  className="input-field w-28"
+                >
+                  <option value="viewer">Viewer</option>
+                  <option value="editor">Editor</option>
+                </select>
+              </div>
+              <p className="text-xs text-warm-gray mt-2">
+                Viewers can only see the collection. Editors can add/remove recipes and share with others.
+              </p>
+            </div>
+
+            {/* Current shares list */}
+            <div className="flex-1 overflow-y-auto">
+              <label className="label mb-2 block">People with access</label>
+              {loadingShares ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-2 border-gold border-t-transparent" />
+                </div>
+              ) : shares.length === 0 ? (
+                <p className="text-warm-gray text-sm py-4 text-center">
+                  This collection isn't shared with anyone yet
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {shares.map(share => (
+                    <div
+                      key={share.id}
+                      className="flex items-center gap-3 p-3 bg-cream/50 rounded-lg"
+                    >
+                      {share.user.profile_image_url ? (
+                        <img
+                          src={share.user.profile_image_url}
+                          alt={share.user.name}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-cream-dark flex items-center justify-center">
+                          <span className="text-sm text-warm-gray">
+                            {share.user.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-charcoal truncate">{share.user.name}</p>
+                        {share.user.username && (
+                          <p className="text-xs text-warm-gray truncate">@{share.user.username}</p>
+                        )}
+                      </div>
+                      <select
+                        value={share.permission}
+                        onChange={(e) => handleUpdateShare(share.user_id, e.target.value as 'viewer' | 'editor')}
+                        className="input-field text-sm py-1 w-24"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="editor">Editor</option>
+                      </select>
+                      <button
+                        onClick={() => handleRemoveShare(share.user_id)}
+                        className="text-warm-gray hover:text-red-500 transition-colors p-1"
+                        title="Remove access"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-cream-dark">
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="btn-primary w-full"
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

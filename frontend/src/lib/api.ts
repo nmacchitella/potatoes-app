@@ -5,6 +5,7 @@ import type {
   Recipe, RecipeWithScale, RecipeSummary, RecipeListResponse, RecipeListParams,
   RecipeCreateInput, RecipeUpdateInput, RecipeImportResponse, RecipeImportMultiResponse,
   Collection, CollectionWithRecipes, CollectionCreateInput, CollectionUpdateInput,
+  CollectionShare, CollectionShareCreateInput, CollectionShareUpdateInput, SharedCollection,
   Tag, ParsedIngredient, Ingredient, MeasurementUnit,
   UserSearchResult, UserProfilePublic, FollowResponse, Notification,
   SearchResponse, FullSearchResponse,
@@ -443,6 +444,35 @@ export const collectionApi = {
 
   removeRecipe: async (collectionId: string, recipeId: string): Promise<void> => {
     await api.delete(`/collections/${collectionId}/recipes/${recipeId}`);
+  },
+
+  // Sharing methods
+  listSharedWithMe: async (): Promise<SharedCollection[]> => {
+    const response = await api.get<SharedCollection[]>('/collections/shared-with-me');
+    return response.data;
+  },
+
+  listShares: async (collectionId: string): Promise<CollectionShare[]> => {
+    const response = await api.get<CollectionShare[]>(`/collections/${collectionId}/shares`);
+    return response.data;
+  },
+
+  share: async (collectionId: string, data: CollectionShareCreateInput): Promise<CollectionShare> => {
+    const response = await api.post<CollectionShare>(`/collections/${collectionId}/shares`, data);
+    return response.data;
+  },
+
+  updateShare: async (collectionId: string, userId: string, data: CollectionShareUpdateInput): Promise<CollectionShare> => {
+    const response = await api.put<CollectionShare>(`/collections/${collectionId}/shares/${userId}`, data);
+    return response.data;
+  },
+
+  removeShare: async (collectionId: string, userId: string): Promise<void> => {
+    await api.delete(`/collections/${collectionId}/shares/${userId}`);
+  },
+
+  leave: async (collectionId: string): Promise<void> => {
+    await api.delete(`/collections/${collectionId}/leave`);
   },
 };
 
