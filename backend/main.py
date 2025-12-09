@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from database import engine, Base
 from config import settings, logger
-from routers import auth_router, google_auth, recipe_router, collection_router, tag_router, social_router, notification_router, ingredient_router, search_router
+from routers import auth_router, google_auth, recipe_router, collection_router, tag_router, social_router, notification_router, ingredient_router, search_router, meal_plan_router
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -58,6 +58,7 @@ app.include_router(social_router.router, prefix="/api")
 app.include_router(notification_router.router, prefix="/api")
 app.include_router(ingredient_router.router, prefix="/api")
 app.include_router(search_router.router, prefix="/api")
+app.include_router(meal_plan_router.router, prefix="/api")
 
 
 @app.get("/")

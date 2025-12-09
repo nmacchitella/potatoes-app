@@ -49,8 +49,8 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
   const handleCollectionClick = (collectionId: string | null) => {
     const url = collectionId
-      ? `/recipes?collection=${collectionId}`
-      : '/recipes';
+      ? `/?collection=${collectionId}`
+      : '/';
     router.push(url);
     onClose();
   };
@@ -86,7 +86,7 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
           {/* Header with close button */}
           <div className="flex items-center justify-between p-4 border-b border-border">
             <Link
-              href="/recipes"
+              href="/"
               onClick={() => { handleCollectionClick(null); }}
               className="font-serif text-xl text-charcoal"
             >
@@ -141,7 +141,7 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               <button
                 onClick={() => handleCollectionClick(null)}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  pathname === '/recipes' && !selectedCollection
+                  pathname === '/' && !selectedCollection
                     ? 'bg-gold/10 text-gold-dark font-medium'
                     : 'text-charcoal hover:bg-cream-dark'
                 }`}
@@ -178,23 +178,55 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     <div className="py-4 text-center">
                       <div className="animate-spin rounded-full h-5 w-5 border-2 border-gold border-t-transparent mx-auto" />
                     </div>
-                  ) : collections.length === 0 ? (
-                    <p className="text-sm text-warm-gray py-2 px-3">No collections yet</p>
                   ) : (
-                    collections.map(collection => (
+                    <>
+                      {collections.length === 0 ? (
+                        <p className="text-sm text-warm-gray py-2 px-3">No collections yet</p>
+                      ) : (
+                        collections.map(collection => (
+                          <div
+                            key={collection.id}
+                            className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm transition-colors ${
+                              selectedCollection === collection.id
+                                ? 'bg-gold/10 text-gold-dark font-medium'
+                                : 'text-charcoal hover:bg-cream-dark'
+                            }`}
+                          >
+                            <button
+                              onClick={() => handleCollectionClick(collection.id)}
+                              className="flex-1 text-left truncate"
+                            >
+                              {collection.name}
+                            </button>
+                            <div className="flex items-center gap-2 ml-2">
+                              <span className="text-xs text-warm-gray">{collection.recipe_count}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleNavClick(`/collections/${collection.id}`);
+                                }}
+                                className="p-1 text-warm-gray hover:text-gold transition-colors"
+                                aria-label={`Edit ${collection.name}`}
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {/* Create new collection */}
                       <button
-                        key={collection.id}
-                        onClick={() => handleCollectionClick(collection.id)}
-                        className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm text-left transition-colors ${
-                          selectedCollection === collection.id
-                            ? 'bg-gold/10 text-gold-dark font-medium'
-                            : 'text-charcoal hover:bg-cream-dark'
-                        }`}
+                        onClick={() => handleNavClick('/collections')}
+                        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-left text-gold hover:bg-gold/10 transition-colors mt-2"
                       >
-                        <span className="truncate">{collection.name}</span>
-                        <span className="text-xs text-warm-gray ml-2">{collection.recipe_count}</span>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>New collection</span>
                       </button>
-                    ))
+                    </>
                   )}
                 </nav>
               )}

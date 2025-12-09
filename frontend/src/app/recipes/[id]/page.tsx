@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { recipeApi, collectionApi, tagApi, getErrorMessage } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import { abbreviateUnit, formatQuantity } from '@/lib/constants';
+import { convertIngredient, type UnitSystem } from '@/lib/unitConversion';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { RecipeWithScale, Collection, RecipeIngredient, RecipeInstruction, Tag } from '@/types';
@@ -13,15 +14,33 @@ import type { RecipeWithScale, Collection, RecipeIngredient, RecipeInstruction, 
 /**
  * Format an ingredient for display
  * Combines quantity, unit, name, and preparation into a readable string
+ * Optionally converts units to the specified unit system
  */
-const formatIngredient = (ing: RecipeIngredient): string => {
+const formatIngredientWithUnit = (ing: RecipeIngredient, unitSystem?: UnitSystem): string => {
   const parts: string[] = [];
 
+  // Convert units if a target system is specified
+  let displayQty = ing.quantity;
+  let displayQtyMax = ing.quantity_max;
+  let displayUnit = ing.unit;
+
+  if (unitSystem && ing.unit && ing.quantity) {
+    const converted = convertIngredient(
+      ing.quantity,
+      ing.quantity_max,
+      ing.unit,
+      unitSystem
+    );
+    displayQty = converted.quantity;
+    displayQtyMax = converted.quantityMax;
+    displayUnit = converted.unit;
+  }
+
   // Format quantity (with optional range)
-  if (ing.quantity) {
-    const qty = formatQuantity(ing.quantity);
-    if (ing.quantity_max) {
-      const qtyMax = formatQuantity(ing.quantity_max);
+  if (displayQty) {
+    const qty = formatQuantity(displayQty);
+    if (displayQtyMax) {
+      const qtyMax = formatQuantity(displayQtyMax);
       parts.push(`${qty}-${qtyMax}`);
     } else {
       parts.push(qty);
@@ -29,8 +48,8 @@ const formatIngredient = (ing: RecipeIngredient): string => {
   }
 
   // Add unit (metric units attach directly to quantity)
-  if (ing.unit) {
-    const abbr = abbreviateUnit(ing.unit);
+  if (displayUnit) {
+    const abbr = abbreviateUnit(displayUnit);
     if (abbr) {
       const metricUnits = ['g', 'kg', 'mg', 'ml', 'L'];
       if (metricUnits.includes(abbr)) {
@@ -49,6 +68,7 @@ const formatIngredient = (ing: RecipeIngredient): string => {
 
   return parts.join(' ');
 };
+
 
 // Editable ingredient type for form state
 interface EditableIngredient {
@@ -74,6 +94,7 @@ export default function RecipeDetailPage() {
   const [recipe, setRecipe] = useState<RecipeWithScale | null>(null);
   const [loading, setLoading] = useState(true);
   const [scale, setScale] = useState(1);
+  const [unitSystem, setUnitSystem] = useState<UnitSystem | null>(null); // null = original units
   const [deleting, setDeleting] = useState(false);
   const [cloning, setCloning] = useState(false);
 
@@ -125,7 +146,7 @@ export default function RecipeDetailPage() {
         setRecipe(data);
       } catch (error) {
         console.error('Failed to fetch recipe:', error);
-        router.push('/recipes');
+        router.push('/');
       } finally {
         setLoading(false);
       }
@@ -201,7 +222,7 @@ export default function RecipeDetailPage() {
     setDeleting(true);
     try {
       await recipeApi.delete(recipeId);
-      router.push('/recipes');
+      router.push('/');
     } catch (error) {
       console.error('Failed to delete recipe:', error);
       setDeleting(false);
@@ -391,9 +412,9 @@ export default function RecipeDetailPage() {
       <main className="max-w-6xl mx-auto px-4 md:px-8 py-6 pb-24">
         {/* Breadcrumb & Actions */}
         <div className="flex items-center justify-between mb-4">
-          <Link href="/recipes" className="text-warm-gray hover:text-gold text-xs uppercase tracking-wider">
-            &larr; Recipes
-          </Link>
+          <button onClick={() => router.back()} className="text-warm-gray hover:text-gold text-xs uppercase tracking-wider">
+            &larr; Back
+          </button>
           {isOwner && !isEditing && (
             <div className="flex gap-3 items-center">
               <button onClick={() => setIsEditing(true)} className="text-xs text-warm-gray hover:text-gold">
@@ -779,7 +800,7 @@ export default function RecipeDetailPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Ingredients */}
             <div className="bg-white rounded-lg border border-border p-5">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <h2 className="font-serif text-xl text-charcoal">Ingredients</h2>
                 {isEditing ? (
                   <div className="flex items-center gap-2 text-xs">
@@ -799,13 +820,36 @@ export default function RecipeDetailPage() {
                     />
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-sm">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="text-warm-gray">{recipe.scaled_yield_quantity} {recipe.yield_unit}</span>
                     <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
                       <button onClick={() => setScale(s => Math.max(0.5, s - 0.5))} className="w-5 h-5 rounded bg-cream hover:bg-cream-dark flex items-center justify-center text-charcoal text-xs transition-colors">−</button>
                       <span className="w-6 text-center text-xs text-charcoal">{scale}x</span>
                       <button onClick={() => setScale(s => s + 0.5)} className="w-5 h-5 rounded bg-cream hover:bg-cream-dark flex items-center justify-center text-charcoal text-xs transition-colors">+</button>
                       {scale !== 1 && <button onClick={() => setScale(1)} className="text-xs text-warm-gray hover:text-gold ml-1">reset</button>}
+                    </div>
+                    {/* Unit System Toggle */}
+                    <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
+                      <button
+                        onClick={() => setUnitSystem(unitSystem === 'metric' ? null : 'metric')}
+                        className={`px-2 py-0.5 rounded text-xs transition-colors ${
+                          unitSystem === 'metric'
+                            ? 'bg-gold text-white'
+                            : 'bg-cream hover:bg-cream-dark text-charcoal'
+                        }`}
+                      >
+                        metric
+                      </button>
+                      <button
+                        onClick={() => setUnitSystem(unitSystem === 'imperial' ? null : 'imperial')}
+                        className={`px-2 py-0.5 rounded text-xs transition-colors ${
+                          unitSystem === 'imperial'
+                            ? 'bg-gold text-white'
+                            : 'bg-cream hover:bg-cream-dark text-charcoal'
+                        }`}
+                      >
+                        imperial
+                      </button>
                     </div>
                   </div>
                 )}
@@ -857,7 +901,7 @@ export default function RecipeDetailPage() {
                 <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-1.5 pl-4">
                   {recipe.ingredients.map(ing => (
                     <li key={ing.id} className="text-xs text-charcoal leading-relaxed list-disc marker:text-gold">
-                      {formatIngredient(ing)}
+                      {formatIngredientWithUnit(ing, unitSystem || undefined)}
                       {ing.is_optional && <span className="text-warm-gray"> (optional)</span>}
                     </li>
                   ))}

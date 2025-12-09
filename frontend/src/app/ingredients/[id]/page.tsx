@@ -87,7 +87,7 @@ export default function IngredientPage() {
           </div>
           <h1 className="font-serif text-2xl text-charcoal mb-2">{error || 'Ingredient not found'}</h1>
           <p className="text-warm-gray mb-6">The ingredient you're looking for doesn't exist or isn't available.</p>
-          <Link href="/recipes" className="btn-primary">
+          <Link href="/" className="btn-primary">
             Back to Recipes
           </Link>
         </div>

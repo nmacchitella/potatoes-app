@@ -43,6 +43,13 @@ body {
   line-height: 1.6;
 }
 
+/* Prevent iOS zoom on input focus - requires 16px minimum font size */
+@media screen and (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 400;
@@ -82,7 +89,7 @@ h1, h2, h3, h4, h5, h6 {
   }
 
   .input-field {
-    @apply w-full bg-white border border-border rounded-lg px-4 py-3 text-charcoal placeholder-warm-gray-light focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all font-body;
+    @apply w-full bg-white border border-border rounded-lg px-3 py-2 md:px-4 md:py-3 text-charcoal placeholder-warm-gray-light focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all font-body;
   }
 
   .card {

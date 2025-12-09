@@ -396,7 +396,7 @@ function NewRecipeContent() {
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <Link href="/recipes" className="text-warm-gray hover:text-gold text-sm uppercase tracking-wider mb-4 inline-block">
+          <Link href="/" className="text-warm-gray hover:text-gold text-sm uppercase tracking-wider mb-4 inline-block">
             &larr; Back to Recipes
           </Link>
           <div className="flex items-end justify-between">
@@ -849,7 +849,7 @@ function NewRecipeContent() {
                   {/* Save buttons for manual entry */}
                   <div className="flex gap-3 pt-2">
                     <button
-                      onClick={() => router.push('/recipes')}
+                      onClick={() => router.push('/')}
                       disabled={saving}
                       className="btn-secondary flex-1 disabled:opacity-50"
                     >
@@ -1272,7 +1272,7 @@ function NewRecipeContent() {
           {/* Save buttons */}
           <div className="flex gap-3 pt-4">
             <button
-              onClick={() => router.push('/recipes')}
+              onClick={() => router.push('/')}
               disabled={saving}
               className="btn-secondary flex-1 disabled:opacity-50"
             >

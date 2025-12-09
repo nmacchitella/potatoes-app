@@ -9,6 +9,9 @@ import type {
   Tag, ParsedIngredient, Ingredient, MeasurementUnit,
   UserSearchResult, UserProfilePublic, FollowResponse, Notification,
   SearchResponse, FullSearchResponse,
+  MealPlan, MealPlanCreateInput, MealPlanUpdateInput, MealPlanMoveInput,
+  MealPlanCopyInput, MealPlanRecurringInput, MealPlanListResponse,
+  MealPlanShare, SharedMealPlanAccess, MealPlanShareCreateInput, MealPlanShareUpdateInput,
 } from '@/types';
 import {
   getAccessToken,
@@ -659,6 +662,103 @@ export const searchApi = {
       params: { page, page_size: pageSize }
     });
     return response.data;
+  },
+};
+
+// ============================================================================
+// MEAL PLAN API
+// ============================================================================
+
+export const mealPlanApi = {
+  list: async (start: string, end: string): Promise<MealPlanListResponse> => {
+    const response = await api.get<MealPlanListResponse>('/meal-plan', {
+      params: { start, end }
+    });
+    return response.data;
+  },
+
+  get: async (id: string): Promise<MealPlan> => {
+    const response = await api.get<MealPlan>(`/meal-plan/${id}`);
+    return response.data;
+  },
+
+  create: async (data: MealPlanCreateInput): Promise<MealPlan> => {
+    const response = await api.post<MealPlan>('/meal-plan', data);
+    return response.data;
+  },
+
+  update: async (id: string, data: MealPlanUpdateInput): Promise<MealPlan> => {
+    const response = await api.patch<MealPlan>(`/meal-plan/${id}`, data);
+    return response.data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await api.delete(`/meal-plan/${id}`);
+  },
+
+  move: async (id: string, data: MealPlanMoveInput): Promise<MealPlan> => {
+    const response = await api.post<MealPlan>(`/meal-plan/${id}/move`, data);
+    return response.data;
+  },
+
+  copy: async (data: MealPlanCopyInput): Promise<MealPlan[]> => {
+    const response = await api.post<MealPlan[]>('/meal-plan/copy', data);
+    return response.data;
+  },
+
+  createRecurring: async (data: MealPlanRecurringInput): Promise<MealPlan[]> => {
+    const response = await api.post<MealPlan[]>('/meal-plan/recurring', data);
+    return response.data;
+  },
+
+  deleteRecurring: async (recurrenceId: string, futureOnly: boolean = true): Promise<{ status: string; count: number }> => {
+    const response = await api.delete<{ status: string; count: number }>(`/meal-plan/recurring/${recurrenceId}`, {
+      params: { future_only: futureOnly }
+    });
+    return response.data;
+  },
+
+  swap: async (mealPlanId1: string, mealPlanId2: string): Promise<{ status: string }> => {
+    const response = await api.post<{ status: string }>('/meal-plan/swap', null, {
+      params: { meal_plan_id_1: mealPlanId1, meal_plan_id_2: mealPlanId2 }
+    });
+    return response.data;
+  },
+
+  // Sharing methods
+  listSharedWithMe: async (): Promise<SharedMealPlanAccess[]> => {
+    const response = await api.get<SharedMealPlanAccess[]>('/meal-plan/shared-with-me');
+    return response.data;
+  },
+
+  getSharedMealPlan: async (userId: string, start: string, end: string): Promise<MealPlanListResponse> => {
+    const response = await api.get<MealPlanListResponse>(`/meal-plan/shared/${userId}`, {
+      params: { start, end }
+    });
+    return response.data;
+  },
+
+  listShares: async (): Promise<MealPlanShare[]> => {
+    const response = await api.get<MealPlanShare[]>('/meal-plan/shares');
+    return response.data;
+  },
+
+  share: async (data: MealPlanShareCreateInput): Promise<MealPlanShare> => {
+    const response = await api.post<MealPlanShare>('/meal-plan/shares', data);
+    return response.data;
+  },
+
+  updateShare: async (userId: string, data: MealPlanShareUpdateInput): Promise<MealPlanShare> => {
+    const response = await api.put<MealPlanShare>(`/meal-plan/shares/${userId}`, data);
+    return response.data;
+  },
+
+  removeShare: async (userId: string): Promise<void> => {
+    await api.delete(`/meal-plan/shares/${userId}`);
+  },
+
+  leaveSharedMealPlan: async (ownerId: string): Promise<void> => {
+    await api.delete(`/meal-plan/shares/leave/${ownerId}`);
   },
 };
 

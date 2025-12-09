@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, date
 
 
 # User Schemas
@@ -595,6 +595,143 @@ class RecipeImportMultiResponse(BaseModel):
     """Response for recipe import that may contain multiple recipes (e.g., from YouTube)"""
     recipes: List[RecipeImportResponse]
     source_type: str = "webpage"  # "webpage" or "youtube"
+
+
+# ============================================================================
+# MEAL PLAN SCHEMAS
+# ============================================================================
+
+class MealPlanCreate(BaseModel):
+    """Create a new meal plan entry."""
+    recipe_id: str
+    planned_date: date
+    meal_type: str = Field(..., pattern="^(breakfast|lunch|dinner|snack)$")
+    servings: float = 4
+    notes: Optional[str] = None
+
+
+class MealPlanUpdate(BaseModel):
+    """Update an existing meal plan entry."""
+    planned_date: Optional[date] = None
+    meal_type: Optional[str] = Field(None, pattern="^(breakfast|lunch|dinner|snack)$")
+    servings: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class MealPlanMove(BaseModel):
+    """Move a meal to a different date/slot."""
+    planned_date: date
+    meal_type: str = Field(..., pattern="^(breakfast|lunch|dinner|snack)$")
+
+
+class MealPlanCopy(BaseModel):
+    """Copy meals from one date range to another."""
+    source_start: date
+    source_end: date
+    target_start: date
+
+
+class MealPlanRecurring(BaseModel):
+    """Create a recurring meal."""
+    recipe_id: str
+    meal_type: str = Field(..., pattern="^(breakfast|lunch|dinner|snack)$")
+    day_of_week: int = Field(..., ge=0, le=6)  # 0=Monday, 6=Sunday
+    start_date: date
+    end_date: date
+    servings: float = 4
+
+
+class MealPlanRecipe(BaseModel):
+    """Minimal recipe info for meal plan responses."""
+    id: str
+    title: str
+    cover_image_url: Optional[str] = None
+    prep_time_minutes: Optional[int] = None
+    cook_time_minutes: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+class MealPlan(BaseModel):
+    """Meal plan entry response."""
+    id: str
+    planned_date: date
+    meal_type: str
+    servings: float
+    notes: Optional[str] = None
+    recurrence_id: Optional[str] = None
+    recipe: MealPlanRecipe
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MealPlanListResponse(BaseModel):
+    """Response for listing meal plans."""
+    items: List[MealPlan]
+    start_date: date
+    end_date: date
+
+
+# ============================================================================
+# MEAL PLAN SHARING SCHEMAS
+# ============================================================================
+
+class MealPlanShareUser(BaseModel):
+    """User info for meal plan sharing."""
+    id: str
+    name: str
+    username: Optional[str] = None
+    profile_image_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class MealPlanShareCreate(BaseModel):
+    """Create a meal plan share."""
+    user_id: str
+    permission: str = "viewer"  # viewer, editor
+
+
+class MealPlanShareUpdate(BaseModel):
+    """Update a meal plan share."""
+    permission: str  # viewer, editor
+
+
+class MealPlanShareResponse(BaseModel):
+    """Meal plan share response."""
+    id: str
+    permission: str
+    created_at: datetime
+    shared_with: MealPlanShareUser
+
+    class Config:
+        from_attributes = True
+
+
+class SharedMealPlanOwner(BaseModel):
+    """Owner info for shared meal plans."""
+    id: str
+    name: str
+    username: Optional[str] = None
+    profile_image_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SharedMealPlanAccess(BaseModel):
+    """Info about a meal plan shared with the current user."""
+    id: str
+    owner: SharedMealPlanOwner
+    permission: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # Update forward references

@@ -131,11 +131,11 @@ export default function PublicProfilePage() {
   const canViewRecipes = profile.is_public || profile.follow_status === 'confirmed';
 
   return (
-    <div className="min-h-screen bg-cream has-bottom-nav">
+    <div className="min-h-screen bg-cream has-bottom-nav overflow-x-hidden">
       <Navbar />
       <MobileNavWrapper />
       <div className="p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto w-full">
           {/* Profile Header */}
           <div className="bg-white rounded-lg border border-border p-6 mb-6">
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">

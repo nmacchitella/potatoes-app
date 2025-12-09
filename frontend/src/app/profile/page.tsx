@@ -10,12 +10,12 @@ import RecipeCard from '@/components/recipes/RecipeCard';
 import FollowButton from '@/components/social/FollowButton';
 import type { User, UserSearchResult, RecipeSummary, Collection } from '@/types';
 
-type TabType = 'recipes' | 'collections' | 'followers' | 'following';
+type TabType = 'collections' | 'followers' | 'following';
 
 export default function MyProfilePage() {
   const { user: currentUser, fetchUserProfile } = useStore();
 
-  const [activeTab, setActiveTab] = useState<TabType>('recipes');
+  const [activeTab, setActiveTab] = useState<TabType>('collections');
   const [profile, setProfile] = useState<User | null>(null);
   const [recipes, setRecipes] = useState<RecipeSummary[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -95,18 +95,17 @@ export default function MyProfilePage() {
   }
 
   const tabs: { id: TabType; label: string; count?: number }[] = [
-    { id: 'recipes', label: 'Recipes', count: recipes.length },
     { id: 'collections', label: 'Collections', count: collections.length },
     { id: 'followers', label: 'Followers', count: followers.length + requests.length },
     { id: 'following', label: 'Following', count: following.length },
   ];
 
   return (
-    <div className="min-h-screen bg-cream has-bottom-nav">
+    <div className="min-h-screen bg-cream has-bottom-nav overflow-x-hidden">
       <Navbar />
       <MobileNavWrapper />
       <div className="p-4 md:p-8">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto w-full">
           {/* Profile Header */}
           <div className="bg-white rounded-lg border border-border p-6 mb-6">
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
@@ -146,13 +145,13 @@ export default function MyProfilePage() {
                 )}
 
                 <div className="flex justify-center sm:justify-start gap-6 text-sm">
-                  <button
-                    onClick={() => setActiveTab('recipes')}
+                  <Link
+                    href="/"
                     className="hover:text-gold transition-colors"
                   >
                     <span className="font-semibold text-charcoal">{recipes.length}</span>
                     <span className="text-warm-gray ml-1">recipes</span>
-                  </button>
+                  </Link>
                   <button
                     onClick={() => setActiveTab('followers')}
                     className="hover:text-gold transition-colors"
@@ -215,27 +214,6 @@ export default function MyProfilePage() {
             </div>
           ) : (
             <>
-              {/* Recipes Tab */}
-              {activeTab === 'recipes' && (
-                recipes.length === 0 ? (
-                  <div className="bg-white rounded-lg border border-border p-12 text-center">
-                    <p className="text-warm-gray mb-4">You haven't created any recipes yet</p>
-                    <Link
-                      href="/recipes/new"
-                      className="inline-block px-4 py-2 bg-gold text-white rounded-lg hover:bg-gold/90 transition-colors"
-                    >
-                      Create Your First Recipe
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                    {recipes.map(recipe => (
-                      <RecipeCard key={recipe.id} recipe={recipe} />
-                    ))}
-                  </div>
-                )
-              )}
-
               {/* Collections Tab */}
               {activeTab === 'collections' && (
                 collections.length === 0 ? (

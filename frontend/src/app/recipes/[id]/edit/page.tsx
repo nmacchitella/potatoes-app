@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi, tagApi } from '@/lib/api';
 import { IngredientAutocomplete, UnitAutocomplete } from '@/components/recipes/IngredientAutocomplete';
+import Navbar from '@/components/layout/Navbar';
+import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { RecipeWithScale, RecipeIngredientInput, RecipeInstructionInput, Tag } from '@/types';
 
 export default function EditRecipePage() {
@@ -88,7 +90,7 @@ export default function EditRecipePage() {
         setAvailableTags(tags);
       } catch (err) {
         console.error('Failed to load recipe:', err);
-        router.push('/recipes');
+        router.push('/');
       } finally {
         setLoading(false);
       }
@@ -172,14 +174,18 @@ export default function EditRecipePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-dark-bg p-8">
-        <div className="max-w-3xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-dark-hover rounded w-1/4 mb-8" />
-            <div className="card">
-              <div className="h-10 bg-dark-hover rounded mb-4" />
-              <div className="h-24 bg-dark-hover rounded mb-4" />
-              <div className="h-10 bg-dark-hover rounded" />
+      <div className="min-h-screen bg-cream has-bottom-nav">
+        <Navbar />
+        <MobileNavWrapper />
+        <div className="p-4 md:p-8">
+          <div className="max-w-3xl mx-auto">
+            <div className="animate-pulse">
+              <div className="h-8 bg-cream-dark rounded w-1/4 mb-8" />
+              <div className="card">
+                <div className="h-10 bg-cream-dark rounded mb-4" />
+                <div className="h-24 bg-cream-dark rounded mb-4" />
+                <div className="h-10 bg-cream-dark rounded" />
+              </div>
             </div>
           </div>
         </div>
@@ -188,15 +194,18 @@ export default function EditRecipePage() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg p-8">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <Link href={`/recipes/${recipeId}`} className="text-gray-400 hover:text-primary text-sm mb-2 inline-block">
-            &larr; Cancel
-          </Link>
-          <h1 className="text-3xl font-bold">Edit Recipe</h1>
-        </div>
+    <div className="min-h-screen bg-cream has-bottom-nav">
+      <Navbar />
+      <MobileNavWrapper />
+      <div className="p-4 md:p-8">
+        <div className="max-w-3xl mx-auto">
+          {/* Header */}
+          <div className="mb-6 md:mb-8">
+            <Link href={`/recipes/${recipeId}`} className="text-warm-gray hover:text-gold text-sm mb-2 inline-block">
+              &larr; Cancel
+            </Link>
+            <h1 className="text-2xl md:text-3xl font-serif text-charcoal">Edit Recipe</h1>
+          </div>
 
         {error && (
           <div className="bg-red-500/20 text-red-400 p-4 rounded-lg mb-6">
@@ -301,51 +310,59 @@ export default function EditRecipePage() {
 
         {/* Ingredients */}
         <div className="card mb-6">
-          <h2 className="text-xl font-semibold mb-4">Ingredients</h2>
-          <div className="space-y-3">
+          <h2 className="text-xl font-serif text-charcoal mb-4">Ingredients</h2>
+          <div className="space-y-4">
             {ingredients.map((ing, index) => (
-              <div key={index} className="flex gap-2 items-start">
-                <input
-                  type="number"
-                  value={ing.quantity || ''}
-                  onChange={e => updateIngredient(index, 'quantity', e.target.value ? Number(e.target.value) : undefined)}
-                  placeholder="Qty"
-                  className="input-field w-20"
-                  step="0.25"
-                  min="0.01"
-                />
-                <UnitAutocomplete
-                  value={ing.unit || ''}
-                  onChange={value => updateIngredient(index, 'unit', value)}
-                  placeholder="Unit"
-                  className="w-24"
-                />
-                <IngredientAutocomplete
-                  value={ing.name}
-                  onChange={value => updateIngredient(index, 'name', value)}
-                  placeholder="Ingredient name"
-                  className="flex-1"
-                />
-                <input
-                  type="text"
-                  value={ing.preparation || ''}
-                  onChange={e => updateIngredient(index, 'preparation', e.target.value)}
-                  placeholder="Prep"
-                  className="input-field w-28"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeIngredient(index)}
-                  className="text-gray-400 hover:text-red-400 p-2"
-                >
-                  &times;
-                </button>
+              <div key={index} className="border border-border rounded-lg p-3 md:p-0 md:border-0">
+                <div className="flex flex-wrap gap-2 items-start">
+                  <div className="flex gap-2 w-full md:w-auto">
+                    <input
+                      type="number"
+                      value={ing.quantity || ''}
+                      onChange={e => updateIngredient(index, 'quantity', e.target.value ? Number(e.target.value) : undefined)}
+                      placeholder="Qty"
+                      className="input-field w-20"
+                      step="0.25"
+                      min="0.01"
+                    />
+                    <UnitAutocomplete
+                      value={ing.unit || ''}
+                      onChange={value => updateIngredient(index, 'unit', value)}
+                      placeholder="Unit"
+                      className="w-24"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0 w-full md:w-auto">
+                    <IngredientAutocomplete
+                      value={ing.name}
+                      onChange={value => updateIngredient(index, 'name', value)}
+                      placeholder="Ingredient name"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center w-full md:w-auto">
+                    <input
+                      type="text"
+                      value={ing.preparation || ''}
+                      onChange={e => updateIngredient(index, 'preparation', e.target.value)}
+                      placeholder="Prep (optional)"
+                      className="input-field flex-1 md:w-28"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeIngredient(index)}
+                      className="text-warm-gray hover:text-red-500 p-2"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
             <button
               type="button"
               onClick={addIngredient}
-              className="text-primary hover:underline text-sm"
+              className="text-gold hover:underline text-sm"
             >
               + Add ingredient
             </button>
@@ -354,11 +371,11 @@ export default function EditRecipePage() {
 
         {/* Instructions */}
         <div className="card mb-6">
-          <h2 className="text-xl font-semibold mb-4">Instructions</h2>
+          <h2 className="text-xl font-serif text-charcoal mb-4">Instructions</h2>
           <div className="space-y-4">
             {instructions.map((inst, index) => (
-              <div key={index} className="flex gap-4 items-start">
-                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-black font-bold flex items-center justify-center mt-2">
+              <div key={index} className="flex gap-3 md:gap-4 items-start">
+                <span className="flex-shrink-0 w-8 h-8 rounded-full bg-gold text-white font-bold flex items-center justify-center mt-2 text-sm">
                   {index + 1}
                 </span>
                 <textarea
@@ -366,12 +383,12 @@ export default function EditRecipePage() {
                   onChange={e => updateInstruction(index, e.target.value)}
                   placeholder="Describe this step..."
                   rows={2}
-                  className="input-field flex-1"
+                  className="input-field flex-1 min-w-0"
                 />
                 <button
                   type="button"
                   onClick={() => removeInstruction(index)}
-                  className="text-gray-400 hover:text-red-400 p-2 mt-2"
+                  className="text-warm-gray hover:text-red-500 p-2 mt-2"
                 >
                   &times;
                 </button>
@@ -380,7 +397,7 @@ export default function EditRecipePage() {
             <button
               type="button"
               onClick={addInstruction}
-              className="text-primary hover:underline text-sm"
+              className="text-gold hover:underline text-sm"
             >
               + Add step
             </button>
@@ -389,26 +406,28 @@ export default function EditRecipePage() {
 
         {/* Organization */}
         <div className="card mb-6">
-          <h2 className="text-xl font-semibold mb-4">Organization</h2>
+          <h2 className="text-xl font-serif text-charcoal mb-4">Organization</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Privacy</label>
+              <label className="label mb-2 block">Privacy</label>
               <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer text-charcoal">
                   <input
                     type="radio"
                     name="privacy"
                     checked={privacyLevel === 'private'}
                     onChange={() => setPrivacyLevel('private')}
+                    className="accent-gold"
                   />
                   <span>Private</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer text-charcoal">
                   <input
                     type="radio"
                     name="privacy"
                     checked={privacyLevel === 'public'}
                     onChange={() => setPrivacyLevel('public')}
+                    className="accent-gold"
                   />
                   <span>Public</span>
                 </label>
@@ -416,23 +435,25 @@ export default function EditRecipePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Status</label>
+              <label className="label mb-2 block">Status</label>
               <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer text-charcoal">
                   <input
                     type="radio"
                     name="status"
                     checked={status === 'draft'}
                     onChange={() => setStatus('draft')}
+                    className="accent-gold"
                   />
                   <span>Draft</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer text-charcoal">
                   <input
                     type="radio"
                     name="status"
                     checked={status === 'published'}
                     onChange={() => setStatus('published')}
+                    className="accent-gold"
                   />
                   <span>Published</span>
                 </label>
@@ -440,7 +461,7 @@ export default function EditRecipePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-2">Tags</label>
+              <label className="label mb-2 block">Tags</label>
               <div className="flex flex-wrap gap-2">
                 {availableTags.map(tag => (
                   <button
@@ -449,8 +470,8 @@ export default function EditRecipePage() {
                     onClick={() => toggleTag(tag.id)}
                     className={`px-3 py-1 rounded-full text-sm transition-colors ${
                       selectedTagIds.includes(tag.id)
-                        ? 'bg-primary text-black'
-                        : 'bg-dark-hover text-gray-300 hover:bg-dark-card'
+                        ? 'bg-gold text-white'
+                        : 'bg-cream-dark text-charcoal hover:bg-cream-dark/80'
                     }`}
                   >
                     {tag.name}
@@ -462,8 +483,8 @@ export default function EditRecipePage() {
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-4">
-          <Link href={`/recipes/${recipeId}`} className="btn-secondary">
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 sm:gap-4">
+          <Link href={`/recipes/${recipeId}`} className="btn-secondary text-center">
             Cancel
           </Link>
           <button
@@ -473,6 +494,7 @@ export default function EditRecipePage() {
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
+        </div>
         </div>
       </div>
     </div>

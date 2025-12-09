@@ -84,7 +84,9 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
     results.my_recipes.length > 0 ||
     results.discover_recipes.length > 0 ||
     results.tags.length > 0 ||
-    results.collections.length > 0
+    results.collections.length > 0 ||
+    results.users?.length > 0 ||
+    results.ingredients?.length > 0
   );
 
   return (
@@ -193,6 +195,37 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
                                 )}
                               </div>
                               <span className="text-sm text-charcoal truncate">{item.title}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {results.users && results.users.length > 0 && (
+                        <div className="py-2 border-t border-border">
+                          <div className="px-3 py-1 text-xs font-medium text-warm-gray uppercase tracking-wider">
+                            Users
+                          </div>
+                          {results.users.slice(0, 3).map(user => (
+                            <button
+                              key={user.id}
+                              onClick={() => handleResultClick(`/profile/${user.username || user.id}`)}
+                              className="flex items-center gap-3 px-3 py-2 hover:bg-cream transition-colors w-full text-left"
+                            >
+                              <div className="w-10 h-10 rounded-full bg-cream-dark flex-shrink-0 overflow-hidden flex items-center justify-center">
+                                {user.profile_image_url ? (
+                                  <img src={user.profile_image_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="text-sm font-serif text-charcoal">
+                                    {user.name.charAt(0).toUpperCase()}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm text-charcoal truncate">{user.name}</p>
+                                {user.username && (
+                                  <p className="text-xs text-warm-gray">@{user.username}</p>
+                                )}
+                              </div>
                             </button>
                           ))}
                         </div>

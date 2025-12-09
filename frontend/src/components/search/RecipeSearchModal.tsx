@@ -24,7 +24,9 @@ export default function RecipeSearchModal({
   const [query, setQuery] = useState('');
   const [myRecipes, setMyRecipes] = useState<SearchRecipeResult[]>([]);
   const [discoverRecipes, setDiscoverRecipes] = useState<SearchRecipeResult[]>([]);
+  const [suggestedRecipes, setSuggestedRecipes] = useState<SearchRecipeResult[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [addingRecipe, setAddingRecipe] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,8 +36,25 @@ export default function RecipeSearchModal({
   // Filter out excluded recipes
   const filteredMyRecipes = myRecipes.filter(r => !excludeRecipeIds.has(r.id));
   const filteredDiscoverRecipes = discoverRecipes.filter(r => !excludeRecipeIds.has(r.id));
-  const allRecipes = [...filteredMyRecipes, ...filteredDiscoverRecipes];
+  const filteredSuggested = suggestedRecipes.filter(r => !excludeRecipeIds.has(r.id));
+  const allRecipes = query.length >= 2
+    ? [...filteredMyRecipes, ...filteredDiscoverRecipes]
+    : filteredSuggested;
   const hasResults = allRecipes.length > 0;
+
+  // Load suggestions when modal opens
+  useEffect(() => {
+    if (isOpen && suggestedRecipes.length === 0) {
+      setLoadingSuggestions(true);
+      // Fetch top recipes as suggestions (empty query returns recent/popular)
+      searchApi.autocomplete('', 6)
+        .then(data => {
+          setSuggestedRecipes(data.my_recipes || []);
+        })
+        .catch(err => console.error('Failed to load suggestions:', err))
+        .finally(() => setLoadingSuggestions(false));
+    }
+  }, [isOpen]);
 
   // Focus input when modal opens
   useEffect(() => {
@@ -181,9 +200,56 @@ export default function RecipeSearchModal({
         {/* Results */}
         <div className="max-h-[60vh] overflow-y-auto">
           {query.length < 2 ? (
-            <div className="px-4 py-8 text-center text-warm-gray">
-              <p>Start typing to search recipes...</p>
-            </div>
+            loadingSuggestions ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-gold border-t-transparent" />
+              </div>
+            ) : filteredSuggested.length > 0 ? (
+              <div className="py-2">
+                <div className="px-4 py-1 text-xs font-medium text-warm-gray uppercase tracking-wider">
+                  Your Recipes
+                </div>
+                {filteredSuggested.map((recipe, index) => (
+                  <button
+                    key={recipe.id}
+                    onClick={() => handleSelectRecipe(recipe)}
+                    disabled={addingRecipe === recipe.id}
+                    className={`w-full flex items-center gap-3 px-4 py-2 hover:bg-cream transition-colors text-left ${
+                      selectedIndex === index ? 'bg-cream' : ''
+                    } ${addingRecipe === recipe.id ? 'opacity-50' : ''}`}
+                  >
+                    <div className="w-10 h-10 rounded bg-cream-dark flex-shrink-0 overflow-hidden">
+                      {recipe.cover_image_url ? (
+                        <img src={recipe.cover_image_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <svg className="w-5 h-5 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-charcoal truncate">{recipe.title}</p>
+                      {recipe.description && (
+                        <p className="text-xs text-warm-gray truncate">{recipe.description}</p>
+                      )}
+                    </div>
+                    {addingRecipe === recipe.id ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-gold border-t-transparent flex-shrink-0" />
+                    ) : (
+                      <svg className="w-5 h-5 text-gold flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="px-4 py-8 text-center text-warm-gray">
+                <p>Start typing to search recipes...</p>
+              </div>
+            )
           ) : loading ? (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-2 border-gold border-t-transparent" />

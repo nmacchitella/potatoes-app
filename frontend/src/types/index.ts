@@ -455,3 +455,100 @@ export interface FullSearchResponse {
   ingredients_total: number;
   query: string;
 }
+
+// ============================================================================
+// MEAL PLAN TYPES
+// ============================================================================
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface MealPlanRecipe {
+  id: string;
+  title: string;
+  cover_image_url?: string;
+  prep_time_minutes?: number;
+  cook_time_minutes?: number;
+}
+
+export interface MealPlan {
+  id: string;
+  planned_date: string; // ISO date string YYYY-MM-DD
+  meal_type: MealType;
+  servings: number;
+  notes?: string;
+  recurrence_id?: string;
+  recipe: MealPlanRecipe;
+  created_at: string;
+}
+
+export interface MealPlanCreateInput {
+  recipe_id: string;
+  planned_date: string; // ISO date string YYYY-MM-DD
+  meal_type: MealType;
+  servings?: number;
+  notes?: string;
+}
+
+export interface MealPlanUpdateInput {
+  planned_date?: string;
+  meal_type?: MealType;
+  servings?: number;
+  notes?: string;
+}
+
+export interface MealPlanMoveInput {
+  planned_date: string;
+  meal_type: MealType;
+}
+
+export interface MealPlanCopyInput {
+  source_start: string;
+  source_end: string;
+  target_start: string;
+}
+
+export interface MealPlanRecurringInput {
+  recipe_id: string;
+  meal_type: MealType;
+  day_of_week: number; // 0=Monday, 6=Sunday
+  start_date: string;
+  end_date: string;
+  servings?: number;
+}
+
+export interface MealPlanListResponse {
+  items: MealPlan[];
+  start_date: string;
+  end_date: string;
+}
+
+// Meal Plan Sharing
+export interface MealPlanShareUser {
+  id: string;
+  name: string;
+  username?: string;
+  profile_image_url?: string;
+}
+
+export interface MealPlanShare {
+  id: string;
+  permission: 'viewer' | 'editor';
+  created_at: string;
+  shared_with: MealPlanShareUser;
+}
+
+export interface SharedMealPlanAccess {
+  id: string;
+  owner: MealPlanShareUser;
+  permission: 'viewer' | 'editor';
+  created_at: string;
+}
+
+export interface MealPlanShareCreateInput {
+  user_id: string;
+  permission: 'viewer' | 'editor';
+}
+
+export interface MealPlanShareUpdateInput {
+  permission: 'viewer' | 'editor';
+}

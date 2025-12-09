@@ -359,7 +359,7 @@ function PublicNavbar() {
 
           <div className="flex items-center gap-3">
             {user ? (
-              <Link href="/recipes" className="text-sm text-charcoal hover:text-gold transition-colors">
+              <Link href="/" className="text-sm text-charcoal hover:text-gold transition-colors">
                 My Recipes
               </Link>
             ) : (

@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKey, String, DateTime, JSON, Integer, Float, Text, Table, UniqueConstraint
+from sqlalchemy import Boolean, Column, ForeignKey, String, DateTime, Date, JSON, Integer, Float, Text, Table, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -282,3 +282,53 @@ class UserSettings(Base):
 
     # Relationship
     user = relationship("User", back_populates="settings")
+
+
+# ============================================================================
+# MEAL PLANNING MODELS
+# ============================================================================
+
+class MealPlan(Base):
+    """Represents a recipe scheduled for a specific date and meal slot."""
+    __tablename__ = "meal_plans"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=False)
+    planned_date = Column(Date, nullable=False)
+    meal_type = Column(String(20), nullable=False)  # breakfast, lunch, dinner, snack
+    servings = Column(Float, default=4)
+    notes = Column(Text, nullable=True)
+
+    # For recurring meals - groups instances created from same recurrence rule
+    recurrence_id = Column(String, nullable=True, index=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        Index('ix_meal_plans_user_date', 'user_id', 'planned_date'),
+    )
+
+    # Relationships
+    user = relationship("User", backref="meal_plans")
+    recipe = relationship("Recipe", backref="meal_plans")
+
+
+class MealPlanShare(Base):
+    """Represents sharing meal plans with another user (e.g., family member)."""
+    __tablename__ = "meal_plan_shares"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    owner_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    shared_with_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    permission = Column(String(20), default="viewer")  # viewer, editor
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('owner_id', 'shared_with_id', name='uq_meal_plan_share'),
+    )
+
+    # Relationships
+    owner = relationship("User", foreign_keys=[owner_id], backref="meal_plan_shares_given")
+    shared_with = relationship("User", foreign_keys=[shared_with_id], backref="meal_plan_shares_received")

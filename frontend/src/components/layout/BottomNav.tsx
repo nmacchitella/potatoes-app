@@ -15,7 +15,7 @@ export default function BottomNav() {
   if (shouldHide) return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-cream border-t border-border z-40 md:hidden pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-border z-40 md:hidden pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
       <div className="flex items-center justify-around h-16 px-4">
         {/* Left slot - empty for now */}
         <div className="w-12" />
@@ -41,7 +41,7 @@ export default function BottomNav() {
           }`}
           aria-label="Profile"
         >
-          <div className="w-7 h-7 rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden">
+          <div className="w-9 h-9 rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden">
             {user?.profile_image_url ? (
               <img
                 src={user.profile_image_url}
@@ -49,7 +49,7 @@ export default function BottomNav() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             )}
