@@ -711,7 +711,7 @@ export default function RecipeDetailPage() {
             {/* Ingredients */}
             <div className="bg-white rounded-lg border border-border p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <h2 className="font-serif text-xl text-charcoal">Ingredients</h2>
+                <h2 className="font-serif text-xl text-charcoal flex-shrink-0">Ingredients</h2>
                 {isEditing ? (
                   <div className="flex items-center gap-2 text-xs">
                     <input
@@ -731,15 +731,15 @@ export default function RecipeDetailPage() {
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-warm-gray">{recipe.yield_quantity ? Math.round(recipe.yield_quantity * scale * 10) / 10 : ''} {recipe.yield_unit}</span>
+                    <span className="text-warm-gray text-xs sm:text-sm">{recipe.yield_quantity ? Math.round(recipe.yield_quantity * scale * 10) / 10 : ''} {recipe.yield_unit}</span>
                     <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
                       <button onClick={() => setScale(s => Math.max(0.5, s - 0.5))} className="w-5 h-5 rounded bg-cream hover:bg-cream-dark flex items-center justify-center text-charcoal text-xs transition-colors">−</button>
                       <span className="w-6 text-center text-xs text-charcoal">{scale}x</span>
                       <button onClick={() => setScale(s => s + 0.5)} className="w-5 h-5 rounded bg-cream hover:bg-cream-dark flex items-center justify-center text-charcoal text-xs transition-colors">+</button>
                       {scale !== 1 && <button onClick={() => setScale(1)} className="text-xs text-warm-gray hover:text-gold ml-1">reset</button>}
                     </div>
-                    {/* Unit System Toggle */}
-                    <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
+                    {/* Unit System Toggle - shown on separate row on mobile */}
+                    <div className="flex items-center gap-1 sm:border-l sm:border-border sm:pl-2 sm:ml-1">
                       <button
                         onClick={() => setUnitSystem(unitSystem === 'metric' ? null : 'metric')}
                         className={`px-2 py-0.5 rounded text-xs transition-colors ${

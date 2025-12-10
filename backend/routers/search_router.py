@@ -110,7 +110,7 @@ class FullSearchResponse(BaseModel):
 
 @router.get("", response_model=SearchResponse)
 async def search_autocomplete(
-    q: str = Query(..., min_length=1, description="Search query"),
+    q: str = Query("", description="Search query (empty returns user's recent recipes)"),
     limit: int = Query(5, ge=1, le=10, description="Max results per category"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -118,7 +118,39 @@ async def search_autocomplete(
     """
     Quick search for autocomplete suggestions.
     Returns limited results from each category.
+    When query is empty, returns user's most recent recipes as suggestions.
     """
+    # If empty query, return user's recent recipes as suggestions
+    if not q.strip():
+        recent_recipes = db.query(Recipe).filter(
+            Recipe.author_id == current_user.id,
+            Recipe.deleted_at.is_(None)
+        ).options(joinedload(Recipe.author)).order_by(
+            Recipe.updated_at.desc()
+        ).limit(limit).all()
+
+        my_recipes = [
+            SearchRecipeResult(
+                id=r.id,
+                title=r.title,
+                description=r.description,
+                cover_image_url=r.cover_image_url,
+                author_name=r.author.name,
+                is_own=True
+            )
+            for r in recent_recipes
+        ]
+
+        return SearchResponse(
+            my_recipes=my_recipes,
+            discover_recipes=[],
+            tags=[],
+            collections=[],
+            users=[],
+            ingredients=[],
+            query=q
+        )
+
     search_term = f"%{q.lower()}%"
 
     # Search user's own recipes

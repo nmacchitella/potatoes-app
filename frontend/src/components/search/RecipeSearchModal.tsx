@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchApi } from '@/lib/api';
 import { useDebouncedSearch } from '@/hooks';
@@ -43,6 +43,35 @@ export default function RecipeSearchModal({
     : filteredSuggested;
   const hasResults = allRecipes.length > 0;
 
+  // Handlers defined first so they can be used in effects
+  const handleClose = useCallback(() => {
+    setQuery('');
+    setSelectedIndex(-1);
+    onClose();
+  }, [onClose]);
+
+  const handleSelectRecipe = useCallback((recipe: SearchRecipeResult) => {
+    setAddingRecipe(recipe.id);
+    try {
+      onSelectRecipe(recipe);
+      // Clear search after successfully adding - returns to suggested recipes view
+      setQuery('');
+      setSelectedIndex(-1);
+    } finally {
+      setAddingRecipe(null);
+    }
+  }, [onSelectRecipe]);
+
+  const handleCreateRecipe = useCallback(() => {
+    const url = query.trim()
+      ? `/recipes/new?title=${encodeURIComponent(query.trim())}`
+      : '/recipes/new';
+    router.push(url);
+    setQuery('');
+    setSelectedIndex(-1);
+    onClose();
+  }, [query, router, onClose]);
+
   // Reset selected index when results change
   useEffect(() => {
     setSelectedIndex(-1);
@@ -73,7 +102,11 @@ export default function RecipeSearchModal({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      const totalItems = allRecipes.length + 1; // +1 for "Create recipe" option
+      // Only include "Create recipe" option when query has 2+ characters
+      const showCreateOption = query.length >= 2;
+      const totalItems = allRecipes.length + (showCreateOption ? 1 : 0);
+
+      if (totalItems === 0) return;
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -85,8 +118,11 @@ export default function RecipeSearchModal({
         e.preventDefault();
         if (selectedIndex >= 0 && selectedIndex < allRecipes.length) {
           handleSelectRecipe(allRecipes[selectedIndex]);
-        } else if (selectedIndex === allRecipes.length || selectedIndex === -1) {
+        } else if (showCreateOption && (selectedIndex === allRecipes.length || selectedIndex === -1)) {
           handleCreateRecipe();
+        } else if (!showCreateOption && selectedIndex >= 0 && selectedIndex < allRecipes.length) {
+          // When no create option, just select the recipe
+          handleSelectRecipe(allRecipes[selectedIndex]);
         }
       } else if (e.key === 'Escape') {
         handleClose();
@@ -95,33 +131,7 @@ export default function RecipeSearchModal({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, allRecipes, selectedIndex]);
-
-  const handleClose = () => {
-    setQuery('');
-    setSelectedIndex(-1);
-    onClose();
-  };
-
-  const handleSelectRecipe = async (recipe: SearchRecipeResult) => {
-    setAddingRecipe(recipe.id);
-    try {
-      await onSelectRecipe(recipe);
-      // Clear search after successfully adding - returns to suggested recipes view
-      setQuery('');
-      setSelectedIndex(-1);
-    } finally {
-      setAddingRecipe(null);
-    }
-  };
-
-  const handleCreateRecipe = () => {
-    const url = query.trim()
-      ? `/recipes/new?title=${encodeURIComponent(query.trim())}`
-      : '/recipes/new';
-    router.push(url);
-    handleClose();
-  };
+  }, [isOpen, allRecipes, selectedIndex, query, handleSelectRecipe, handleCreateRecipe, handleClose]);
 
   return (
     <Modal

@@ -94,26 +94,26 @@ export function RecipeIngredientsEdit({
         {pasteMode ? renderPasteMode() : (
           <>
             {ingredients.map((ing, idx) => (
-              <div key={idx} className="flex items-center gap-2 group">
+              <div key={idx} className="flex items-center gap-1.5 sm:gap-2 group">
                 <input
                   type="text"
                   value={ing.quantity?.toString() || ''}
                   onChange={e => updateIngredient(idx, 'quantity', e.target.value ? Number(e.target.value) : undefined)}
                   placeholder="Qty"
-                  className="w-14 text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none"
+                  className="w-10 sm:w-14 text-xs bg-cream rounded px-1.5 sm:px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none"
                 />
                 <UnitAutocomplete
                   value={ing.unit || ''}
                   onChange={value => updateIngredient(idx, 'unit', value || undefined)}
                   placeholder="unit"
-                  className="w-20"
+                  className="w-14 sm:w-20"
                   compact
                 />
                 <IngredientAutocomplete
                   value={ing.name}
                   onChange={value => updateIngredient(idx, 'name', value)}
-                  placeholder="Ingredient name"
-                  className="flex-1"
+                  placeholder="Ingredient"
+                  className="flex-1 min-w-0"
                   compact
                 />
                 <input
@@ -121,11 +121,11 @@ export function RecipeIngredientsEdit({
                   value={ing.preparation || ''}
                   onChange={e => updateIngredient(idx, 'preparation', e.target.value || undefined)}
                   placeholder="prep"
-                  className="w-20 text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none"
+                  className="hidden sm:block w-20 text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none"
                 />
                 <button
                   onClick={() => removeIngredient(idx)}
-                  className="text-warm-gray hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="text-warm-gray hover:text-red-500 flex-shrink-0 p-1"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

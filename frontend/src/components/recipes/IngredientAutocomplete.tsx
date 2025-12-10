@@ -101,17 +101,18 @@ export function IngredientAutocomplete({
     s => s.name.toLowerCase() === value.toLowerCase()
   );
 
-  // Extract width class from className for the container, rest goes to input
-  const widthMatch = className.match(/(?:^|\s)(w-\S+|flex-\d+|flex-1)/);
-  const widthClass = widthMatch ? widthMatch[1] : '';
-  const inputClasses = className.replace(/(?:^|\s)(w-\S+|flex-\d+|flex-1)/g, '').trim();
+  // Extract width/flex classes from className for the container, rest goes to input
+  const containerClasses = (className.match(/(?:^|\s)(w-\S+|min-w-\S+|max-w-\S+|flex-\d+|flex-1)/g) || [])
+    .map(c => c.trim())
+    .join(' ');
+  const inputClasses = className.replace(/(?:^|\s)(w-\S+|min-w-\S+|max-w-\S+|flex-\d+|flex-1)/g, '').trim();
 
   const inputStyle = compact
     ? `text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none w-full ${inputClasses}`
     : `input-field w-full ${inputClasses}`;
 
   return (
-    <div ref={containerRef} className={`relative ${widthClass}`}>
+    <div ref={containerRef} className={`relative ${containerClasses}`}>
       <input
         type="text"
         value={value}
@@ -235,17 +236,18 @@ export function UnitAutocomplete({
     }
   };
 
-  // Extract width class from className for the container, rest goes to input
-  const widthMatch = className.match(/(?:^|\s)(w-\S+|flex-\d+|flex-1)/);
-  const widthClass = widthMatch ? widthMatch[1] : '';
-  const inputClasses = className.replace(/(?:^|\s)(w-\S+|flex-\d+|flex-1)/g, '').trim();
+  // Extract width/flex classes from className for the container, rest goes to input
+  const containerClasses = (className.match(/(?:^|\s)(w-\S+|min-w-\S+|max-w-\S+|flex-\d+|flex-1)/g) || [])
+    .map(c => c.trim())
+    .join(' ');
+  const inputClasses = className.replace(/(?:^|\s)(w-\S+|min-w-\S+|max-w-\S+|flex-\d+|flex-1)/g, '').trim();
 
   const inputStyle = compact
     ? `text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none w-full ${inputClasses}`
     : `input-field w-full ${inputClasses}`;
 
   return (
-    <div ref={containerRef} className={`relative ${widthClass}`}>
+    <div ref={containerRef} className={`relative ${containerClasses}`}>
       <input
         type="text"
         value={value}
