@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import NotificationBell from '@/components/notifications/NotificationBell';
-import { searchApi } from '@/lib/api';
-import type { SearchResponse } from '@/types';
+import { useClickOutside, useDebouncedSearch } from '@/hooks';
+import { UserAvatar, RecipeImage } from '@/components/ui';
 
 interface MobileNavProps {
   onMenuClick: () => void;
@@ -13,59 +13,17 @@ interface MobileNavProps {
 export default function MobileNav({ onMenuClick }: MobileNavProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResponse | null>(null);
-  const [loading, setLoading] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Debounced search
-  useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
+  const { results, loading, hasResults } = useDebouncedSearch(query);
 
-    if (query.length < 2) {
-      setResults(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const data = await searchApi.autocomplete(query, 5);
-        setResults(data);
-      } catch (error) {
-        console.error('Search failed:', error);
-      } finally {
-        setLoading(false);
-      }
-    }, 200);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [query]);
-
-  // Close on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsSearchOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(containerRef, useCallback(() => setIsSearchOpen(false), []));
 
   const handleClose = () => {
     setIsSearchOpen(false);
     setQuery('');
-    setResults(null);
   };
 
   const handleSearchAll = () => {
@@ -79,15 +37,6 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
     router.push(href);
     handleClose();
   };
-
-  const hasResults = results && (
-    results.my_recipes.length > 0 ||
-    results.discover_recipes.length > 0 ||
-    results.tags.length > 0 ||
-    results.collections.length > 0 ||
-    results.users?.length > 0 ||
-    results.ingredients?.length > 0
-  );
 
   return (
     <nav className="bg-cream border-b border-border sticky top-0 z-40 md:hidden">
@@ -142,7 +91,7 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
                     </div>
                   )}
 
-                  {hasResults && (
+                  {hasResults && results && (
                     <>
                       {results.my_recipes.length > 0 && (
                         <div className="py-2">
@@ -155,17 +104,7 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
                               onClick={() => handleResultClick(`/recipes/${item.id}`)}
                               className="flex items-center gap-3 px-3 py-2 hover:bg-cream transition-colors w-full text-left"
                             >
-                              <div className="w-10 h-10 rounded bg-cream-dark flex-shrink-0 overflow-hidden">
-                                {item.cover_image_url ? (
-                                  <img src={item.cover_image_url} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                  </div>
-                                )}
-                              </div>
+                              <RecipeImage src={item.cover_image_url} size="sm" />
                               <span className="text-sm text-charcoal truncate">{item.title}</span>
                             </button>
                           ))}
@@ -183,17 +122,7 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
                               onClick={() => handleResultClick(`/recipes/${item.id}`)}
                               className="flex items-center gap-3 px-3 py-2 hover:bg-cream transition-colors w-full text-left"
                             >
-                              <div className="w-10 h-10 rounded bg-cream-dark flex-shrink-0 overflow-hidden">
-                                {item.cover_image_url ? (
-                                  <img src={item.cover_image_url} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <svg className="w-5 h-5 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                    </svg>
-                                  </div>
-                                )}
-                              </div>
+                              <RecipeImage src={item.cover_image_url} size="sm" />
                               <span className="text-sm text-charcoal truncate">{item.title}</span>
                             </button>
                           ))}
@@ -211,15 +140,7 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
                               onClick={() => handleResultClick(`/profile/${user.id}`)}
                               className="flex items-center gap-3 px-3 py-2 hover:bg-cream transition-colors w-full text-left"
                             >
-                              <div className="w-10 h-10 rounded-full bg-cream-dark flex-shrink-0 overflow-hidden flex items-center justify-center">
-                                {user.profile_image_url ? (
-                                  <img src={user.profile_image_url} alt="" className="w-full h-full object-cover" />
-                                ) : (
-                                  <span className="text-sm font-serif text-charcoal">
-                                    {user.name.charAt(0).toUpperCase()}
-                                  </span>
-                                )}
-                              </div>
+                              <UserAvatar user={user} size="sm" className="w-10 h-10" />
                               <div className="min-w-0">
                                 <p className="text-sm text-charcoal truncate">{user.name}</p>
                               </div>

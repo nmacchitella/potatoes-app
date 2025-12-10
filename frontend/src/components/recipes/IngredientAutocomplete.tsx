@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ingredientApi } from '@/lib/api';
+import { useClickOutside } from '@/hooks';
 import type { Ingredient, MeasurementUnit } from '@/types';
 
 interface IngredientAutocompleteProps {
@@ -10,6 +11,7 @@ interface IngredientAutocompleteProps {
   placeholder?: string;
   className?: string;
   onSelect?: (ingredient: Ingredient) => void;
+  compact?: boolean;
 }
 
 export function IngredientAutocomplete({
@@ -18,12 +20,15 @@ export function IngredientAutocomplete({
   placeholder = 'Ingredient name',
   className = '',
   onSelect,
+  compact = false,
 }: IngredientAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<Ingredient[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions when clicking outside container
+  useClickOutside(containerRef, useCallback(() => setShowSuggestions(false), []), showSuggestions);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -43,22 +48,6 @@ export function IngredientAutocomplete({
     const debounceTimer = setTimeout(fetchSuggestions, 200);
     return () => clearTimeout(debounceTimer);
   }, [value]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleSelect = (ingredient: Ingredient) => {
     onChange(ingredient.name);
@@ -117,10 +106,13 @@ export function IngredientAutocomplete({
   const widthClass = widthMatch ? widthMatch[1] : '';
   const inputClasses = className.replace(/(?:^|\s)(w-\S+|flex-\d+|flex-1)/g, '').trim();
 
+  const inputStyle = compact
+    ? `text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none w-full ${inputClasses}`
+    : `input-field w-full ${inputClasses}`;
+
   return (
-    <div className={`relative ${widthClass}`}>
+    <div ref={containerRef} className={`relative ${widthClass}`}>
       <input
-        ref={inputRef}
         type="text"
         value={value}
         onChange={e => {
@@ -130,13 +122,12 @@ export function IngredientAutocomplete({
         onFocus={() => value.length >= 2 && setShowSuggestions(true)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={`input-field w-full ${inputClasses}`}
+        className={inputStyle}
         autoComplete="off"
       />
 
       {showSuggestions && (suggestions.length > 0 || value.length >= 2) && (
         <div
-          ref={suggestionsRef}
           className="absolute z-50 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto"
         >
           {suggestions.map((ingredient, index) => (
@@ -183,6 +174,7 @@ interface UnitAutocompleteProps {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  compact?: boolean;
 }
 
 export function UnitAutocomplete({
@@ -190,12 +182,15 @@ export function UnitAutocomplete({
   onChange,
   placeholder = 'Unit',
   className = '',
+  compact = false,
 }: UnitAutocompleteProps) {
   const [units, setUnits] = useState<MeasurementUnit[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions when clicking outside container
+  useClickOutside(containerRef, useCallback(() => setShowSuggestions(false), []), showSuggestions);
 
   useEffect(() => {
     ingredientApi.getUnits().then(setUnits).catch(console.error);
@@ -206,22 +201,6 @@ export function UnitAutocomplete({
       unit.name.toLowerCase().includes(value.toLowerCase()) ||
       (unit.abbreviation?.toLowerCase().includes(value.toLowerCase()))
   );
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleSelect = (unit: MeasurementUnit) => {
     onChange(unit.name);
@@ -261,10 +240,13 @@ export function UnitAutocomplete({
   const widthClass = widthMatch ? widthMatch[1] : '';
   const inputClasses = className.replace(/(?:^|\s)(w-\S+|flex-\d+|flex-1)/g, '').trim();
 
+  const inputStyle = compact
+    ? `text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none w-full ${inputClasses}`
+    : `input-field w-full ${inputClasses}`;
+
   return (
-    <div className={`relative ${widthClass}`}>
+    <div ref={containerRef} className={`relative ${widthClass}`}>
       <input
-        ref={inputRef}
         type="text"
         value={value}
         onChange={e => {
@@ -274,13 +256,12 @@ export function UnitAutocomplete({
         onFocus={() => setShowSuggestions(true)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={`input-field w-full ${inputClasses}`}
+        className={inputStyle}
         autoComplete="off"
       />
 
       {showSuggestions && filteredUnits.length > 0 && (
         <div
-          ref={suggestionsRef}
           className="absolute z-50 w-full mt-1 bg-white border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto"
         >
           {filteredUnits.map((unit, index) => (

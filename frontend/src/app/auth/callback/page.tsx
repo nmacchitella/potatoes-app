@@ -17,7 +17,7 @@ function AuthCallbackContent() {
 
       if (!token || !refreshToken) {
         console.error('No tokens received from OAuth callback');
-        router.push('/login?error=oauth_failed');
+        router.push('/auth/login?error=oauth_failed');
         return;
       }
 
@@ -33,7 +33,7 @@ function AuthCallbackContent() {
         router.push('/');
       } catch (error) {
         console.error('Error during OAuth callback:', error);
-        router.push('/login?error=oauth_failed');
+        router.push('/auth/login?error=oauth_failed');
       }
     };
 

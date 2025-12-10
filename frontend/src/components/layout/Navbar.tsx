@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/store/useStore';
+import { useClickOutside } from '@/hooks';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import GlobalSearch, { CommandPalette } from '@/components/search/GlobalSearch';
+import { UserAvatar } from '@/components/ui';
 
 export default function Navbar() {
   const router = useRouter();
@@ -13,16 +15,7 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(menuRef, useCallback(() => setMenuOpen(false), []));
 
   return (
     <nav className="bg-cream border-b border-border sticky top-0 z-40 hidden md:block">
@@ -48,19 +41,7 @@ export default function Navbar() {
                 onClick={() => setMenuOpen(!menuOpen)}
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
               >
-                <div className="w-9 h-9 rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden">
-                  {user?.profile_image_url ? (
-                    <img
-                      src={user.profile_image_url}
-                      alt={user.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-sm font-serif text-charcoal">
-                      {user?.name?.charAt(0).toUpperCase() || '?'}
-                    </span>
-                  )}
-                </div>
+                <UserAvatar user={user} size="md" />
                 <svg
                   className={`w-4 h-4 text-warm-gray transition-transform ${
                     menuOpen ? 'rotate-180' : ''
@@ -108,7 +89,7 @@ export default function Navbar() {
                       onClick={async () => {
                         await logout();
                         setMenuOpen(false);
-                        router.push('/login');
+                        router.push('/auth/login');
                       }}
                       className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-cream transition-colors"
                     >

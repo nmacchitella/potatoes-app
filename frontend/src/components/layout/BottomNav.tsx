@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useStore } from '@/store/useStore';
+import { UserAvatar } from '@/components/ui';
 
 export default function BottomNav() {
   const pathname = usePathname();
   const { user } = useStore();
 
   // Don't show on certain pages
-  const hideOnPaths = ['/login', '/register', '/r/'];
+  const hideOnPaths = ['/auth/login', '/register', '/r/'];
   const shouldHide = hideOnPaths.some(path => pathname.startsWith(path));
 
   if (shouldHide) return null;
@@ -56,19 +57,7 @@ export default function BottomNav() {
           }`}
           aria-label="Profile"
         >
-          <div className="w-7 h-7 rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden">
-            {user?.profile_image_url ? (
-              <img
-                src={user.profile_image_url}
-                alt={user.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            )}
-          </div>
+          <UserAvatar user={user} size="sm" showFallbackIcon />
           <span className="text-[10px] mt-0.5">Profile</span>
         </Link>
       </div>

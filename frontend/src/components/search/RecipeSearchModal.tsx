@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchApi } from '@/lib/api';
+import { useDebouncedSearch } from '@/hooks';
+import { RecipeImage, Modal } from '@/components/ui';
 import type { SearchRecipeResult } from '@/types';
 
 interface RecipeSearchModalProps {
@@ -22,31 +24,34 @@ export default function RecipeSearchModal({
 }: RecipeSearchModalProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [myRecipes, setMyRecipes] = useState<SearchRecipeResult[]>([]);
-  const [discoverRecipes, setDiscoverRecipes] = useState<SearchRecipeResult[]>([]);
   const [suggestedRecipes, setSuggestedRecipes] = useState<SearchRecipeResult[]>([]);
-  const [loading, setLoading] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [addingRecipe, setAddingRecipe] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Use shared debounced search hook
+  const { results, loading } = useDebouncedSearch(query, { limit: 10 });
 
   // Filter out excluded recipes
-  const filteredMyRecipes = myRecipes.filter(r => !excludeRecipeIds.has(r.id));
-  const filteredDiscoverRecipes = discoverRecipes.filter(r => !excludeRecipeIds.has(r.id));
+  const filteredMyRecipes = (results?.my_recipes || []).filter(r => !excludeRecipeIds.has(r.id));
+  const filteredDiscoverRecipes = (results?.discover_recipes || []).filter(r => !excludeRecipeIds.has(r.id));
   const filteredSuggested = suggestedRecipes.filter(r => !excludeRecipeIds.has(r.id));
   const allRecipes = query.length >= 2
     ? [...filteredMyRecipes, ...filteredDiscoverRecipes]
     : filteredSuggested;
   const hasResults = allRecipes.length > 0;
 
+  // Reset selected index when results change
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [results]);
+
   // Load suggestions when modal opens
   useEffect(() => {
     if (isOpen && suggestedRecipes.length === 0) {
       setLoadingSuggestions(true);
-      // Fetch top recipes as suggestions (empty query returns recent/popular)
       searchApi.autocomplete('', 6)
         .then(data => {
           setSuggestedRecipes(data.my_recipes || []);
@@ -62,40 +67,6 @@ export default function RecipeSearchModal({
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
-
-  // Debounced search
-  useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    if (query.length < 2) {
-      setMyRecipes([]);
-      setDiscoverRecipes([]);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const data = await searchApi.autocomplete(query, 10);
-        setMyRecipes(data.my_recipes || []);
-        setDiscoverRecipes(data.discover_recipes || []);
-        setSelectedIndex(-1);
-      } catch (error) {
-        console.error('Search failed:', error);
-      } finally {
-        setLoading(false);
-      }
-    }, 200);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [query]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -128,8 +99,6 @@ export default function RecipeSearchModal({
 
   const handleClose = () => {
     setQuery('');
-    setMyRecipes([]);
-    setDiscoverRecipes([]);
     setSelectedIndex(-1);
     onClose();
   };
@@ -138,6 +107,9 @@ export default function RecipeSearchModal({
     setAddingRecipe(recipe.id);
     try {
       await onSelectRecipe(recipe);
+      // Clear search after successfully adding - returns to suggested recipes view
+      setQuery('');
+      setSelectedIndex(-1);
     } finally {
       setAddingRecipe(null);
     }
@@ -151,19 +123,18 @@ export default function RecipeSearchModal({
     handleClose();
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
-      {/* Backdrop with blur */}
-      <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={handleClose}
-      />
-
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      size="xl"
+      position="top"
+      blur
+      closeOnEscape={false} // We handle escape in keyboard navigation
+    >
       <div
         ref={containerRef}
-        className="relative w-full max-w-xl bg-white rounded-xl shadow-2xl overflow-hidden"
+        className="bg-white rounded-xl shadow-2xl overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -218,17 +189,7 @@ export default function RecipeSearchModal({
                       selectedIndex === index ? 'bg-cream' : ''
                     } ${addingRecipe === recipe.id ? 'opacity-50' : ''}`}
                   >
-                    <div className="w-10 h-10 rounded bg-cream-dark flex-shrink-0 overflow-hidden">
-                      {recipe.cover_image_url ? (
-                        <img src={recipe.cover_image_url} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <svg className="w-5 h-5 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
+                    <RecipeImage src={recipe.cover_image_url} size="sm" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-charcoal truncate">{recipe.title}</p>
                       {recipe.description && (
@@ -289,17 +250,7 @@ export default function RecipeSearchModal({
                         selectedIndex === index ? 'bg-cream' : ''
                       } ${addingRecipe === recipe.id ? 'opacity-50' : ''}`}
                     >
-                      <div className="w-10 h-10 rounded bg-cream-dark flex-shrink-0 overflow-hidden">
-                        {recipe.cover_image_url ? (
-                          <img src={recipe.cover_image_url} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <svg className="w-5 h-5 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
+                      <RecipeImage src={recipe.cover_image_url} size="sm" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-charcoal truncate">{recipe.title}</p>
                         {recipe.description && (
@@ -335,17 +286,7 @@ export default function RecipeSearchModal({
                           selectedIndex === actualIndex ? 'bg-cream' : ''
                         } ${addingRecipe === recipe.id ? 'opacity-50' : ''}`}
                       >
-                        <div className="w-10 h-10 rounded bg-cream-dark flex-shrink-0 overflow-hidden">
-                          {recipe.cover_image_url ? (
-                            <img src={recipe.cover_image_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <svg className="w-5 h-5 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
+                        <RecipeImage src={recipe.cover_image_url} size="sm" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-charcoal truncate">{recipe.title}</p>
                           <p className="text-xs text-warm-gray">by {recipe.author_name}</p>
@@ -393,6 +334,6 @@ export default function RecipeSearchModal({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

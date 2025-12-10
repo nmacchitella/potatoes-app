@@ -3,13 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { recipeApi, collectionApi, tagApi, getErrorMessage } from '@/lib/api';
+import { recipeApi, collectionApi, getErrorMessage } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import { abbreviateUnit, formatQuantity } from '@/lib/constants';
 import { convertIngredient, type UnitSystem } from '@/lib/unitConversion';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
-import type { RecipeWithScale, Collection, RecipeIngredient, RecipeInstruction, Tag } from '@/types';
+import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit } from '@/components/recipes';
+import type { RecipeWithScale, Collection, RecipeIngredient, RecipeIngredientInput, RecipeInstructionInput } from '@/types';
 
 /**
  * Format an ingredient for display
@@ -71,22 +72,6 @@ const formatIngredientWithUnit = (ing: RecipeIngredient, unitSystem?: UnitSystem
 };
 
 
-// Editable ingredient type for form state
-interface EditableIngredient {
-  id: string;
-  quantity: string;
-  unit: string;
-  name: string;
-  preparation: string;
-  is_optional: boolean;
-}
-
-interface EditableInstruction {
-  id: string;
-  step_number: number;
-  instruction_text: string;
-  duration_minutes: string;
-}
 
 export default function RecipeDetailPage() {
   const params = useParams();
@@ -119,11 +104,9 @@ export default function RecipeDetailPage() {
 
   // Recipe collections
   const [recipeCollections, setRecipeCollections] = useState<Collection[]>([]);
-  const [editIngredients, setEditIngredients] = useState<EditableIngredient[]>([]);
-  const [editInstructions, setEditInstructions] = useState<EditableInstruction[]>([]);
+  const [editIngredients, setEditIngredients] = useState<RecipeIngredientInput[]>([]);
+  const [editInstructions, setEditInstructions] = useState<RecipeInstructionInput[]>([]);
   const [editTagIds, setEditTagIds] = useState<string[]>([]);
-  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
-  const [showTagPicker, setShowTagPicker] = useState(false);
 
   // Collection dropdown state
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -131,7 +114,6 @@ export default function RecipeDetailPage() {
   const [addingToCollection, setAddingToCollection] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const tagPickerRef = useRef<HTMLDivElement>(null);
 
   const recipeId = params.id as string;
 
@@ -174,22 +156,24 @@ export default function RecipeDetailPage() {
         privacy_level: recipe.privacy_level,
       });
       setEditIngredients(recipe.ingredients.map(ing => ({
-        id: ing.id,
-        quantity: ing.quantity?.toString() || '',
-        unit: ing.unit || '',
+        sort_order: ing.sort_order,
+        quantity: ing.quantity,
+        quantity_max: ing.quantity_max,
+        unit: ing.unit,
         name: ing.name,
-        preparation: ing.preparation || '',
+        preparation: ing.preparation,
         is_optional: ing.is_optional,
+        is_staple: ing.is_staple,
+        ingredient_group: ing.ingredient_group,
+        notes: ing.notes,
       })));
       setEditInstructions(recipe.instructions.map(inst => ({
-        id: inst.id,
         step_number: inst.step_number,
         instruction_text: inst.instruction_text,
-        duration_minutes: inst.duration_minutes?.toString() || '',
+        duration_minutes: inst.duration_minutes,
+        instruction_group: inst.instruction_group,
       })));
       setEditTagIds(recipe.tags.map(t => t.id));
-      // Load available tags
-      tagApi.list().then(setAvailableTags).catch(console.error);
     }
   }, [isEditing, recipe]);
 
@@ -210,9 +194,6 @@ export default function RecipeDetailPage() {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowCollectionDropdown(false);
-      }
-      if (tagPickerRef.current && !tagPickerRef.current.contains(event.target as Node)) {
-        setShowTagPicker(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -304,17 +285,12 @@ export default function RecipeDetailPage() {
         notes: editForm.notes || undefined,
         privacy_level: editForm.privacy_level,
         ingredients: editIngredients.filter(ing => ing.name.trim()).map((ing, idx) => ({
+          ...ing,
           sort_order: idx,
-          quantity: ing.quantity ? parseFloat(ing.quantity) : undefined,
-          unit: ing.unit || undefined,
-          name: ing.name,
-          preparation: ing.preparation || undefined,
-          is_optional: ing.is_optional,
         })),
         instructions: editInstructions.filter(inst => inst.instruction_text.trim()).map((inst, idx) => ({
+          ...inst,
           step_number: idx + 1,
-          instruction_text: inst.instruction_text,
-          duration_minutes: inst.duration_minutes ? parseInt(inst.duration_minutes) : undefined,
         })),
         tag_ids: editTagIds,
       });
@@ -335,52 +311,6 @@ export default function RecipeDetailPage() {
 
   const handleCancel = () => {
     setIsEditing(false);
-  };
-
-  const addIngredient = () => {
-    setEditIngredients([...editIngredients, {
-      id: `new-${Date.now()}`,
-      quantity: '',
-      unit: '',
-      name: '',
-      preparation: '',
-      is_optional: false,
-    }]);
-  };
-
-  const removeIngredient = (index: number) => {
-    setEditIngredients(editIngredients.filter((_, i) => i !== index));
-  };
-
-  const updateIngredient = (index: number, field: keyof EditableIngredient, value: string | boolean) => {
-    const updated = [...editIngredients];
-    updated[index] = { ...updated[index], [field]: value };
-    setEditIngredients(updated);
-  };
-
-  const addInstruction = () => {
-    setEditInstructions([...editInstructions, {
-      id: `new-${Date.now()}`,
-      step_number: editInstructions.length + 1,
-      instruction_text: '',
-      duration_minutes: '',
-    }]);
-  };
-
-  const removeInstruction = (index: number) => {
-    setEditInstructions(editInstructions.filter((_, i) => i !== index));
-  };
-
-  const updateInstruction = (index: number, field: keyof EditableInstruction, value: string | number) => {
-    const updated = [...editInstructions];
-    updated[index] = { ...updated[index], [field]: value };
-    setEditInstructions(updated);
-  };
-
-  const toggleTag = (tagId: string) => {
-    setEditTagIds(prev =>
-      prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
-    );
   };
 
   if (loading) {
@@ -404,7 +334,6 @@ export default function RecipeDetailPage() {
 
   const isOwner = user?.id === recipe.author_id;
   const totalTime = (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0);
-  const selectedTags = availableTags.filter(t => editTagIds.includes(t.id));
 
   return (
     <div className="min-h-screen bg-cream has-bottom-nav">
@@ -571,33 +500,12 @@ export default function RecipeDetailPage() {
 
             {/* Tags */}
             {isEditing ? (
-              <div className="relative mb-3" ref={tagPickerRef}>
-                <div
-                  onClick={() => setShowTagPicker(!showTagPicker)}
-                  className="flex flex-wrap gap-1.5 min-h-[28px] cursor-pointer border border-border rounded p-1.5"
-                >
-                  {selectedTags.length > 0 ? selectedTags.map(tag => (
-                    <span key={tag.id} className="bg-gold/15 text-gold-dark px-2 py-0.5 rounded text-xs flex items-center gap-1">
-                      {tag.name}
-                      <button onClick={(e) => { e.stopPropagation(); toggleTag(tag.id); }} className="hover:text-red-500">×</button>
-                    </span>
-                  )) : (
-                    <span className="text-xs text-warm-gray">Click to add tags...</span>
-                  )}
-                </div>
-                {showTagPicker && (
-                  <div className="absolute top-full left-0 mt-1 w-full bg-white border border-border rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
-                    {availableTags.map(tag => (
-                      <button
-                        key={tag.id}
-                        onClick={() => toggleTag(tag.id)}
-                        className={`w-full px-3 py-1.5 text-left text-xs hover:bg-cream transition-colors ${editTagIds.includes(tag.id) ? 'bg-gold/10 text-gold-dark' : 'text-charcoal'}`}
-                      >
-                        {tag.name}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div className="mb-3">
+                <RecipeTagsEdit
+                  selectedTagIds={editTagIds}
+                  onChange={setEditTagIds}
+                  compact
+                />
               </div>
             ) : recipe.tags.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-3">
@@ -858,47 +766,11 @@ export default function RecipeDetailPage() {
               </div>
 
               {isEditing ? (
-                <div className="space-y-2">
-                  {editIngredients.map((ing, idx) => (
-                    <div key={ing.id} className="flex items-center gap-2 group">
-                      <input
-                        type="text"
-                        value={ing.quantity}
-                        onChange={e => updateIngredient(idx, 'quantity', e.target.value)}
-                        placeholder="Qty"
-                        className="w-14 text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={ing.unit}
-                        onChange={e => updateIngredient(idx, 'unit', e.target.value)}
-                        placeholder="unit"
-                        className="w-16 text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={ing.name}
-                        onChange={e => updateIngredient(idx, 'name', e.target.value)}
-                        placeholder="Ingredient name"
-                        className="flex-1 text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none"
-                      />
-                      <input
-                        type="text"
-                        value={ing.preparation}
-                        onChange={e => updateIngredient(idx, 'preparation', e.target.value)}
-                        placeholder="prep"
-                        className="w-20 text-xs bg-cream rounded px-2 py-1.5 focus:ring-1 focus:ring-gold outline-none"
-                      />
-                      <button onClick={() => removeIngredient(idx)} className="text-warm-gray hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                    </div>
-                  ))}
-                  <button onClick={addIngredient} className="text-xs text-gold hover:text-gold-dark flex items-center gap-1 mt-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                    Add ingredient
-                  </button>
-                </div>
+                <RecipeIngredientsEdit
+                  ingredients={editIngredients}
+                  onChange={setEditIngredients}
+                  compact
+                />
               ) : (
                 <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-1.5 pl-4">
                   {recipe.ingredients.map(ing => (
@@ -916,41 +788,11 @@ export default function RecipeDetailPage() {
               <h2 className="font-serif text-xl text-charcoal mb-4">Instructions</h2>
 
               {isEditing ? (
-                <div className="space-y-3">
-                  {editInstructions.map((inst, idx) => (
-                    <div key={inst.id} className="flex gap-3 group">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold text-white text-xs font-medium flex items-center justify-center mt-1">
-                        {idx + 1}
-                      </span>
-                      <div className="flex-1">
-                        <textarea
-                          value={inst.instruction_text}
-                          onChange={e => updateInstruction(idx, 'instruction_text', e.target.value)}
-                          placeholder="Instruction step..."
-                          rows={2}
-                          className="w-full text-sm bg-cream rounded px-3 py-2 focus:ring-1 focus:ring-gold outline-none resize-none"
-                        />
-                        <div className="flex items-center gap-2 mt-1">
-                          <input
-                            type="number"
-                            value={inst.duration_minutes}
-                            onChange={e => updateInstruction(idx, 'duration_minutes', e.target.value)}
-                            placeholder="Time"
-                            className="w-14 text-xs bg-cream rounded px-2 py-1 focus:ring-1 focus:ring-gold outline-none"
-                          />
-                          <span className="text-xs text-warm-gray">min</span>
-                        </div>
-                      </div>
-                      <button onClick={() => removeInstruction(idx)} className="text-warm-gray hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                    </div>
-                  ))}
-                  <button onClick={addInstruction} className="text-xs text-gold hover:text-gold-dark flex items-center gap-1 mt-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-                    Add step
-                  </button>
-                </div>
+                <RecipeInstructionsEdit
+                  instructions={editInstructions}
+                  onChange={setEditInstructions}
+                  compact
+                />
               ) : (
                 <ol className="space-y-4">
                   {recipe.instructions.map(inst => (

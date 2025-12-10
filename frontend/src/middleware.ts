@@ -4,11 +4,11 @@ import type { NextRequest } from 'next/server';
 // Routes that don't require authentication
 const publicRoutes = [
   '/',                      // Landing page (handles its own redirect for logged-in users)
-  '/login',
-  '/verify-email',
-  '/forgot-password',
-  '/reset-password',
-  '/verification-required',
+  '/auth/login',
+  '/auth/verify-email',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/verification-required',
   '/auth/callback',
 ];
 
@@ -45,7 +45,7 @@ export function middleware(request: NextRequest) {
   }
 
   // No tokens at all - redirect to login
-  const loginUrl = new URL('/login', request.url);
+  const loginUrl = new URL('/auth/login', request.url);
   loginUrl.searchParams.set('returnUrl', pathname);
   return NextResponse.redirect(loginUrl);
 }

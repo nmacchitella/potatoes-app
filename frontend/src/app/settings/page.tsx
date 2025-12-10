@@ -179,7 +179,7 @@ export default function SettingsPage() {
     try {
       await authApi.deleteAccount();
       logout();
-      router.push('/login');
+      router.push('/auth/login');
     } catch (error) {
       console.error('Failed to delete account:', error);
       setDeleting(false);

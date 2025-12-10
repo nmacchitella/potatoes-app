@@ -128,3 +128,54 @@ export function formatQuantity(quantity: number | null | undefined): string {
   }
   return quantity.toFixed(2).replace(/\.?0+$/, '');
 }
+
+interface Ingredient {
+  name: string;
+  quantity?: number | null;
+  quantity_max?: number | null;
+  unit?: string | null;
+  preparation?: string | null;
+}
+
+/**
+ * Format a recipe ingredient for display
+ * Combines quantity, unit, name, and preparation into a readable string
+ */
+export function formatIngredient(ing: Ingredient): string {
+  const parts: string[] = [];
+
+  // Format quantity (and range if applicable)
+  if (ing.quantity) {
+    const qty = formatQuantity(ing.quantity);
+    if (ing.quantity_max) {
+      const qtyMax = formatQuantity(ing.quantity_max);
+      parts.push(`${qty}-${qtyMax}`);
+    } else {
+      parts.push(qty);
+    }
+  }
+
+  // Format unit
+  if (ing.unit) {
+    const abbr = abbreviateUnit(ing.unit);
+    if (abbr) {
+      // Metric units attach directly to quantity (e.g., "100g" not "100 g")
+      const metricUnits = ['g', 'kg', 'mg', 'ml', 'L'];
+      if (metricUnits.includes(abbr) && parts.length > 0) {
+        parts[parts.length - 1] = (parts[parts.length - 1] || '') + abbr;
+      } else {
+        parts.push(abbr);
+      }
+    }
+  }
+
+  // Add ingredient name
+  parts.push(ing.name);
+
+  // Add preparation if present
+  if (ing.preparation) {
+    parts[parts.length - 1] += `, ${ing.preparation}`;
+  }
+
+  return parts.join(' ');
+}

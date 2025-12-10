@@ -257,8 +257,8 @@ api.interceptors.response.use(
       clearTokens();
       stopProactiveRefresh();
 
-      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-        window.location.href = '/login';
+      if (typeof window !== 'undefined' && window.location.pathname !== '/auth/login') {
+        window.location.href = '/auth/login';
       }
       return Promise.reject(error);
     }

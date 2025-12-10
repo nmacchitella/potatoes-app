@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import { collectionApi } from '@/lib/api';
+import { UserAvatar } from '@/components/ui';
 import type { Collection, SharedCollection } from '@/types';
 
 type PageView = 'recipes' | 'calendar';
@@ -96,7 +97,7 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const handleLogout = async () => {
     await logout();
     onClose();
-    router.push('/login');
+    router.push('/auth/login');
   };
 
   const handleNavClick = (href: string) => {
@@ -196,19 +197,7 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               onClick={() => handleNavClick(`/profile/${user?.id}`)}
               className="flex items-center gap-3 w-full text-left"
             >
-              <div className="w-12 h-12 rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden">
-                {user?.profile_image_url ? (
-                  <img
-                    src={user.profile_image_url}
-                    alt={user.name}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-lg font-serif text-charcoal">
-                    {user?.name?.charAt(0).toUpperCase() || '?'}
-                  </span>
-                )}
-              </div>
+              <UserAvatar user={user} size="lg" />
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-charcoal truncate">{user?.name}</p>
                 <p className="text-sm text-warm-gray truncate">View profile</p>

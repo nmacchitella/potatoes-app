@@ -55,8 +55,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Token was removed - log out this tab too
           logout();
           // Redirect to login if not already there
-          if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/') {
-            window.location.href = '/login';
+          if (typeof window !== 'undefined' && window.location.pathname !== '/auth/login' && window.location.pathname !== '/') {
+            window.location.href = '/auth/login';
           }
         } else if (event.newValue !== null && event.oldValue === null) {
           // Token was added - refresh the page to pick up new auth state
@@ -78,8 +78,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // If we have a user in state but no token, logout
       if (user && !token) {
         logout();
-        if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
-          window.location.href = '/login';
+        if (window.location.pathname !== '/auth/login' && window.location.pathname !== '/') {
+          window.location.href = '/auth/login';
         }
       }
     };

@@ -4,56 +4,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi } from '@/lib/api';
+import { formatIngredient } from '@/lib/constants';
 import { useStore } from '@/store/useStore';
-import type { RecipeWithScale, RecipeIngredient } from '@/types';
-
-// Unit abbreviation mapping
-const unitAbbreviations: Record<string, string> = {
-  gram: 'g', grams: 'g', kilogram: 'kg', kilograms: 'kg',
-  milligram: 'mg', milligrams: 'mg', ounce: 'oz', ounces: 'oz',
-  pound: 'lb', pounds: 'lb', cup: 'cup', cups: 'cups',
-  tablespoon: 'tbsp', tablespoons: 'tbsp', teaspoon: 'tsp', teaspoons: 'tsp',
-  milliliter: 'ml', milliliters: 'ml', liter: 'L', liters: 'L',
-  fluid_ounce: 'fl oz', fluid_ounces: 'fl oz', pint: 'pt', pints: 'pt',
-  quart: 'qt', quarts: 'qt', gallon: 'gal', gallons: 'gal',
-  piece: '', pieces: '', slice: 'slice', slices: 'slices',
-  clove: 'clove', cloves: 'cloves', pinch: 'pinch', dash: 'dash',
-  handful: 'handful', bunch: 'bunch', sprig: 'sprig', sprigs: 'sprigs',
-  can: 'can', cans: 'cans', package: 'pkg', packages: 'pkgs',
-};
-
-const abbreviateUnit = (unit: string): string => {
-  return unitAbbreviations[unit.toLowerCase()] ?? unit;
-};
-
-const formatIngredient = (ing: RecipeIngredient): string => {
-  const parts: string[] = [];
-  if (ing.quantity) {
-    const qty = ing.quantity % 1 === 0 ? ing.quantity.toString() : ing.quantity.toFixed(2).replace(/\.?0+$/, '');
-    if (ing.quantity_max) {
-      const qtyMax = ing.quantity_max % 1 === 0 ? ing.quantity_max.toString() : ing.quantity_max.toFixed(2).replace(/\.?0+$/, '');
-      parts.push(`${qty}-${qtyMax}`);
-    } else {
-      parts.push(qty);
-    }
-  }
-  if (ing.unit) {
-    const abbr = abbreviateUnit(ing.unit);
-    if (abbr) {
-      const metricUnits = ['g', 'kg', 'mg', 'ml', 'L'];
-      if (metricUnits.includes(abbr)) {
-        parts[parts.length - 1] = (parts[parts.length - 1] || '') + abbr;
-      } else {
-        parts.push(abbr);
-      }
-    }
-  }
-  parts.push(ing.name);
-  if (ing.preparation) {
-    parts[parts.length - 1] += `, ${ing.preparation}`;
-  }
-  return parts.join(' ');
-};
+import type { RecipeWithScale } from '@/types';
 
 export default function PublicRecipePage() {
   const params = useParams();
@@ -144,7 +97,7 @@ export default function PublicRecipePage() {
           </div>
           <h1 className="font-serif text-2xl text-charcoal mb-2">{error || 'Recipe not available'}</h1>
           <p className="text-warm-gray mb-6">This recipe may be private or doesn't exist.</p>
-          <Link href="/login" className="btn-primary">
+          <Link href="/auth/login" className="btn-primary">
             Sign in to view more recipes
           </Link>
         </div>
@@ -186,7 +139,7 @@ export default function PublicRecipePage() {
 
             <div className="space-y-3">
               <Link
-                href={`/login?returnUrl=/recipes/${recipeId}`}
+                href={`/auth/login?returnUrl=/recipes/${recipeId}`}
                 className="block w-full bg-gold hover:bg-gold-dark text-white text-center font-medium py-3 rounded-full transition-colors"
               >
                 Sign in or create account
@@ -333,7 +286,7 @@ export default function PublicRecipePage() {
               Sign in to save recipes, build collections, and discover more dishes.
             </p>
             <Link
-              href={`/login?returnUrl=/recipes/${recipeId}`}
+              href={`/auth/login?returnUrl=/recipes/${recipeId}`}
               className="inline-block bg-gold hover:bg-gold-dark text-white font-medium px-6 py-2 rounded-full text-sm transition-colors"
             >
               Sign in or create account
@@ -363,7 +316,7 @@ function PublicNavbar() {
                 My Recipes
               </Link>
             ) : (
-              <Link href="/login" className="btn-primary text-sm py-2 px-4">
+              <Link href="/auth/login" className="btn-primary text-sm py-2 px-4">
                 Sign in
               </Link>
             )}

@@ -1,0 +1,173 @@
+'use client';
+
+import Link from 'next/link';
+import type { RecipeSummary } from '@/types';
+
+interface RecipeGridProps {
+  recipes: RecipeSummary[];
+  loading: boolean;
+  emptyState: {
+    hasFilters: boolean;
+    hasCollection: boolean;
+    onClearFilters: () => void;
+  };
+  manageMode?: {
+    enabled: boolean;
+    selectedCollection: string | null;
+    savingRecipeId: string | null;
+    onRemoveRecipe: (recipeId: string, recipeName: string) => void;
+  };
+}
+
+export default function RecipeGrid({
+  recipes,
+  loading,
+  emptyState,
+  manageMode,
+}: RecipeGridProps) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="animate-pulse">
+            <div className="aspect-[4/3] bg-cream-dark rounded-lg mb-2 sm:mb-3" />
+            <div className="h-3 sm:h-4 bg-cream-dark rounded w-3/4 mb-1 sm:mb-2" />
+            <div className="h-2 sm:h-3 bg-cream-dark rounded w-1/2" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (recipes.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cream-dark flex items-center justify-center">
+          <svg className="w-8 h-8 text-warm-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+          </svg>
+        </div>
+        <h3 className="font-serif text-xl text-charcoal mb-2">
+          {emptyState.hasFilters
+            ? 'No recipes match your filters'
+            : emptyState.hasCollection
+            ? 'No recipes in this collection'
+            : 'No recipes yet'}
+        </h3>
+        <p className="text-warm-gray mb-6">
+          {emptyState.hasFilters
+            ? 'Try adjusting your search or clearing filters'
+            : emptyState.hasCollection
+            ? 'Add some recipes to this collection to see them here'
+            : 'Create your first recipe to get started'
+          }
+        </p>
+        {emptyState.hasFilters ? (
+          <button
+            onClick={emptyState.onClearFilters}
+            className="btn-secondary"
+          >
+            Clear Filters
+          </button>
+        ) : !emptyState.hasCollection && (
+          <Link href="/recipes/new" className="btn-primary">
+            + New Recipe
+          </Link>
+        )}
+      </div>
+    );
+  }
+
+  const isManaging = manageMode?.enabled && manageMode?.selectedCollection;
+
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+      {recipes.map(recipe => (
+        <Link
+          key={recipe.id}
+          href={`/recipes/${recipe.id}`}
+          className="group"
+        >
+          <div className="aspect-[4/3] rounded-lg overflow-hidden mb-2 sm:mb-3 bg-cream-dark relative">
+            {recipe.cover_image_url ? (
+              <img
+                src={recipe.cover_image_url}
+                alt={recipe.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <svg className="w-8 h-8 sm:w-12 sm:h-12 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            )}
+            {/* Remove from Collection Button - shown in manage mode when viewing a collection */}
+            {isManaging && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  manageMode.onRemoveRecipe(recipe.id, recipe.title);
+                }}
+                disabled={manageMode.savingRecipeId === recipe.id}
+                className="absolute top-1 right-1 sm:top-2 sm:right-2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-colors disabled:opacity-50"
+                title="Remove from collection"
+              >
+                {manageMode.savingRecipeId === recipe.id ? (
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </button>
+            )}
+            {/* Privacy Badge - display only (edit via recipe detail page) */}
+            {!isManaging && (
+              <span
+                className={`absolute top-1 right-1 sm:top-2 sm:right-2 px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[10px] font-medium ${
+                  recipe.privacy_level === 'public'
+                    ? 'bg-green-100/90 text-green-700'
+                    : 'bg-gray-100/90 text-gray-600'
+                }`}
+              >
+                {recipe.privacy_level === 'public' ? (
+                  <span className="flex items-center gap-0.5">
+                    <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="hidden sm:inline">Public</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-0.5">
+                    <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span className="hidden sm:inline">Private</span>
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
+          <h3 className="font-serif text-sm sm:text-lg text-charcoal group-hover:text-gold transition-colors line-clamp-2">
+            {recipe.title}
+          </h3>
+          <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-warm-gray mt-1">
+            {(recipe.prep_time_minutes || recipe.cook_time_minutes) && (
+              <span>{(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)} min</span>
+            )}
+            {recipe.difficulty && (
+              <span className={`capitalize ${
+                recipe.difficulty === 'easy' ? 'text-green-600' :
+                recipe.difficulty === 'medium' ? 'text-yellow-600' : 'text-red-600'
+              }`}>
+                {recipe.difficulty}
+              </span>
+            )}
+          </div>
+        </Link>
+      ))}
+    </div>
+  );
+}

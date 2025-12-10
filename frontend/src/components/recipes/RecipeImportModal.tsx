@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { recipeApi, getErrorMessage } from '@/lib/api';
+import { Modal } from '@/components/ui';
 import type { RecipeImportResponse, RecipeImportMultiResponse } from '@/types';
 
 interface RecipeImportModalProps {
@@ -34,8 +35,6 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
       setError('');
     }
   }, [isOpen]);
-
-  if (!isOpen) return null;
 
   const handleImport = async () => {
     if (!url.trim()) {
@@ -110,21 +109,13 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
     if (e.key === 'Enter' && !loading) {
       handleImport();
     }
-    if (e.key === 'Escape') {
-      onClose();
-    }
   };
 
   // Recipe selection view when multiple recipes are found
   if (multipleRecipes && multipleRecipes.recipes.length > 1) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-          onClick={handleDone}
-        />
-
-        <div className="relative bg-dark-card rounded-lg shadow-xl w-full max-w-2xl mx-4 p-6 max-h-[80vh] overflow-hidden flex flex-col">
+      <Modal isOpen={isOpen} onClose={handleDone} size="2xl" blur>
+        <div className="bg-dark-card rounded-lg shadow-xl p-6 max-h-[80vh] overflow-hidden flex flex-col">
           <div className="flex items-center gap-3 mb-4">
             {!initialData && (
               <button
@@ -203,21 +194,14 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
             </button>
           </div>
         </div>
-      </div>
+      </Modal>
     );
   }
 
   // Default URL input view
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="relative bg-dark-card rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
+    <Modal isOpen={isOpen} onClose={onClose} size="lg" blur>
+      <div className="bg-dark-card rounded-lg shadow-xl p-6">
         <h2 className="text-xl font-semibold mb-4">Import Recipe from URL</h2>
 
         <p className="text-gray-400 text-sm mb-4">
@@ -276,6 +260,6 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

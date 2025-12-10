@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi, tagApi, collectionApi } from '@/lib/api';
-import { IngredientAutocomplete, UnitAutocomplete } from '@/components/recipes/IngredientAutocomplete';
+import { RecipeIngredientsEdit, RecipeInstructionsEdit } from '@/components/recipes';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { RecipeIngredientInput, RecipeInstructionInput, Tag, ParsedIngredient, RecipeImportResponse, Collection } from '@/types';
 
@@ -121,11 +121,6 @@ function NewRecipeContent() {
     title: initialTitle,
   }));
 
-  // Paste mode for ingredients
-  const [pasteMode, setPasteMode] = useState(false);
-  const [pasteText, setPasteText] = useState('');
-  const [parsing, setParsing] = useState(false);
-
   useEffect(() => {
     tagApi.list().then(setAvailableTags).catch(console.error);
     collectionApi.list().then(setCollections).catch(console.error);
@@ -152,63 +147,18 @@ function NewRecipeContent() {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
 
-  const addIngredient = () => {
-    const newIngredients = [...currentFormData.ingredients, { name: '', sort_order: currentFormData.ingredients.length }];
-    updateCurrentForm('ingredients', newIngredients);
-  };
-
-  const removeIngredient = (index: number) => {
-    const newIngredients = currentFormData.ingredients.filter((_, i) => i !== index);
-    updateCurrentForm('ingredients', newIngredients);
-  };
-
-  const updateIngredient = (index: number, field: keyof RecipeIngredientInput, value: any) => {
-    const updated = [...currentFormData.ingredients];
-    updated[index] = { ...updated[index], [field]: value };
-    updateCurrentForm('ingredients', updated);
-  };
-
-  const addInstruction = () => {
-    const newInstructions = [...currentFormData.instructions, { step_number: currentFormData.instructions.length + 1, instruction_text: '' }];
-    updateCurrentForm('instructions', newInstructions);
-  };
-
-  const removeInstruction = (index: number) => {
-    const updated = currentFormData.instructions.filter((_, i) => i !== index);
-    const renumbered = updated.map((inst, i) => ({ ...inst, step_number: i + 1 }));
-    updateCurrentForm('instructions', renumbered);
-  };
-
-  const updateInstruction = (index: number, text: string) => {
-    const updated = [...currentFormData.instructions];
-    updated[index] = { ...updated[index], instruction_text: text };
-    updateCurrentForm('instructions', updated);
-  };
-
-  const handleParseIngredients = async () => {
-    if (!pasteText.trim()) return;
-    setParsing(true);
-    try {
-      const result = await recipeApi.parseIngredients(pasteText);
-      const parsed = result.ingredients.map((ing: ParsedIngredient, idx: number) => ({
-        name: ing.name,
-        quantity: ing.quantity,
-        quantity_max: ing.quantity_max,
-        unit: ing.unit,
-        preparation: ing.preparation,
-        notes: ing.notes,
-        sort_order: currentFormData.ingredients.length + idx,
-      }));
-      const newIngredients = [...currentFormData.ingredients.filter(i => i.name), ...parsed];
-      updateCurrentForm('ingredients', newIngredients);
-      setPasteText('');
-      setPasteMode(false);
-    } catch (error) {
-      console.error('Failed to parse ingredients:', error);
-    } finally {
-      setParsing(false);
-    }
-  };
+  const handleParseIngredients = useCallback(async (text: string): Promise<RecipeIngredientInput[]> => {
+    const result = await recipeApi.parseIngredients(text);
+    return result.ingredients.map((ing: ParsedIngredient, idx: number) => ({
+      name: ing.name,
+      quantity: ing.quantity,
+      quantity_max: ing.quantity_max,
+      unit: ing.unit,
+      preparation: ing.preparation,
+      notes: ing.notes,
+      sort_order: currentFormData.ingredients.length + idx,
+    }));
+  }, [currentFormData.ingredients.length]);
 
   const toggleTag = (tagId: string) => {
     const newTags = currentFormData.selectedTagIds.includes(tagId)
@@ -715,80 +665,13 @@ function NewRecipeContent() {
                     </button>
 
                     {expandedSections.ingredients && (
-                      <div className="mt-4 space-y-2">
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => setPasteMode(!pasteMode)}
-                            className="text-xs text-gold hover:text-gold-dark"
-                          >
-                            {pasteMode ? 'Manual entry' : 'Paste list'}
-                          </button>
-                        </div>
-
-                        {pasteMode ? (
-                          <div className="space-y-2">
-                            <textarea
-                              value={pasteText}
-                              onChange={e => setPasteText(e.target.value)}
-                              placeholder="Paste ingredients, one per line..."
-                              rows={6}
-                              className="input-field w-full font-mono text-sm"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleParseIngredients}
-                              disabled={parsing || !pasteText.trim()}
-                              className="btn-primary text-sm disabled:opacity-50"
-                            >
-                              {parsing ? 'Parsing...' : 'Parse'}
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            {currentFormData.ingredients.map((ing, index) => (
-                              <div key={index} className="flex gap-1.5 items-center">
-                                <input
-                                  type="number"
-                                  value={ing.quantity || ''}
-                                  onChange={e => updateIngredient(index, 'quantity', e.target.value ? Number(e.target.value) : undefined)}
-                                  placeholder="Qty"
-                                  className="input-field w-16 text-sm"
-                                  step="0.25"
-                                  min="0"
-                                />
-                                <UnitAutocomplete
-                                  value={ing.unit || ''}
-                                  onChange={value => updateIngredient(index, 'unit', value)}
-                                  placeholder="Unit"
-                                  className="w-20"
-                                />
-                                <IngredientAutocomplete
-                                  value={ing.name}
-                                  onChange={value => updateIngredient(index, 'name', value)}
-                                  placeholder="Ingredient"
-                                  className="flex-1"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => removeIngredient(index)}
-                                  className="text-warm-gray hover:text-red-500 p-1"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              </div>
-                            ))}
-                            <button
-                              type="button"
-                              onClick={addIngredient}
-                              className="text-gold hover:text-gold-dark text-sm font-medium"
-                            >
-                              + Add ingredient
-                            </button>
-                          </>
-                        )}
+                      <div className="mt-4">
+                        <RecipeIngredientsEdit
+                          ingredients={currentFormData.ingredients}
+                          onChange={ingredients => updateCurrentForm('ingredients', ingredients)}
+                          showPasteToggle
+                          onParsePaste={handleParseIngredients}
+                        />
                       </div>
                     )}
                   </div>
@@ -811,37 +694,11 @@ function NewRecipeContent() {
                     </button>
 
                     {expandedSections.instructions && (
-                      <div className="mt-4 space-y-3">
-                        {currentFormData.instructions.map((inst, index) => (
-                          <div key={index} className="flex gap-2 items-start">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold text-white text-xs font-medium flex items-center justify-center">
-                              {index + 1}
-                            </span>
-                            <textarea
-                              value={inst.instruction_text}
-                              onChange={e => updateInstruction(index, e.target.value)}
-                              placeholder="Describe this step..."
-                              rows={2}
-                              className="input-field flex-1 text-sm"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeInstruction(index)}
-                              className="text-warm-gray hover:text-red-500 p-1"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          </div>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={addInstruction}
-                          className="text-gold hover:text-gold-dark text-sm font-medium"
-                        >
-                          + Add step
-                        </button>
+                      <div className="mt-4">
+                        <RecipeInstructionsEdit
+                          instructions={currentFormData.instructions}
+                          onChange={instructions => updateCurrentForm('instructions', instructions)}
+                        />
                       </div>
                     )}
                   </div>
@@ -1131,87 +988,13 @@ function NewRecipeContent() {
             </button>
 
             {expandedSections.ingredients && (
-              <div className="mt-6 space-y-3">
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setPasteMode(!pasteMode)}
-                    className="text-sm text-gold hover:text-gold-dark"
-                  >
-                    {pasteMode ? 'Manual entry' : 'Paste list'}
-                  </button>
-                </div>
-
-                {pasteMode ? (
-                  <div className="space-y-3">
-                    <textarea
-                      value={pasteText}
-                      onChange={e => setPasteText(e.target.value)}
-                      placeholder="Paste ingredients, one per line..."
-                      rows={8}
-                      className="input-field w-full font-mono text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleParseIngredients}
-                      disabled={parsing || !pasteText.trim()}
-                      className="btn-primary disabled:opacity-50"
-                    >
-                      {parsing ? 'Parsing...' : 'Parse'}
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    {currentFormData.ingredients.map((ing, index) => (
-                      <div key={index} className="flex gap-2 items-center">
-                        <input
-                          type="number"
-                          value={ing.quantity || ''}
-                          onChange={e => updateIngredient(index, 'quantity', e.target.value ? Number(e.target.value) : undefined)}
-                          placeholder="Qty"
-                          className="input-field w-20"
-                          step="0.25"
-                          min="0"
-                        />
-                        <UnitAutocomplete
-                          value={ing.unit || ''}
-                          onChange={value => updateIngredient(index, 'unit', value)}
-                          placeholder="Unit"
-                          className="w-24"
-                        />
-                        <IngredientAutocomplete
-                          value={ing.name}
-                          onChange={value => updateIngredient(index, 'name', value)}
-                          placeholder="Ingredient"
-                          className="flex-1"
-                        />
-                        <input
-                          type="text"
-                          value={ing.preparation || ''}
-                          onChange={e => updateIngredient(index, 'preparation', e.target.value)}
-                          placeholder="Prep"
-                          className="input-field w-28 hidden md:block"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeIngredient(index)}
-                          className="text-warm-gray hover:text-red-500 p-2"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={addIngredient}
-                      className="text-gold hover:text-gold-dark text-sm font-medium"
-                    >
-                      + Add ingredient
-                    </button>
-                  </>
-                )}
+              <div className="mt-6">
+                <RecipeIngredientsEdit
+                  ingredients={currentFormData.ingredients}
+                  onChange={ingredients => updateCurrentForm('ingredients', ingredients)}
+                  showPasteToggle
+                  onParsePaste={handleParseIngredients}
+                />
               </div>
             )}
           </div>
@@ -1234,37 +1017,11 @@ function NewRecipeContent() {
             </button>
 
             {expandedSections.instructions && (
-              <div className="mt-6 space-y-4">
-                {currentFormData.instructions.map((inst, index) => (
-                  <div key={index} className="flex gap-4 items-start">
-                    <span className="flex-shrink-0 w-8 h-8 rounded-full bg-gold text-white text-sm font-medium flex items-center justify-center">
-                      {index + 1}
-                    </span>
-                    <textarea
-                      value={inst.instruction_text}
-                      onChange={e => updateInstruction(index, e.target.value)}
-                      placeholder="Describe this step..."
-                      rows={2}
-                      className="input-field flex-1"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeInstruction(index)}
-                      className="text-warm-gray hover:text-red-500 p-2"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addInstruction}
-                  className="text-gold hover:text-gold-dark text-sm font-medium"
-                >
-                  + Add step
-                </button>
+              <div className="mt-6">
+                <RecipeInstructionsEdit
+                  instructions={currentFormData.instructions}
+                  onChange={instructions => updateCurrentForm('instructions', instructions)}
+                />
               </div>
             )}
           </div>

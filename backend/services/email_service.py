@@ -189,7 +189,7 @@ class EmailService:
     async def send_verification_email(self, email: EmailStr, token: str, background_tasks: BackgroundTasks):
         """Send verification email"""
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        link = f"{frontend_url}/verify-email?token={token}"
+        link = f"{frontend_url}/auth/verify-email?token={token}"
 
         content = self._get_verification_content(link)
         html_body = self._get_base_template(content)
@@ -209,7 +209,7 @@ class EmailService:
     async def send_password_reset_email(self, email: EmailStr, token: str, background_tasks: BackgroundTasks):
         """Send password reset email"""
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        link = f"{frontend_url}/reset-password?token={token}"
+        link = f"{frontend_url}/auth/reset-password?token={token}"
 
         content = self._get_reset_password_content(link)
         html_body = self._get_base_template(content)

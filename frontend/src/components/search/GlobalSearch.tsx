@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { searchApi } from '@/lib/api';
-import type { SearchResponse } from '@/types';
+import { useClickOutside, useDebouncedSearch } from '@/hooks';
+import { UserAvatar, RecipeImage, Modal } from '@/components/ui';
 
 interface GlobalSearchProps {
   variant?: 'navbar' | 'modal';
@@ -14,13 +14,19 @@ interface GlobalSearchProps {
 export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSearchProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResponse | null>(null);
-  const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  const { results, loading, hasResults } = useDebouncedSearch(query);
+
+  useClickOutside(containerRef, useCallback(() => setIsOpen(false), []));
+
+  // Reset selected index when results change
+  useEffect(() => {
+    setSelectedIndex(-1);
+  }, [results]);
 
   // All flattened results for keyboard navigation
   const getAllItems = useCallback(() => {
@@ -36,49 +42,6 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
 
     return items;
   }, [results]);
-
-  // Debounced search
-  useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
-    if (query.length < 2) {
-      setResults(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const data = await searchApi.autocomplete(query, 5);
-        setResults(data);
-        setSelectedIndex(-1);
-      } catch (error) {
-        console.error('Search failed:', error);
-      } finally {
-        setLoading(false);
-      }
-    }, 200);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [query]);
-
-  // Close on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   // Keyboard navigation
   useEffect(() => {
@@ -117,7 +80,6 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
   const handleClose = () => {
     setIsOpen(false);
     setQuery('');
-    setResults(null);
     setSelectedIndex(-1);
     onClose?.();
   };
@@ -136,22 +98,9 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
     }
   };
 
-  const hasRecipeResults = results && (
-    results.my_recipes.length > 0 || results.discover_recipes.length > 0
-  );
-
   const handleFocus = () => {
     setIsOpen(true);
   };
-
-  const hasResults = results && (
-    results.my_recipes.length > 0 ||
-    results.discover_recipes.length > 0 ||
-    results.tags.length > 0 ||
-    results.collections.length > 0 ||
-    results.users.length > 0 ||
-    results.ingredients.length > 0
-  );
 
   const renderResults = () => {
     if (!results) return null;
@@ -193,17 +142,7 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
               selectedIndex === index ? 'bg-cream' : ''
             }`}
           >
-            <div className="w-10 h-10 rounded bg-cream-dark flex-shrink-0 overflow-hidden">
-              {item.cover_image_url ? (
-                <img src={item.cover_image_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              )}
-            </div>
+            <RecipeImage src={item.cover_image_url} size="sm" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-charcoal truncate">{item.title}</p>
               {item.description && (
@@ -222,17 +161,7 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
               selectedIndex === index ? 'bg-cream' : ''
             }`}
           >
-            <div className="w-10 h-10 rounded bg-cream-dark flex-shrink-0 overflow-hidden">
-              {item.cover_image_url ? (
-                <img src={item.cover_image_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <svg className="w-5 h-5 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              )}
-            </div>
+            <RecipeImage src={item.cover_image_url} size="sm" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-charcoal truncate">{item.title}</p>
               <p className="text-xs text-warm-gray">by {item.author_name}</p>
@@ -312,15 +241,7 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
               selectedIndex === index ? 'bg-cream' : ''
             }`}
           >
-            <div className="w-8 h-8 rounded-full bg-cream-dark flex items-center justify-center flex-shrink-0 overflow-hidden">
-              {item.profile_image_url ? (
-                <img src={item.profile_image_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-sm font-serif text-charcoal">
-                  {item.name.charAt(0).toUpperCase()}
-                </span>
-              )}
-            </div>
+            <UserAvatar user={item} size="xs" className="w-8 h-8" />
             <div className="flex-1 min-w-0">
               <p className="text-sm text-charcoal">{item.name}</p>
             </div>
@@ -332,11 +253,16 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
 
   if (variant === 'modal') {
     return (
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
-        <div className="fixed inset-0 bg-black/50" onClick={handleClose} />
+      <Modal
+        isOpen={true}
+        onClose={handleClose}
+        size="xl"
+        position="top"
+        closeOnEscape={false} // We handle escape in keyboard navigation
+      >
         <div
           ref={containerRef}
-          className="relative w-full max-w-xl bg-white rounded-xl shadow-2xl overflow-hidden"
+          className="bg-white rounded-xl shadow-2xl overflow-hidden"
         >
           {/* Search Input */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
@@ -412,7 +338,7 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
             )}
           </div>
         </div>
-      </div>
+      </Modal>
     );
   }
 
