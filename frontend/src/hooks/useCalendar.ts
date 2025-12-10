@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { mealPlanApi, authApi } from '@/lib/api';
 import {
   CalendarViewMode,
@@ -131,9 +132,27 @@ interface UseCalendarReturn {
 }
 
 export function useCalendar(isActive: boolean = true): UseCalendarReturn {
+  const searchParams = useSearchParams();
+
+  // Read initial view mode from URL params
+  const getInitialViewMode = (): CalendarViewMode => {
+    const modeParam = searchParams.get('mode');
+    if (modeParam === 'day' || modeParam === 'month') return modeParam;
+    return 'week';
+  };
+
   // Core state
-  const [viewMode, setViewMode] = useState<CalendarViewMode>('week');
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(getInitialViewMode);
   const [currentDate, setCurrentDate] = useState(() => new Date());
+
+  // Sync view mode with URL params when they change
+  useEffect(() => {
+    const modeParam = searchParams.get('mode');
+    const newMode: CalendarViewMode = (modeParam === 'day' || modeParam === 'month') ? modeParam : 'week';
+    if (newMode !== viewMode) {
+      setViewMode(newMode);
+    }
+  }, [searchParams]);
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);

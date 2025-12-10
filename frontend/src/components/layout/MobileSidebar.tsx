@@ -9,6 +9,7 @@ import { UserAvatar } from '@/components/ui';
 import type { Collection, SharedCollection } from '@/types';
 
 type PageView = 'recipes' | 'calendar';
+type CalendarMode = 'day' | 'week' | 'month';
 
 interface MobileSidebarProps {
   isOpen: boolean;
@@ -39,7 +40,9 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
   const selectedCollection = searchParams.get('collection');
   const viewParam = searchParams.get('view');
+  const modeParam = searchParams.get('mode');
   const pageView: PageView = viewParam === 'calendar' ? 'calendar' : 'recipes';
+  const calendarMode: CalendarMode = (modeParam === 'day' || modeParam === 'month') ? modeParam : 'week';
 
   // Load collections on mount
   useEffect(() => {
@@ -92,6 +95,10 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
       router.push('/');
     }
     onClose();
+  };
+
+  const handleCalendarModeChange = (mode: CalendarMode) => {
+    router.push(`/?view=calendar&mode=${mode}`);
   };
 
   const handleLogout = async () => {
@@ -242,24 +249,58 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               </div>
             </div>
 
-            {/* Quick Links */}
-            <div className="p-4 border-b border-border">
-              <button
-                onClick={() => handleCollectionClick(null)}
-                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  pathname === '/' && !selectedCollection && pageView === 'recipes'
-                    ? 'bg-gold/10 text-gold-dark font-medium'
-                    : 'text-charcoal hover:bg-cream-dark'
-                }`}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-                <span>All Recipes</span>
-              </button>
-            </div>
+            {/* Calendar View Options - Only show when on calendar view */}
+            {pageView === 'calendar' && (
+              <div className="p-4 border-b border-border">
+                <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-3">
+                  Calendar View
+                </span>
+                <div className="space-y-1">
+                  {([
+                    { mode: 'day' as CalendarMode, label: 'Day', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+                    { mode: 'week' as CalendarMode, label: '3 Days', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
+                    { mode: 'month' as CalendarMode, label: 'Month', icon: 'M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h16a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V10z' },
+                  ]).map(({ mode, label, icon }) => (
+                    <button
+                      key={mode}
+                      onClick={() => handleCalendarModeChange(mode)}
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
+                        calendarMode === mode
+                          ? 'bg-gold/10 text-gold-dark font-medium'
+                          : 'text-charcoal hover:bg-cream-dark'
+                      }`}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={icon} />
+                      </svg>
+                      <span>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
-            {/* Collections */}
+            {/* Quick Links - Only show when on recipes view */}
+            {pageView === 'recipes' && (
+              <div className="p-4 border-b border-border">
+                <button
+                  onClick={() => handleCollectionClick(null)}
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
+                    pathname === '/' && !selectedCollection && pageView === 'recipes'
+                      ? 'bg-gold/10 text-gold-dark font-medium'
+                      : 'text-charcoal hover:bg-cream-dark'
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  <span>All Recipes</span>
+                </button>
+              </div>
+            )}
+
+            {/* Collections - Only show when on recipes view */}
+            {pageView === 'recipes' && (
             <div className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <button
@@ -469,6 +510,7 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                 </div>
               )}
             </div>
+            )}
           </div>
 
           {/* Footer */}

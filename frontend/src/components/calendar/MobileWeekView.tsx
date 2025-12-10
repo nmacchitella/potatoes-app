@@ -53,22 +53,25 @@ export default function MobileWeekView({
     <div className="md:hidden">
       {/* Mobile Navigation */}
       <div className="flex items-center justify-between mb-4">
-        <button onClick={onGoPrev} className="p-2 text-warm-gray hover:text-charcoal">
+        <button onClick={onGoPrev} className="p-2 text-warm-gray hover:text-charcoal active:bg-cream-dark rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <div className="text-center">
+        <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-charcoal">
             {dates[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {dates[2].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </span>
           {offset !== 0 && (
-            <button onClick={onGoToday} className="ml-2 text-xs text-gold">
+            <button
+              onClick={onGoToday}
+              className="px-3 py-1 text-xs font-medium text-white bg-gold rounded-full hover:bg-gold-dark active:scale-95 transition-all"
+            >
               Today
             </button>
           )}
         </div>
-        <button onClick={onGoNext} className="p-2 text-warm-gray hover:text-charcoal">
+        <button onClick={onGoNext} className="p-2 text-warm-gray hover:text-charcoal active:bg-cream-dark rounded-lg transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
@@ -138,35 +141,51 @@ export default function MobileWeekView({
 
                               {/* Mobile Action Menu */}
                               {selectedMealForActions === meal.id && (
-                                <div className="absolute inset-0 bg-white/95 rounded-lg flex flex-col items-center justify-center gap-2 z-10">
+                                <div
+                                  className="absolute inset-0 bg-charcoal/90 backdrop-blur-sm rounded-lg flex flex-col items-stretch justify-center p-2 z-10"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <Link
                                     href={`/recipes/${meal.recipe.id}`}
-                                    className="text-xs text-charcoal hover:text-gold"
-                                    onClick={(e) => e.stopPropagation()}
+                                    className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"
                                   >
-                                    View Recipe
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                    View
                                   </Link>
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); onMove(meal); }}
-                                    className="text-xs text-charcoal hover:text-gold"
+                                    onClick={() => onMove(meal)}
+                                    className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"
                                   >
-                                    Move to...
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                    </svg>
+                                    Move
                                   </button>
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); onRepeat(meal, e); }}
-                                    className="text-xs text-charcoal hover:text-gold"
+                                    onClick={(e) => onRepeat(meal, e)}
+                                    className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"
                                   >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
                                     Repeat
                                   </button>
+                                  <div className="border-t border-white/20 my-1" />
                                   <button
                                     onClick={(e) => onDelete(meal.id, e)}
-                                    className="text-xs text-red-500"
+                                    className="flex items-center justify-center gap-1.5 py-2 text-xs text-red-400 hover:text-red-300 transition-colors"
                                   >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
                                     Remove
                                   </button>
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); onClearMealActions(); }}
-                                    className="text-[10px] text-warm-gray mt-1"
+                                    onClick={() => onClearMealActions()}
+                                    className="mt-1 py-1 text-[10px] text-white/60 hover:text-white/80 transition-colors"
                                   >
                                     Cancel
                                   </button>
