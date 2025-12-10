@@ -15,19 +15,20 @@ import type { RecipeWithScale, Collection, RecipeIngredient, RecipeInstruction, 
  * Format an ingredient for display
  * Combines quantity, unit, name, and preparation into a readable string
  * Optionally converts units to the specified unit system
+ * Optionally scales quantities by a factor
  */
-const formatIngredientWithUnit = (ing: RecipeIngredient, unitSystem?: UnitSystem): string => {
+const formatIngredientWithUnit = (ing: RecipeIngredient, unitSystem?: UnitSystem, scale: number = 1): string => {
   const parts: string[] = [];
 
-  // Convert units if a target system is specified
-  let displayQty = ing.quantity;
-  let displayQtyMax = ing.quantity_max;
+  // Apply scaling first
+  let displayQty = ing.quantity ? ing.quantity * scale : undefined;
+  let displayQtyMax = ing.quantity_max ? ing.quantity_max * scale : undefined;
   let displayUnit = ing.unit;
 
-  if (unitSystem && ing.unit && ing.quantity) {
+  if (unitSystem && ing.unit && displayQty) {
     const converted = convertIngredient(
-      ing.quantity,
-      ing.quantity_max,
+      displayQty,
+      displayQtyMax,
       ing.unit,
       unitSystem
     );
@@ -142,7 +143,8 @@ export default function RecipeDetailPage() {
     const fetchRecipe = async () => {
       setLoading(true);
       try {
-        const data = await recipeApi.get(recipeId, scale !== 1 ? scale : undefined);
+        // Fetch recipe without scale - we'll apply scaling client-side
+        const data = await recipeApi.get(recipeId);
         setRecipe(data);
       } catch (error) {
         console.error('Failed to fetch recipe:', error);
@@ -152,7 +154,7 @@ export default function RecipeDetailPage() {
       }
     };
     fetchRecipe();
-  }, [recipeId, scale, router]);
+  }, [recipeId, router]);
 
   // Initialize edit form when entering edit mode
   useEffect(() => {
@@ -488,7 +490,7 @@ export default function RecipeDetailPage() {
             {/* Author (show when viewing someone else's recipe) */}
             {!isOwner && recipe.author && (
               <Link
-                href={`/profile/${recipe.author.username || recipe.author.id}`}
+                href={`/profile/${recipe.author.id}`}
                 className="flex items-center gap-2 mb-3 group"
               >
                 <div className="w-6 h-6 rounded-full bg-cream-dark flex items-center justify-center overflow-hidden">
@@ -518,10 +520,10 @@ export default function RecipeDetailPage() {
                 </svg>
                 <span>Saved from </span>
                 <Link
-                  href={`/profile/${recipe.forked_from.user_username || recipe.forked_from.user_id}`}
+                  href={`/profile/${recipe.forked_from.user_id}`}
                   className="text-gold hover:text-gold-dark transition-colors"
                 >
-                  {recipe.forked_from.user_username ? `@${recipe.forked_from.user_username}` : recipe.forked_from.user_name}
+                  {recipe.forked_from.user_name}
                 </Link>
               </div>
             )}
@@ -772,7 +774,7 @@ export default function RecipeDetailPage() {
                           {collections.length === 0 ? (
                             <div className="p-2 text-center">
                               <p className="text-warm-gray text-xs mb-1">No collections</p>
-                              <Link href="/collections" className="text-gold hover:text-gold-dark text-xs">Create one</Link>
+                              <Link href="/" className="text-gold hover:text-gold-dark text-xs">Create one</Link>
                             </div>
                           ) : collections.map(collection => (
                             <button key={collection.id} onClick={() => handleAddToCollection(collection.id)} disabled={addingToCollection === collection.id} className="w-full px-2.5 py-1.5 text-left text-xs text-charcoal hover:bg-cream rounded transition-colors flex items-center justify-between disabled:opacity-50">
@@ -821,7 +823,7 @@ export default function RecipeDetailPage() {
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="text-warm-gray">{recipe.scaled_yield_quantity} {recipe.yield_unit}</span>
+                    <span className="text-warm-gray">{recipe.yield_quantity ? Math.round(recipe.yield_quantity * scale * 10) / 10 : ''} {recipe.yield_unit}</span>
                     <div className="flex items-center gap-1 border-l border-border pl-2 ml-1">
                       <button onClick={() => setScale(s => Math.max(0.5, s - 0.5))} className="w-5 h-5 rounded bg-cream hover:bg-cream-dark flex items-center justify-center text-charcoal text-xs transition-colors">−</button>
                       <span className="w-6 text-center text-xs text-charcoal">{scale}x</span>
@@ -901,7 +903,7 @@ export default function RecipeDetailPage() {
                 <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-1.5 pl-4">
                   {recipe.ingredients.map(ing => (
                     <li key={ing.id} className="text-xs text-charcoal leading-relaxed list-disc marker:text-gold">
-                      {formatIngredientWithUnit(ing, unitSystem || undefined)}
+                      {formatIngredientWithUnit(ing, unitSystem || undefined, scale)}
                       {ing.is_optional && <span className="text-warm-gray"> (optional)</span>}
                     </li>
                   ))}

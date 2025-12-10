@@ -237,7 +237,7 @@ export default function EditRecipePage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Servings</label>
                 <div className="flex gap-2">
@@ -246,7 +246,7 @@ export default function EditRecipePage() {
                     value={yieldQuantity}
                     onChange={e => setYieldQuantity(Number(e.target.value))}
                     min="1"
-                    className="input-field w-24"
+                    className="input-field w-20 sm:w-24"
                   />
                   <input
                     type="text"

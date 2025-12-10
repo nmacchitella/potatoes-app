@@ -171,7 +171,6 @@ async def list_shared_collections(
             owner=CollectionShareUser(
                 id=owner.id,
                 name=owner.name,
-                username=owner.username,
                 profile_image_url=owner.profile_image_url
             ),
             created_at=collection.created_at
@@ -338,7 +337,6 @@ async def list_collection_shares(
             user=CollectionShareUser(
                 id=share.user.id,
                 name=share.user.name,
-                username=share.user.username,
                 profile_image_url=share.user.profile_image_url
             )
         ))
@@ -421,7 +419,6 @@ async def share_collection(
         user=CollectionShareUser(
             id=target_user.id,
             name=target_user.name,
-            username=target_user.username,
             profile_image_url=target_user.profile_image_url
         )
     )
@@ -466,7 +463,6 @@ async def update_collection_share(
         user=CollectionShareUser(
             id=target_user.id,
             name=target_user.name,
-            username=target_user.username,
             profile_image_url=target_user.profile_image_url
         )
     )

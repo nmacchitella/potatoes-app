@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import { collectionApi } from '@/lib/api';
 import type { Collection, SharedCollection } from '@/types';
+
+type PageView = 'recipes' | 'calendar';
 
 interface MobileSidebarProps {
   isOpen: boolean;
@@ -23,7 +25,20 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const [loading, setLoading] = useState(true);
   const [collectionsExpanded, setCollectionsExpanded] = useState(true);
 
+  // Inline collection management state
+  const [isManageMode, setIsManageMode] = useState(false);
+  const [isCreatingCollection, setIsCreatingCollection] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState('');
+  const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null);
+  const [editingCollectionName, setEditingCollectionName] = useState('');
+  const [savingCollection, setSavingCollection] = useState(false);
+
+  const newCollectionInputRef = useRef<HTMLInputElement>(null);
+  const editCollectionInputRef = useRef<HTMLInputElement>(null);
+
   const selectedCollection = searchParams.get('collection');
+  const viewParam = searchParams.get('view');
+  const pageView: PageView = viewParam === 'calendar' ? 'calendar' : 'recipes';
 
   // Load collections on mount
   useEffect(() => {
@@ -31,6 +46,20 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
       loadCollections();
     }
   }, [isOpen, user]);
+
+  // Focus input when creating collection
+  useEffect(() => {
+    if (isCreatingCollection && newCollectionInputRef.current) {
+      newCollectionInputRef.current.focus();
+    }
+  }, [isCreatingCollection]);
+
+  // Focus input when editing collection
+  useEffect(() => {
+    if (editingCollectionId && editCollectionInputRef.current) {
+      editCollectionInputRef.current.focus();
+    }
+  }, [editingCollectionId]);
 
   const loadCollections = async () => {
     try {
@@ -55,6 +84,15 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     onClose();
   };
 
+  const handleViewChange = (view: PageView) => {
+    if (view === 'calendar') {
+      router.push('/?view=calendar');
+    } else {
+      router.push('/');
+    }
+    onClose();
+  };
+
   const handleLogout = async () => {
     await logout();
     onClose();
@@ -64,6 +102,55 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const handleNavClick = (href: string) => {
     router.push(href);
     onClose();
+  };
+
+  // Collection management functions
+  const handleCreateCollection = async () => {
+    if (!newCollectionName.trim()) return;
+    setSavingCollection(true);
+    try {
+      const newCollection = await collectionApi.create({ name: newCollectionName.trim() });
+      setCollections(prev => [...prev, newCollection]);
+      setNewCollectionName('');
+      setIsCreatingCollection(false);
+    } catch (error) {
+      console.error('Failed to create collection:', error);
+    } finally {
+      setSavingCollection(false);
+    }
+  };
+
+  const handleUpdateCollection = async (collectionId: string) => {
+    if (!editingCollectionName.trim()) return;
+    setSavingCollection(true);
+    try {
+      const updated = await collectionApi.update(collectionId, { name: editingCollectionName.trim() });
+      setCollections(prev => prev.map(c => c.id === collectionId ? { ...c, name: updated.name } : c));
+      setEditingCollectionId(null);
+      setEditingCollectionName('');
+    } catch (error) {
+      console.error('Failed to update collection:', error);
+    } finally {
+      setSavingCollection(false);
+    }
+  };
+
+  const handleDeleteCollection = async (collectionId: string) => {
+    if (!confirm('Delete this collection? Recipes will not be deleted.')) return;
+    try {
+      await collectionApi.delete(collectionId);
+      setCollections(prev => prev.filter(c => c.id !== collectionId));
+      if (selectedCollection === collectionId) {
+        router.push('/');
+      }
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to delete collection');
+    }
+  };
+
+  const startEditingCollection = (collection: Collection) => {
+    setEditingCollectionId(collection.id);
+    setEditingCollectionName(collection.name);
   };
 
   return (
@@ -106,7 +193,7 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
           {/* User Profile Section */}
           <div className="p-4 border-b border-border">
             <button
-              onClick={() => handleNavClick(`/profile/${user?.username || user?.id}`)}
+              onClick={() => handleNavClick(`/profile/${user?.id}`)}
               className="flex items-center gap-3 w-full text-left"
             >
               <div className="w-12 h-12 rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden">
@@ -124,9 +211,7 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-charcoal truncate">{user?.name}</p>
-                <p className="text-sm text-warm-gray truncate">
-                  {user?.username ? `@${user.username}` : 'View profile'}
-                </p>
+                <p className="text-sm text-warm-gray truncate">View profile</p>
               </div>
               <svg className="w-5 h-5 text-warm-gray" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -136,12 +221,44 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto">
+            {/* View Toggle: Recipes / Calendar */}
+            <div className="p-4 border-b border-border">
+              <div className="flex rounded-lg bg-cream-dark p-1">
+                <button
+                  onClick={() => handleViewChange('recipes')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    pageView === 'recipes'
+                      ? 'bg-white text-charcoal shadow-sm'
+                      : 'text-warm-gray hover:text-charcoal'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  Recipes
+                </button>
+                <button
+                  onClick={() => handleViewChange('calendar')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    pageView === 'calendar'
+                      ? 'bg-white text-charcoal shadow-sm'
+                      : 'text-warm-gray hover:text-charcoal'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Calendar
+                </button>
+              </div>
+            </div>
+
             {/* Quick Links */}
             <div className="p-4 border-b border-border">
               <button
                 onClick={() => handleCollectionClick(null)}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  pathname === '/' && !selectedCollection
+                  pathname === '/' && !selectedCollection && pageView === 'recipes'
                     ? 'bg-gold/10 text-gold-dark font-medium'
                     : 'text-charcoal hover:bg-cream-dark'
                 }`}
@@ -155,22 +272,32 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
             {/* Collections */}
             <div className="p-4">
-              <button
-                onClick={() => setCollectionsExpanded(!collectionsExpanded)}
-                className="flex items-center justify-between w-full mb-2"
-              >
-                <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">
-                  Collections
-                </span>
-                <svg
-                  className={`w-4 h-4 text-warm-gray transition-transform ${collectionsExpanded ? 'rotate-180' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  onClick={() => setCollectionsExpanded(!collectionsExpanded)}
+                  className="flex items-center gap-1"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+                  <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">
+                    Collections
+                  </span>
+                  <svg
+                    className={`w-4 h-4 text-warm-gray transition-transform ${collectionsExpanded ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {collections.length > 0 && (
+                  <button
+                    onClick={() => setIsManageMode(!isManageMode)}
+                    className={`text-xs ${isManageMode ? 'text-gold' : 'text-warm-gray hover:text-gold'}`}
+                  >
+                    {isManageMode ? 'Done' : 'Manage'}
+                  </button>
+                )}
+              </div>
 
               {collectionsExpanded && (
                 <nav className="space-y-1">
@@ -180,7 +307,7 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                     </div>
                   ) : (
                     <>
-                      {collections.length === 0 ? (
+                      {collections.length === 0 && !isCreatingCollection ? (
                         <p className="text-sm text-warm-gray py-2 px-3">No collections yet</p>
                       ) : (
                         collections.map(collection => (
@@ -192,40 +319,134 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                                 : 'text-charcoal hover:bg-cream-dark'
                             }`}
                           >
-                            <button
-                              onClick={() => handleCollectionClick(collection.id)}
-                              className="flex-1 text-left truncate"
-                            >
-                              {collection.name}
-                            </button>
-                            <div className="flex items-center gap-2 ml-2">
-                              <span className="text-xs text-warm-gray">{collection.recipe_count}</span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleNavClick(`/collections/${collection.id}`);
-                                }}
-                                className="p-1 text-warm-gray hover:text-gold transition-colors"
-                                aria-label={`Edit ${collection.name}`}
-                              >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                              </button>
-                            </div>
+                            {editingCollectionId === collection.id ? (
+                              <div className="flex items-center gap-1 flex-1">
+                                <input
+                                  ref={editCollectionInputRef}
+                                  type="text"
+                                  value={editingCollectionName}
+                                  onChange={(e) => setEditingCollectionName(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleUpdateCollection(collection.id);
+                                    if (e.key === 'Escape') {
+                                      setEditingCollectionId(null);
+                                      setEditingCollectionName('');
+                                    }
+                                  }}
+                                  className="flex-1 px-2 py-1 text-sm border border-gold rounded focus:outline-none"
+                                  disabled={savingCollection}
+                                />
+                                <button
+                                  onClick={() => handleUpdateCollection(collection.id)}
+                                  disabled={savingCollection || !editingCollectionName.trim()}
+                                  className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingCollectionId(null);
+                                    setEditingCollectionName('');
+                                  }}
+                                  className="p-1 text-warm-gray hover:text-charcoal"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ) : isManageMode ? (
+                              <div className="flex items-center justify-between w-full">
+                                <span className="truncate">{collection.name}</span>
+                                <div className="flex items-center gap-1 ml-2">
+                                  <button
+                                    onClick={() => startEditingCollection(collection)}
+                                    className="p-1 text-warm-gray hover:text-gold"
+                                    title="Rename"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteCollection(collection.id)}
+                                    className="p-1 text-warm-gray hover:text-red-500"
+                                    title="Delete"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleCollectionClick(collection.id)}
+                                  className="flex-1 text-left truncate"
+                                >
+                                  {collection.name}
+                                </button>
+                                <span className="text-xs text-warm-gray ml-2">{collection.recipe_count}</span>
+                              </>
+                            )}
                           </div>
                         ))
                       )}
-                      {/* Create new collection */}
-                      <button
-                        onClick={() => handleNavClick('/collections')}
-                        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-left text-gold hover:bg-gold/10 transition-colors mt-2"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        <span>New collection</span>
-                      </button>
+
+                      {/* Create new collection inline */}
+                      {isCreatingCollection ? (
+                        <div className="flex items-center gap-1 px-3 py-2">
+                          <input
+                            ref={newCollectionInputRef}
+                            type="text"
+                            value={newCollectionName}
+                            onChange={(e) => setNewCollectionName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleCreateCollection();
+                              if (e.key === 'Escape') {
+                                setIsCreatingCollection(false);
+                                setNewCollectionName('');
+                              }
+                            }}
+                            placeholder="Collection name..."
+                            className="flex-1 px-2 py-1.5 text-sm border border-gold rounded focus:outline-none"
+                            disabled={savingCollection}
+                          />
+                          <button
+                            onClick={handleCreateCollection}
+                            disabled={savingCollection || !newCollectionName.trim()}
+                            className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsCreatingCollection(false);
+                              setNewCollectionName('');
+                            }}
+                            className="p-1 text-warm-gray hover:text-charcoal"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setIsCreatingCollection(true)}
+                          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm text-left text-gold hover:bg-gold/10 transition-colors mt-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          <span>New collection</span>
+                        </button>
+                      )}
                     </>
                   )}
                 </nav>

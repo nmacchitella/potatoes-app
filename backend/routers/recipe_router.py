@@ -202,7 +202,6 @@ async def get_recipe(
             recipe_id=recipe.forked_from_recipe_id,
             user_id=recipe.forked_from_user_id,
             user_name=recipe.forked_from_user.name,
-            user_username=recipe.forked_from_user.username,
         )
 
     # Check if current user has cloned this recipe (for viewing other's recipes)

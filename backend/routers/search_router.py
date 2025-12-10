@@ -63,7 +63,6 @@ class SearchCollectionResult(BaseModel):
 class SearchUserResult(BaseModel):
     id: str
     name: str
-    username: Optional[str] = None
     profile_image_url: Optional[str] = None
 
     class Config:
@@ -211,17 +210,13 @@ async def search_autocomplete(
     users_query = db.query(User).filter(
         User.id != current_user.id,
         User.is_public == True,
-        or_(
-            func.lower(User.name).like(search_term),
-            func.lower(User.username).like(search_term)
-        )
+        func.lower(User.name).like(search_term)
     ).limit(limit).all()
 
     users = [
         SearchUserResult(
             id=u.id,
             name=u.name,
-            username=u.username,
             profile_image_url=u.profile_image_url
         )
         for u in users_query
@@ -372,10 +367,7 @@ async def search_full(
         users_query = db.query(User).filter(
             User.id != current_user.id,
             User.is_public == True,
-            or_(
-                func.lower(User.name).like(search_term),
-                func.lower(User.username).like(search_term)
-            )
+            func.lower(User.name).like(search_term)
         )
         users_total = users_query.count()
         users_data = users_query.offset(offset if category else 0).limit(cat_limit).all()
@@ -384,7 +376,6 @@ async def search_full(
             SearchUserResult(
                 id=u.id,
                 name=u.name,
-                username=u.username,
                 profile_image_url=u.profile_image_url
             )
             for u in users_data

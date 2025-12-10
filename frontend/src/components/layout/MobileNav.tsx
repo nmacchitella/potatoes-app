@@ -208,7 +208,7 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
                           {results.users.slice(0, 3).map(user => (
                             <button
                               key={user.id}
-                              onClick={() => handleResultClick(`/profile/${user.username || user.id}`)}
+                              onClick={() => handleResultClick(`/profile/${user.id}`)}
                               className="flex items-center gap-3 px-3 py-2 hover:bg-cream transition-colors w-full text-left"
                             >
                               <div className="w-10 h-10 rounded-full bg-cream-dark flex-shrink-0 overflow-hidden flex items-center justify-center">
@@ -222,9 +222,31 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
                               </div>
                               <div className="min-w-0">
                                 <p className="text-sm text-charcoal truncate">{user.name}</p>
-                                {user.username && (
-                                  <p className="text-xs text-warm-gray">@{user.username}</p>
-                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {results.ingredients && results.ingredients.length > 0 && (
+                        <div className="py-2 border-t border-border">
+                          <div className="px-3 py-1 text-xs font-medium text-warm-gray uppercase tracking-wider">
+                            Ingredients
+                          </div>
+                          {results.ingredients.slice(0, 3).map(ing => (
+                            <button
+                              key={ing.id}
+                              onClick={() => handleResultClick(`/ingredients/${ing.id}`)}
+                              className="flex items-center gap-3 px-3 py-2 hover:bg-cream transition-colors w-full text-left"
+                            >
+                              <div className="w-10 h-10 rounded-full bg-green-100 flex-shrink-0 flex items-center justify-center">
+                                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                                </svg>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm text-charcoal truncate">{ing.name}</p>
+                                <p className="text-xs text-warm-gray">{ing.recipe_count} recipes</p>
                               </div>
                             </button>
                           ))}
@@ -233,7 +255,7 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
                     </>
                   )}
 
-                  {/* Search All */}
+                  {/* Search All & Create Recipe */}
                   {query.length >= 2 && (
                     <div className="border-t border-border">
                       <button
@@ -244,6 +266,18 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                         <span className="text-charcoal">Search all for "{query}"</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          router.push(`/recipes/new?title=${encodeURIComponent(query.trim())}`);
+                          handleClose();
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-3 hover:bg-cream transition-colors text-sm border-t border-border"
+                      >
+                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span className="text-charcoal">Create recipe "{query}"</span>
                       </button>
                     </div>
                   )}

@@ -14,7 +14,7 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
   return (
     <div className="flex items-center justify-between p-4 bg-dark-card rounded-lg">
       <Link
-        href={`/profile/${user.username || user.id}`}
+        href={`/profile/${user.id}`}
         className="flex items-center gap-3 flex-1 min-w-0"
       >
         <div className="w-12 h-12 rounded-full bg-dark-hover flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -30,9 +30,6 @@ export default function UserCard({ user, showFollowButton = true, onFollowChange
         </div>
         <div className="min-w-0">
           <p className="font-medium truncate">{user.name}</p>
-          {user.username && (
-            <p className="text-sm text-gray-400 truncate">@{user.username}</p>
-          )}
         </div>
       </Link>
       {showFollowButton && (

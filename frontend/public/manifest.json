@@ -9,13 +9,13 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/icons/android/mipmap-xxxhdpi/ic_launcher.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/icons/android/ic_launcher-web.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"

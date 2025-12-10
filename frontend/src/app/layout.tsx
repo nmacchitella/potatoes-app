@@ -7,8 +7,8 @@ export const metadata: Metadata = {
   description: 'Your personal recipe collection app',
   manifest: '/manifest.json',
   icons: {
-    icon: '/icon-192.png',
-    apple: '/icon-192.png',
+    icon: '/icons/android/mipmap-xxxhdpi/ic_launcher.png',
+    apple: '/icons/ios/AppIcon.appiconset/Icon-App-76x76@2x.png',
   },
   appleWebApp: {
     capable: true,

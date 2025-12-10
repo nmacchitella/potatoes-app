@@ -23,7 +23,6 @@ class User(UserBase):
     is_admin: bool = False
     is_verified: bool = False
     created_at: datetime
-    username: Optional[str] = None
     bio: Optional[str] = None
     is_public: bool = False
     profile_image_url: Optional[str] = None
@@ -60,7 +59,6 @@ class PasswordChange(BaseModel):
 class UserProfileUpdate(BaseModel):
     """Schema for updating user profile settings"""
     name: Optional[str] = None
-    username: Optional[str] = Field(None, min_length=3, max_length=30, pattern="^[a-zA-Z0-9_]+$")
     bio: Optional[str] = Field(None, max_length=500)
     is_public: Optional[bool] = None
 
@@ -105,7 +103,6 @@ class PublicUserProfile(BaseModel):
     """Public view of user profile"""
     id: str
     name: str
-    username: Optional[str] = None
     bio: Optional[str] = None
     profile_image_url: Optional[str] = None
 
@@ -118,7 +115,6 @@ class UserSearchResult(BaseModel):
     """Minimal user info for search results"""
     id: str
     name: str
-    username: Optional[str] = None
     profile_image_url: Optional[str] = None
     is_public: bool
     is_followed_by_me: bool = False
@@ -158,7 +154,6 @@ class UserProfilePublic(BaseModel):
     """Public user profile (for viewing others)"""
     id: str
     name: str
-    username: Optional[str] = None
     bio: Optional[str] = None
     profile_image_url: Optional[str] = None
     is_public: bool
@@ -326,7 +321,6 @@ class CollectionShareUser(BaseModel):
     """User info for collection share responses"""
     id: str
     name: str
-    username: Optional[str] = None
     profile_image_url: Optional[str] = None
 
     class Config:
@@ -406,7 +400,6 @@ class RecipeUpdate(BaseModel):
 class RecipeAuthor(BaseModel):
     id: str
     name: str
-    username: Optional[str] = None
     profile_image_url: Optional[str] = None
 
     class Config:
@@ -439,7 +432,6 @@ class ForkedFromInfo(BaseModel):
     recipe_id: Optional[str] = None
     user_id: Optional[str] = None
     user_name: Optional[str] = None
-    user_username: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -683,7 +675,6 @@ class MealPlanShareUser(BaseModel):
     """User info for meal plan sharing."""
     id: str
     name: str
-    username: Optional[str] = None
     profile_image_url: Optional[str] = None
 
     class Config:
@@ -716,7 +707,6 @@ class SharedMealPlanOwner(BaseModel):
     """Owner info for shared meal plans."""
     id: str
     name: str
-    username: Optional[str] = None
     profile_image_url: Optional[str] = None
 
     class Config:

@@ -127,9 +127,6 @@ export default function MyProfilePage() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
                   <div>
                     <h1 className="text-2xl font-bold text-charcoal">{profile?.name}</h1>
-                    {profile?.username && (
-                      <p className="text-warm-gray">@{profile.username}</p>
-                    )}
                   </div>
 
                   <Link
@@ -220,7 +217,7 @@ export default function MyProfilePage() {
                   <div className="bg-white rounded-lg border border-border p-12 text-center">
                     <p className="text-warm-gray mb-4">You haven't created any collections yet</p>
                     <Link
-                      href="/collections/new"
+                      href="/"
                       className="inline-block px-4 py-2 bg-gold text-white rounded-lg hover:bg-gold/90 transition-colors"
                     >
                       Create Your First Collection
@@ -231,7 +228,7 @@ export default function MyProfilePage() {
                     {collections.map(collection => (
                       <Link
                         key={collection.id}
-                        href={`/collections/${collection.id}`}
+                        href={`/?collection=${collection.id}`}
                         className="bg-white rounded-lg border border-border hover:border-gold/50 transition-colors overflow-hidden group"
                       >
                         <div className="h-32 bg-cream-dark overflow-hidden">
@@ -284,7 +281,7 @@ export default function MyProfilePage() {
                           {requests.map(user => (
                             <div key={user.id} className="p-4 flex items-center justify-between bg-gold/5">
                               <Link
-                                href={`/profile/${user.username || user.id}`}
+                                href={`/profile/${user.id}`}
                                 className="flex items-center gap-3 hover:opacity-80 transition-opacity"
                               >
                                 <div className="w-12 h-12 rounded-full bg-cream-dark flex items-center justify-center overflow-hidden">
@@ -296,7 +293,6 @@ export default function MyProfilePage() {
                                 </div>
                                 <div>
                                   <p className="font-medium text-charcoal">{user.name}</p>
-                                  {user.username && <p className="text-sm text-warm-gray">@{user.username}</p>}
                                 </div>
                               </Link>
                               <div className="flex gap-2">
@@ -331,7 +327,7 @@ export default function MyProfilePage() {
                           {followers.map(user => (
                             <div key={user.id} className="p-4 flex items-center justify-between">
                               <Link
-                                href={`/profile/${user.username || user.id}`}
+                                href={`/profile/${user.id}`}
                                 className="flex items-center gap-3 hover:opacity-80 transition-opacity"
                               >
                                 <div className="w-12 h-12 rounded-full bg-cream-dark flex items-center justify-center overflow-hidden">
@@ -343,7 +339,6 @@ export default function MyProfilePage() {
                                 </div>
                                 <div>
                                   <p className="font-medium text-charcoal">{user.name}</p>
-                                  {user.username && <p className="text-sm text-warm-gray">@{user.username}</p>}
                                 </div>
                               </Link>
                               <FollowButton
@@ -372,7 +367,7 @@ export default function MyProfilePage() {
                     {following.map(user => (
                       <div key={user.id} className="p-4 flex items-center justify-between">
                         <Link
-                          href={`/profile/${user.username || user.id}`}
+                          href={`/profile/${user.id}`}
                           className="flex items-center gap-3 hover:opacity-80 transition-opacity"
                         >
                           <div className="w-12 h-12 rounded-full bg-cream-dark flex items-center justify-center overflow-hidden">
@@ -384,7 +379,6 @@ export default function MyProfilePage() {
                           </div>
                           <div>
                             <p className="font-medium text-charcoal">{user.name}</p>
-                            {user.username && <p className="text-sm text-warm-gray">@{user.username}</p>}
                           </div>
                         </Link>
                         <button

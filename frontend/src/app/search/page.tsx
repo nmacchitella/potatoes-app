@@ -288,7 +288,7 @@ function SearchContent() {
                   {results.collections.map(collection => (
                     <Link
                       key={collection.id}
-                      href={`/collections/${collection.id}`}
+                      href={`/?collection=${collection.id}`}
                       className="flex items-center gap-3 p-4 bg-white rounded-lg border border-border hover:border-gold transition-colors"
                     >
                       <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -329,7 +329,7 @@ function SearchContent() {
                   {results.users.map(user => (
                     <Link
                       key={user.id}
-                      href={`/users/${user.username || user.id}`}
+                      href={`/profile/${user.id}`}
                       className="flex items-center gap-3 p-4 bg-white rounded-lg border border-border hover:border-gold transition-colors"
                     >
                       <div className="w-12 h-12 rounded-full bg-cream-dark flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -343,9 +343,6 @@ function SearchContent() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-charcoal truncate">{user.name}</p>
-                        {user.username && (
-                          <p className="text-sm text-warm-gray">@{user.username}</p>
-                        )}
                       </div>
                     </Link>
                   ))}

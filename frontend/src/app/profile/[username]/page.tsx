@@ -23,7 +23,7 @@ export default function PublicProfilePage() {
   const [recipesLoading, setRecipesLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const isOwnProfile = currentUser?.username === username || currentUser?.id === username;
+  const isOwnProfile = currentUser?.id === username;
 
   // Redirect to /profile if viewing own profile
   useEffect(() => {
@@ -157,9 +157,6 @@ export default function PublicProfilePage() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
                   <div>
                     <h1 className="text-2xl font-bold text-charcoal">{profile.name}</h1>
-                    {profile.username && (
-                      <p className="text-warm-gray">@{profile.username}</p>
-                    )}
                   </div>
 
                   <FollowButton

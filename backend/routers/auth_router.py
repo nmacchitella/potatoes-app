@@ -209,25 +209,11 @@ def update_user_profile(
     current_user: schemas.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update user profile settings (name, username, bio, privacy)."""
+    """Update user profile settings (name, bio, privacy)."""
     db_user = db.query(auth.models.User).filter(auth.models.User.id == current_user.id).first()
 
     if profile_update.name is not None:
         db_user.name = profile_update.name
-
-    if profile_update.username is not None:
-        existing_user = db.query(auth.models.User).filter(
-            auth.models.User.username.ilike(profile_update.username),
-            auth.models.User.id != current_user.id
-        ).first()
-
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already taken"
-            )
-
-        db_user.username = profile_update.username
 
     if profile_update.bio is not None:
         db_user.bio = profile_update.bio

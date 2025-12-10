@@ -30,8 +30,8 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
     results.my_recipes.forEach(r => items.push({ type: 'my_recipe', item: r, href: `/recipes/${r.id}` }));
     results.discover_recipes.forEach(r => items.push({ type: 'discover_recipe', item: r, href: `/recipes/${r.id}` }));
     results.tags.forEach(t => items.push({ type: 'tag', item: t, href: `/search?q=${encodeURIComponent(t.name)}&category=recipes&tag=${t.id}` }));
-    results.collections.forEach(c => items.push({ type: 'collection', item: c, href: `/collections/${c.id}` }));
-    results.users.forEach(u => items.push({ type: 'user', item: u, href: `/users/${u.username || u.id}` }));
+    results.collections.forEach(c => items.push({ type: 'collection', item: c, href: `/?collection=${c.id}` }));
+    results.users.forEach(u => items.push({ type: 'user', item: u, href: `/profile/${u.id}` }));
     results.ingredients.forEach(i => items.push({ type: 'ingredient', item: i, href: `/ingredients/${i.id}` }));
 
     return items;
@@ -285,7 +285,7 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
         {renderSection('Collections', results.collections, 'collection', (item, index) => (
           <Link
             key={item.id}
-            href={`/collections/${item.id}`}
+            href={`/?collection=${item.id}`}
             onClick={handleClose}
             className={`flex items-center gap-3 px-3 py-2 hover:bg-cream transition-colors ${
               selectedIndex === index ? 'bg-cream' : ''
@@ -306,7 +306,7 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
         {renderSection('Users', results.users, 'user', (item, index) => (
           <Link
             key={item.id}
-            href={`/users/${item.username || item.id}`}
+            href={`/profile/${item.id}`}
             onClick={handleClose}
             className={`flex items-center gap-3 px-3 py-2 hover:bg-cream transition-colors ${
               selectedIndex === index ? 'bg-cream' : ''
@@ -323,9 +323,6 @@ export default function GlobalSearch({ variant = 'navbar', onClose }: GlobalSear
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-charcoal">{item.name}</p>
-              {item.username && (
-                <p className="text-xs text-warm-gray">@{item.username}</p>
-              )}
             </div>
           </Link>
         ))}

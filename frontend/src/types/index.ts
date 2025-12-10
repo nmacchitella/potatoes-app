@@ -5,7 +5,6 @@ export interface User {
   is_admin: boolean;
   is_verified: boolean;
   created_at: string;
-  username?: string;
   bio?: string;
   is_public: boolean;
   profile_image_url?: string;
@@ -15,7 +14,6 @@ export interface User {
 
 export interface UserProfileUpdate {
   name?: string;
-  username?: string;
   bio?: string;
   is_public?: boolean;
 }
@@ -72,7 +70,6 @@ export interface Notification {
 export interface UserSearchResult {
   id: string;
   name: string;
-  username?: string;
   profile_image_url?: string;
   is_public: boolean;
   is_followed_by_me: boolean;
@@ -87,7 +84,6 @@ export interface FollowResponse {
 export interface UserProfilePublic {
   id: string;
   name: string;
-  username?: string;
   bio?: string;
   profile_image_url?: string;
   is_public: boolean;
@@ -154,7 +150,6 @@ export interface Tag {
 export interface RecipeAuthor {
   id: string;
   name: string;
-  username?: string;
   profile_image_url?: string;
 }
 
@@ -179,7 +174,6 @@ export interface ForkedFromInfo {
   recipe_id?: string;
   user_id?: string;
   user_name?: string;
-  user_username?: string;
 }
 
 export interface ClonedByMeInfo {
@@ -281,7 +275,6 @@ export interface CollectionUpdateInput extends Partial<CollectionCreateInput> {
 export interface CollectionShareUser {
   id: string;
   name: string;
-  username?: string;
   profile_image_url?: string;
 }
 
@@ -421,7 +414,6 @@ export interface SearchCollectionResult {
 export interface SearchUserResult {
   id: string;
   name: string;
-  username?: string;
   profile_image_url?: string;
 }
 
@@ -526,7 +518,6 @@ export interface MealPlanListResponse {
 export interface MealPlanShareUser {
   id: string;
   name: string;
-  username?: string;
   profile_image_url?: string;
 }
 

@@ -65,11 +65,10 @@ def notify_follow_request(db: Session, follower: User, target_user: User) -> Not
         notification_type="follow_request",
         title="New Follow Request",
         message=f"{follower.name} wants to follow you",
-        link=f"/profile/{follower.username or follower.id}",
+        link=f"/profile/{follower.id}",
         data={
             "follower_id": follower.id,
             "follower_name": follower.name,
-            "follower_username": follower.username,
         },
     )
 
@@ -89,11 +88,10 @@ def notify_new_follower(db: Session, follower: User, target_user: User) -> Notif
         notification_type="new_follower",
         title="New Follower",
         message=f"{follower.name} started following you",
-        link=f"/profile/{follower.username or follower.id}",
+        link=f"/profile/{follower.id}",
         data={
             "follower_id": follower.id,
             "follower_name": follower.name,
-            "follower_username": follower.username,
         },
     )
 
@@ -113,11 +111,10 @@ def notify_follow_accepted(db: Session, requester: User, accepter: User) -> Noti
         notification_type="follow_accepted",
         title="Follow Request Accepted",
         message=f"{accepter.name} accepted your follow request",
-        link=f"/profile/{accepter.username or accepter.id}",
+        link=f"/profile/{accepter.id}",
         data={
             "user_id": accepter.id,
             "user_name": accepter.name,
-            "user_username": accepter.username,
         },
     )
 

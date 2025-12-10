@@ -14,16 +14,31 @@ export default function BottomNav() {
 
   if (shouldHide) return null;
 
+  const isHome = pathname === '/' || pathname.startsWith('/?');
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-border z-40 md:hidden pb-safe shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-      <div className="flex items-center justify-around h-16 px-4">
-        {/* Left slot - empty for now */}
-        <div className="w-12" />
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-border z-40 md:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+      <div className="flex items-center justify-around h-14 px-4">
+        {/* Left - Home/Recipes */}
+        <Link
+          href="/"
+          className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg transition-colors ${
+            isHome
+              ? 'text-gold'
+              : 'text-warm-gray hover:text-charcoal'
+          }`}
+          aria-label="Home"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          <span className="text-[10px] mt-0.5">Home</span>
+        </Link>
 
         {/* Center - Oversized Add Button */}
         <Link
           href="/recipes/new"
-          className="relative -mt-6 flex items-center justify-center w-14 h-14 bg-gold hover:bg-gold-dark rounded-full shadow-lg transition-all active:scale-95"
+          className="relative -mt-5 flex items-center justify-center w-14 h-14 bg-gold hover:bg-gold-dark rounded-full shadow-lg transition-all active:scale-95"
           aria-label="Add new recipe"
         >
           <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -33,7 +48,7 @@ export default function BottomNav() {
 
         {/* Right - Profile */}
         <Link
-          href={`/profile/${user?.username || user?.id || ''}`}
+          href={`/profile/${user?.id || ''}`}
           className={`flex flex-col items-center justify-center w-12 h-12 rounded-lg transition-colors ${
             pathname.startsWith('/profile')
               ? 'text-gold'
@@ -41,7 +56,7 @@ export default function BottomNav() {
           }`}
           aria-label="Profile"
         >
-          <div className="w-9 h-9 rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden">
+          <div className="w-7 h-7 rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden">
             {user?.profile_image_url ? (
               <img
                 src={user.profile_image_url}
@@ -49,11 +64,12 @@ export default function BottomNav() {
                 className="w-full h-full object-cover"
               />
             ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             )}
           </div>
+          <span className="text-[10px] mt-0.5">Profile</span>
         </Link>
       </div>
     </nav>

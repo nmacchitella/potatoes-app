@@ -2,12 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { authApi } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
-import type { UserSettings } from '@/types';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -16,7 +14,6 @@ export default function SettingsPage() {
   // Profile form
   const [profileForm, setProfileForm] = useState({
     name: '',
-    username: '',
     bio: '',
     is_public: false,
   });
@@ -59,7 +56,6 @@ export default function SettingsPage() {
     if (user) {
       setProfileForm({
         name: user.name || '',
-        username: user.username || '',
         bio: user.bio || '',
         is_public: user.is_public || false,
       });
@@ -92,7 +88,6 @@ export default function SettingsPage() {
     try {
       await authApi.updateUserProfile({
         name: profileForm.name,
-        username: profileForm.username,
         bio: profileForm.bio || undefined,
         is_public: profileForm.is_public,
       });
@@ -219,23 +214,6 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <label className="label mb-2 block">Username</label>
-                <div className="flex items-center">
-                  <span className="text-warm-gray mr-1">@</span>
-                  <input
-                    type="text"
-                    value={profileForm.username}
-                    onChange={e => setProfileForm({ ...profileForm, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                    className="input-field flex-1"
-                    placeholder="username"
-                  />
-                </div>
-                <p className="text-sm text-warm-gray mt-1">
-                  Your profile URL: potatoes.app/@{profileForm.username || 'username'}
-                </p>
-              </div>
-
-              <div>
                 <label className="label mb-2 block">Bio</label>
                 <textarea
                   value={profileForm.bio}
@@ -285,7 +263,7 @@ export default function SettingsPage() {
             <form onSubmit={handlePrefsSubmit} className="space-y-5">
               <div>
                 <label className="label mb-2 block">Measurement Units</label>
-                <div className="flex gap-4">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -293,9 +271,9 @@ export default function SettingsPage() {
                       value="metric"
                       checked={prefsForm.preferred_unit_system === 'metric'}
                       onChange={() => setPrefsForm({ ...prefsForm, preferred_unit_system: 'metric' })}
-                      className="w-4 h-4 accent-gold"
+                      className="w-4 h-4 accent-gold flex-shrink-0"
                     />
-                    <span className="text-charcoal">Metric (g, ml, kg)</span>
+                    <span className="text-charcoal text-sm sm:text-base">Metric (g, ml, kg)</span>
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -304,9 +282,9 @@ export default function SettingsPage() {
                       value="imperial"
                       checked={prefsForm.preferred_unit_system === 'imperial'}
                       onChange={() => setPrefsForm({ ...prefsForm, preferred_unit_system: 'imperial' })}
-                      className="w-4 h-4 accent-gold"
+                      className="w-4 h-4 accent-gold flex-shrink-0"
                     />
-                    <span className="text-charcoal">Imperial (oz, cups, lbs)</span>
+                    <span className="text-charcoal text-sm sm:text-base">Imperial (oz, cups, lbs)</span>
                   </label>
                 </div>
                 <p className="text-sm text-warm-gray mt-1">

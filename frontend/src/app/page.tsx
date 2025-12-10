@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi, collectionApi, socialApi, mealPlanApi, authApi } from '@/lib/api';
@@ -87,8 +87,9 @@ function RecipesPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Page view toggle
-  const [pageView, setPageView] = useState<PageView>('recipes');
+  // Page view toggle - read from URL param
+  const viewParam = searchParams.get('view');
+  const [pageView, setPageView] = useState<PageView>(viewParam === 'calendar' ? 'calendar' : 'recipes');
 
   // Recipe state
   const [allRecipes, setAllRecipes] = useState<RecipeSummary[]>([]);
@@ -179,6 +180,17 @@ function RecipesPageContent() {
   // Track previous URL param to detect actual URL changes vs re-renders
   const prevUrlCollectionRef = useRef<string | null | undefined>(undefined);
 
+  // AbortController for cancelling stale recipe fetches
+  const fetchAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Sync page view with URL param
+  useEffect(() => {
+    const newView = viewParam === 'calendar' ? 'calendar' : 'recipes';
+    if (newView !== pageView) {
+      setPageView(newView);
+    }
+  }, [viewParam]);
+
   // Load collections on mount
   useEffect(() => {
     loadCollections();
@@ -199,62 +211,99 @@ function RecipesPageContent() {
     }
   };
 
-  // Read collection from URL query parameter
+  // Read collection from URL query parameter on initial load only
   useEffect(() => {
-    if (!loadingCollections) {
+    if (!loadingCollections && !initialCollectionLoaded) {
       const collectionParam = searchParams.get('collection');
+      const isOwnCollection = collections.some(c => c.id === collectionParam);
+      const isSharedCollection = sharedCollections.some(c => c.id === collectionParam);
+      if (collectionParam && (isOwnCollection || isSharedCollection)) {
+        setSelectedCollection(collectionParam);
+      }
+      prevUrlCollectionRef.current = collectionParam;
+      setInitialCollectionLoaded(true);
+    }
+  }, [loadingCollections, initialCollectionLoaded, collections, sharedCollections, searchParams]);
 
-      if (!initialCollectionLoaded) {
-        // Initial load: set collection if valid
+  // Handle external URL changes (e.g., browser back/forward, clicking logo)
+  useEffect(() => {
+    if (!initialCollectionLoaded) return;
+
+    const collectionParam = searchParams.get('collection');
+    // Only react if URL actually changed externally
+    if (prevUrlCollectionRef.current !== collectionParam) {
+      prevUrlCollectionRef.current = collectionParam;
+      if (!collectionParam) {
+        setSelectedCollection(null);
+      } else {
         const isOwnCollection = collections.some(c => c.id === collectionParam);
         const isSharedCollection = sharedCollections.some(c => c.id === collectionParam);
-        if (collectionParam && (isOwnCollection || isSharedCollection)) {
+        if (isOwnCollection || isSharedCollection) {
           setSelectedCollection(collectionParam);
         }
-        prevUrlCollectionRef.current = collectionParam;
-        setInitialCollectionLoaded(true);
-      } else if (prevUrlCollectionRef.current !== collectionParam) {
-        // URL actually changed externally (e.g., clicking logo to go back to /recipes)
-        prevUrlCollectionRef.current = collectionParam;
+      }
+    }
+  }, [searchParams, initialCollectionLoaded, collections, sharedCollections]);
 
-        if (!collectionParam) {
-          setSelectedCollection(null);
+  // Update URL when collection changes from sidebar clicks
+  const updateUrlForCollection = useCallback((collectionId: string | null) => {
+    const url = collectionId
+      ? `/?collection=${collectionId}`
+      : '/';
+    prevUrlCollectionRef.current = collectionId;
+    router.replace(url, { scroll: false });
+  }, [router]);
+
+  // Load recipes when collection or page changes - with request cancellation
+  useEffect(() => {
+    // Cancel any in-flight request
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort();
+    }
+
+    const abortController = new AbortController();
+    fetchAbortControllerRef.current = abortController;
+
+    const fetchRecipesWithAbort = async () => {
+      setLoading(true);
+      try {
+        if (selectedCollection) {
+          const collection = await collectionApi.get(selectedCollection);
+          if (!abortController.signal.aborted) {
+            setAllRecipes(collection.recipes);
+            setTotalPages(1);
+          }
         } else {
-          const isOwnCollection = collections.some(c => c.id === collectionParam);
-          const isSharedCollection = sharedCollections.some(c => c.id === collectionParam);
-          if (isOwnCollection || isSharedCollection) {
-            setSelectedCollection(collectionParam);
+          const response = await recipeApi.list({
+            page: currentPage,
+            page_size: 100,
+          });
+          if (!abortController.signal.aborted) {
+            setAllRecipes(response.items);
+            setTotalPages(response.total_pages);
           }
         }
+      } catch (error) {
+        if (!abortController.signal.aborted) {
+          console.error('Failed to fetch recipes:', error);
+        }
+      } finally {
+        if (!abortController.signal.aborted) {
+          setLoading(false);
+        }
       }
-    }
-  }, [searchParams, collections, sharedCollections, loadingCollections, initialCollectionLoaded]);
+    };
 
-  // Update URL when collection changes from sidebar clicks (not from URL navigation)
-  useEffect(() => {
-    if (initialCollectionLoaded) {
-      const currentParam = searchParams.get('collection');
-      // Only update URL if state differs AND the change didn't come from URL navigation
-      if (selectedCollection !== currentParam && prevUrlCollectionRef.current === currentParam) {
-        prevUrlCollectionRef.current = selectedCollection;
-        const url = selectedCollection
-          ? `/recipes?collection=${selectedCollection}`
-          : '/recipes';
-        router.replace(url, { scroll: false });
-      }
-    }
-  }, [selectedCollection, initialCollectionLoaded, router, searchParams]);
-
-  // Load recipes when collection changes
-  useEffect(() => {
-    fetchRecipes();
-  }, [currentPage, selectedCollection]);
-
-  // Clear filters when changing collection
-  useEffect(() => {
+    // Clear filters when collection changes
     setSearchQuery('');
     setSelectedTags([]);
-  }, [selectedCollection]);
+
+    fetchRecipesWithAbort();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [currentPage, selectedCollection]);
 
   // Focus input when creating new collection
   useEffect(() => {
@@ -283,28 +332,6 @@ function RecipesPageContent() {
       setCollectionRecipeIds(new Set(collection.recipes.map(r => r.id)));
     } catch (error) {
       console.error('Failed to load collection recipes:', error);
-    }
-  };
-
-  const fetchRecipes = async () => {
-    setLoading(true);
-    try {
-      if (selectedCollection) {
-        const collection = await collectionApi.get(selectedCollection);
-        setAllRecipes(collection.recipes);
-        setTotalPages(1);
-      } else {
-        const response = await recipeApi.list({
-          page: currentPage,
-          page_size: 100,
-        });
-        setAllRecipes(response.items);
-        setTotalPages(response.total_pages);
-      }
-    } catch (error) {
-      console.error('Failed to fetch recipes:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -813,6 +840,7 @@ function RecipesPageContent() {
     if (isManageMode) return;
     setSelectedCollection(collectionId);
     setCurrentPage(1);
+    updateUrlForCollection(collectionId);
   };
 
   // Collection CRUD handlers
@@ -1469,12 +1497,12 @@ function RecipesPageContent() {
 
             {/* Recipe Grid */}
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
                 {[...Array(6)].map((_, i) => (
                   <div key={i} className="animate-pulse">
-                    <div className="aspect-[4/3] bg-cream-dark rounded-lg mb-3" />
-                    <div className="h-4 bg-cream-dark rounded w-3/4 mb-2" />
-                    <div className="h-3 bg-cream-dark rounded w-1/2" />
+                    <div className="aspect-[4/3] bg-cream-dark rounded-lg mb-2 sm:mb-3" />
+                    <div className="h-3 sm:h-4 bg-cream-dark rounded w-3/4 mb-1 sm:mb-2" />
+                    <div className="h-2 sm:h-3 bg-cream-dark rounded w-1/2" />
                   </div>
                 ))}
               </div>
@@ -1517,14 +1545,14 @@ function RecipesPageContent() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
                 {filteredRecipes.map(recipe => (
                   <Link
                     key={recipe.id}
                     href={`/recipes/${recipe.id}`}
                     className="group"
                   >
-                    <div className="aspect-[4/3] rounded-lg overflow-hidden mb-3 bg-cream-dark relative">
+                    <div className="aspect-[4/3] rounded-lg overflow-hidden mb-2 sm:mb-3 bg-cream-dark relative">
                       {recipe.cover_image_url ? (
                         <img
                           src={recipe.cover_image_url}
@@ -1533,7 +1561,7 @@ function RecipesPageContent() {
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
-                          <svg className="w-12 h-12 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-8 h-8 sm:w-12 sm:h-12 text-warm-gray-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </div>
@@ -1547,13 +1575,13 @@ function RecipesPageContent() {
                             handleRemoveRecipeFromCollection(recipe.id, recipe.title);
                           }}
                           disabled={savingRecipes === recipe.id}
-                          className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-colors disabled:opacity-50"
+                          className="absolute top-1 right-1 sm:top-2 sm:right-2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-md transition-colors disabled:opacity-50"
                           title="Remove from collection"
                         >
                           {savingRecipes === recipe.id ? (
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                           ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           )}
@@ -1562,7 +1590,7 @@ function RecipesPageContent() {
                       {/* Privacy Badge - display only (edit via recipe detail page) */}
                       {!(isManageMode && selectedCollection) && (
                         <span
-                          className={`absolute top-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                          className={`absolute top-1 right-1 sm:top-2 sm:right-2 px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[10px] font-medium ${
                             recipe.privacy_level === 'public'
                               ? 'bg-green-100/90 text-green-700'
                               : 'bg-gray-100/90 text-gray-600'
@@ -1570,29 +1598,26 @@ function RecipesPageContent() {
                         >
                           {recipe.privacy_level === 'public' ? (
                             <span className="flex items-center gap-0.5">
-                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              Public
+                              <span className="hidden sm:inline">Public</span>
                             </span>
                           ) : (
                             <span className="flex items-center gap-0.5">
-                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-2 h-2 sm:w-2.5 sm:h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                               </svg>
-                              Private
+                              <span className="hidden sm:inline">Private</span>
                             </span>
                           )}
                         </span>
                       )}
                     </div>
-                    <h3 className="font-serif text-lg text-charcoal group-hover:text-gold transition-colors mb-1">
+                    <h3 className="font-serif text-sm sm:text-lg text-charcoal group-hover:text-gold transition-colors line-clamp-2">
                       {recipe.title}
                     </h3>
-                    {recipe.description && (
-                      <p className="text-sm text-warm-gray line-clamp-2 mb-2">{recipe.description}</p>
-                    )}
-                    <div className="flex items-center gap-3 text-xs text-warm-gray">
+                    <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-warm-gray mt-1">
                       {(recipe.prep_time_minutes || recipe.cook_time_minutes) && (
                         <span>{(recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)} min</span>
                       )}
@@ -1636,8 +1661,13 @@ function RecipesPageContent() {
             ) : (
             /* Calendar View */
             <div>
-              {/* Calendar Header */}
-              <div className="flex items-center justify-between mb-6">
+              {/* Mobile Header */}
+              <div className="md:hidden mb-4">
+                <h1 className="font-serif text-2xl text-charcoal text-center">Meal Plan</h1>
+              </div>
+
+              {/* Desktop Calendar Header */}
+              <div className="hidden md:flex items-center justify-between mb-6">
                 <h1 className="font-serif text-2xl text-charcoal">Meal Plan</h1>
 
                 {/* View Toggle */}
@@ -2427,7 +2457,7 @@ function RecipesPageContent() {
                     type="text"
                     value={userSearchQuery}
                     onChange={(e) => setUserSearchQuery(e.target.value)}
-                    placeholder="Search by name or username..."
+                    placeholder="Search by name..."
                     className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-gold"
                   />
                   {searchingUsers && (
@@ -2458,9 +2488,6 @@ function RecipesPageContent() {
                           )}
                           <div>
                             <p className="text-sm font-medium text-charcoal">{user.name}</p>
-                            {user.username && (
-                              <p className="text-xs text-warm-gray">@{user.username}</p>
-                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -2518,9 +2545,6 @@ function RecipesPageContent() {
                           )}
                           <div>
                             <p className="text-sm font-medium text-charcoal">{share.user.name}</p>
-                            {share.user.username && (
-                              <p className="text-xs text-warm-gray">@{share.user.username}</p>
-                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -2660,7 +2684,7 @@ function RecipesPageContent() {
                     type="text"
                     value={calendarUserSearchQuery}
                     onChange={(e) => setCalendarUserSearchQuery(e.target.value)}
-                    placeholder="Search by name or username..."
+                    placeholder="Search by name..."
                     className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:border-gold"
                   />
                   {searchingCalendarUsers && (
@@ -2691,9 +2715,6 @@ function RecipesPageContent() {
                           )}
                           <div>
                             <p className="text-sm font-medium text-charcoal">{user.name}</p>
-                            {user.username && (
-                              <p className="text-xs text-warm-gray">@{user.username}</p>
-                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -2751,9 +2772,6 @@ function RecipesPageContent() {
                           )}
                           <div>
                             <p className="text-sm font-medium text-charcoal">{share.shared_with.name}</p>
-                            {share.shared_with.username && (
-                              <p className="text-xs text-warm-gray">@{share.shared_with.username}</p>
-                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">

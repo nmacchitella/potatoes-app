@@ -51,7 +51,7 @@ export default function UserSearchPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name or username..."
+            placeholder="Search by name..."
             className="input-field w-full pl-12"
             autoFocus
           />

@@ -6,7 +6,6 @@ Handles user follows, profiles, and social feed.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_
 from typing import List, Optional
 import math
 
@@ -33,16 +32,13 @@ async def search_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Search for users by name or username."""
+    """Search for users by name."""
     search_term = f"%{q}%"
 
     users = db.query(User).filter(
         User.id != current_user.id,
         User.is_public == True,
-        or_(
-            User.name.ilike(search_term),
-            User.username.ilike(search_term)
-        )
+        User.name.ilike(search_term)
     ).limit(limit).all()
 
     # Get follow statuses
@@ -56,7 +52,6 @@ async def search_users(
         results.append(UserSearchResult(
             id=user.id,
             name=user.name,
-            username=user.username,
             profile_image_url=user.profile_image_url,
             is_public=user.is_public,
             is_followed_by_me=follow is not None and follow.status == 'confirmed',
@@ -66,18 +61,14 @@ async def search_users(
     return results
 
 
-@router.get("/{username}", response_model=UserProfilePublic)
+@router.get("/{user_id}", response_model=UserProfilePublic)
 async def get_user_profile(
-    username: str,
+    user_id: str,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
-    """Get a user's public profile by username or user ID."""
-    # Try to find by username first, then by ID
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        # Try finding by ID
-        user = db.query(User).filter(User.id == username).first()
+    """Get a user's public profile by user ID."""
+    user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -108,7 +99,6 @@ async def get_user_profile(
     return UserProfilePublic(
         id=user.id,
         name=user.name,
-        username=user.username,
         bio=user.bio,
         profile_image_url=user.profile_image_url,
         is_public=user.is_public,
@@ -119,19 +109,16 @@ async def get_user_profile(
     )
 
 
-@router.get("/{username}/recipes", response_model=RecipeListResponse)
+@router.get("/{user_id}/recipes", response_model=RecipeListResponse)
 async def get_user_recipes(
-    username: str,
+    user_id: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Get a user's public recipes."""
-    # Try to find by username first, then by ID
-    user = db.query(User).filter(User.username == username).first()
-    if not user:
-        user = db.query(User).filter(User.id == username).first()
+    user = db.query(User).filter(User.id == user_id).first()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -303,7 +290,6 @@ async def get_my_followers(
         results.append(UserSearchResult(
             id=user.id,
             name=user.name,
-            username=user.username,
             profile_image_url=user.profile_image_url,
             is_public=user.is_public,
             is_followed_by_me=follow_back is not None and follow_back.status == 'confirmed',
@@ -332,7 +318,6 @@ async def get_my_following(
         results.append(UserSearchResult(
             id=user.id,
             name=user.name,
-            username=user.username,
             profile_image_url=user.profile_image_url,
             is_public=user.is_public,
             is_followed_by_me=True,
@@ -361,7 +346,6 @@ async def get_follow_requests(
         results.append(UserSearchResult(
             id=user.id,
             name=user.name,
-            username=user.username,
             profile_image_url=user.profile_image_url,
             is_public=user.is_public,
             is_followed_by_me=False,
