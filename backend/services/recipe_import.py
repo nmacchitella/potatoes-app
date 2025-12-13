@@ -345,22 +345,41 @@ def get_youtube_transcript(video_id: str) -> Tuple[str, str]:
     """
     Get transcript from a YouTube video.
     Returns (transcript_text, video_title).
+    Tries English first, then falls back to any available language.
     """
     try:
-        # Create API instance (new API style)
         api = YouTubeTranscriptApi()
-
-        # Try to get English transcript first
         transcript_data = None
+
+        # Try English first
         try:
             transcript_data = api.fetch(video_id, languages=['en', 'en-US', 'en-GB'])
         except Exception:
-            # Try with just English
+            pass
+
+        # If no English, try to get any available transcript
+        if not transcript_data:
             try:
-                transcript_data = api.fetch(video_id, languages=['en'])
+                available = api.list(video_id)
+                # Prefer common languages that Gemini handles well
+                preferred_langs = ['it', 'es', 'fr', 'de', 'pt', 'nl', 'pl', 'ru', 'ja', 'ko', 'zh']
+
+                # Try preferred languages first
+                for lang in preferred_langs:
+                    for transcript in available:
+                        if transcript.language_code.startswith(lang):
+                            transcript_data = api.fetch(video_id, languages=[transcript.language_code])
+                            break
+                    if transcript_data:
+                        break
+
+                # If still nothing, just take the first available
+                if not transcript_data:
+                    for transcript in available:
+                        transcript_data = api.fetch(video_id, languages=[transcript.language_code])
+                        break
             except Exception:
-                # Try without language preference (uses default 'en')
-                transcript_data = api.fetch(video_id)
+                pass
 
         if not transcript_data:
             raise ValueError("No transcript available for this video")
