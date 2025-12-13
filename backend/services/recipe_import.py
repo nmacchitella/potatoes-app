@@ -857,28 +857,44 @@ IMPORTANT - How to combine sources:
 
 Respond with a JSON array of recipe objects."""
 
+    max_retries = 3
+    last_error = None
+
     try:
-        response = model.generate_content(
-            [audio_file, prompt],
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json",
-                response_schema=recipe_schema,
-                temperature=0.1,
-            )
-        )
+        for attempt in range(max_retries):
+            try:
+                response = model.generate_content(
+                    [audio_file, prompt],
+                    generation_config=genai.GenerationConfig(
+                        response_mime_type="application/json",
+                        response_schema=recipe_schema,
+                        temperature=0.1,
+                    )
+                )
 
-        # Parse the response
-        response_text = response.text.strip()
+                # Parse the response
+                response_text = response.text.strip()
 
-        # Debug: log raw response
-        logger.debug(f"Raw Gemini audio response:\n{response_text[:2000]}")
+                # Debug: log raw response
+                logger.debug(f"Raw Gemini audio response (attempt {attempt + 1}):\n{response_text[:2000]}")
 
-        # Clean up response if needed
-        if response_text.startswith('```'):
-            response_text = re.sub(r'^```(?:json)?\n?', '', response_text)
-            response_text = re.sub(r'\n?```$', '', response_text)
+                # Clean up response if needed
+                if response_text.startswith('```'):
+                    response_text = re.sub(r'^```(?:json)?\n?', '', response_text)
+                    response_text = re.sub(r'\n?```$', '', response_text)
 
-        recipes_data = json.loads(response_text)
+                recipes_data = json.loads(response_text)
+                break  # Success, exit retry loop
+
+            except json.JSONDecodeError as e:
+                last_error = e
+                logger.warning(f"JSON parse error on attempt {attempt + 1}/{max_retries}: {e}")
+                logger.warning(f"Raw response that failed to parse:\n{response_text[:1000]}...")
+                if attempt < max_retries - 1:
+                    logger.info(f"Retrying audio transcription...")
+                    continue
+                else:
+                    raise ValueError(f"Failed to parse Gemini response after {max_retries} attempts: {e}")
 
         # Debug: log parsed JSON
         logger.info(f"Parsed {len(recipes_data) if isinstance(recipes_data, list) else 1} recipe(s) from audio")
@@ -1128,17 +1144,32 @@ Webpage content:
 
 Return ONLY the JSON, no other text."""
 
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(
-            response_mime_type="application/json",
-            response_schema=recipe_schema,
-            temperature=0.1,
-        )
-    )
+    # Retry logic for handling occasional malformed JSON from Gemini
+    max_retries = 3
+    response_text = ""
 
-    # Parse the response - with schema enforcement, JSON should always be valid
-    data = json.loads(response.text)
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json",
+                    response_schema=recipe_schema,
+                    temperature=0.1,
+                )
+            )
+            response_text = response.text.strip()
+            data = json.loads(response_text)
+            break  # Success, exit retry loop
+
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parse error on attempt {attempt + 1}/{max_retries}: {e}")
+            logger.warning(f"Raw response that failed to parse:\n{response_text[:1000]}...")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying text extraction...")
+                continue
+            else:
+                raise ValueError(f"Failed to parse Gemini response after {max_retries} attempts: {e}")
 
     # Handle both old format (single recipe) and new format (recipes array)
     recipes_data = data.get('recipes', [data] if 'title' in data else [])

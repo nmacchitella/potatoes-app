@@ -186,23 +186,41 @@ async def main():
 
     # Determine which URLs to process
     if args.retry_failed:
-        urls_to_process = metadata.get('failed_urls', [])
-        print(f"Retrying {len(urls_to_process)} failed URLs...")
+        all_failed = metadata.get('failed_urls', [])
+        urls_to_process = all_failed.copy()
+        retry_mode = True
+        # Track URLs not being processed this run (for preserving in metadata)
+        remaining_failed = []
     else:
         urls_to_process = [url for url in urls if url not in existing_urls]
+        retry_mode = False
+        remaining_failed = []
 
     # Apply limit if specified
+    total_available = len(urls_to_process)
     if args.limit and args.limit < len(urls_to_process):
+        # In retry mode, preserve the URLs we're not processing this run
+        if retry_mode:
+            remaining_failed = urls_to_process[args.limit:]
         urls_to_process = urls_to_process[:args.limit]
-        print(f"Limiting to first {args.limit} URLs")
 
     total = len(urls_to_process)
     if total == 0:
-        print("All URLs have already been extracted!")
+        if retry_mode:
+            print("No failed URLs to retry!")
+        else:
+            print("All URLs have already been extracted!")
         print(f"Total recipes: {len(list(recipes_dir.glob('*.json')))}")
         return
 
-    print(f"Processing {total} URLs (skipping {len(urls) - total} already extracted)")
+    # Show appropriate message based on mode
+    if retry_mode:
+        if args.limit:
+            print(f"Retrying {total} of {total_available} failed URLs")
+        else:
+            print(f"Retrying {total} failed URLs")
+    else:
+        print(f"Processing {total} new URLs (skipping {len(existing_urls)} already extracted)")
     print("-" * 60)
 
     successful = 0
@@ -234,8 +252,8 @@ async def main():
         # Update metadata periodically
         if i % 10 == 0:
             metadata['stats']['successful'] = successful
-            metadata['stats']['failed'] = failed
-            metadata['failed_urls'] = failed_urls
+            metadata['stats']['failed'] = len(remaining_failed) + failed
+            metadata['failed_urls'] = remaining_failed + failed_urls
             save_metadata(metadata_path, metadata)
 
         # Delay between requests
@@ -245,9 +263,12 @@ async def main():
     # Final metadata update
     metadata['stats']['total_urls'] = len(urls)
     metadata['stats']['successful'] += successful
-    metadata['stats']['failed'] = len(failed_urls)
     metadata['stats']['skipped'] = len(urls) - total
-    metadata['failed_urls'] = failed_urls
+
+    # Combine remaining failed URLs (not processed this run) with new failures
+    all_failed_urls = remaining_failed + failed_urls
+    metadata['stats']['failed'] = len(all_failed_urls)
+    metadata['failed_urls'] = all_failed_urls
     save_metadata(metadata_path, metadata)
 
     # Summary

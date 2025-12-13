@@ -7,7 +7,7 @@ from database import engine, SessionLocal
 from models import (
     User, RefreshToken, VerificationToken, Notification, UserFollow,
     Recipe, RecipeIngredient, RecipeInstruction, Tag, Ingredient, MeasurementUnit,
-    Collection, CollectionShare, UserSettings, MealPlan, MealPlanShare
+    Collection, CollectionShare, UserSettings, MealPlan, MealPlanShare, URLCheck
 )
 from auth import verify_password
 import secrets
@@ -343,6 +343,31 @@ class MealPlanShareAdmin(ModelView, model=MealPlanShare):
 
 
 # ============================================================================
+# URL CHECK CACHE ADMIN VIEW
+# ============================================================================
+
+class URLCheckAdmin(ModelView, model=URLCheck):
+    name = "URL Check"
+    name_plural = "URL Checks"
+    icon = "fa-solid fa-link"
+
+    column_list = [URLCheck.url, URLCheck.domain, URLCheck.has_recipe, URLCheck.error, URLCheck.checked_at]
+    column_searchable_list = [URLCheck.url, URLCheck.domain]
+    column_sortable_list = [URLCheck.domain, URLCheck.has_recipe, URLCheck.checked_at]
+    column_default_sort = [(URLCheck.checked_at, True)]
+
+    # Truncate long URLs in the list view to prevent horizontal scrolling
+    column_formatters = {
+        URLCheck.url: lambda m, a: m.url[:60] + "..." if m.url and len(m.url) > 60 else m.url
+    }
+
+    can_create = False  # URLs are checked automatically
+    can_edit = True
+    can_delete = True
+    can_view_details = True
+
+
+# ============================================================================
 # CUSTOM VIEWS - RECIPE IMPORT
 # ============================================================================
 
@@ -434,8 +459,8 @@ def create_recipe_from_json(db: Session, data: dict, user_id: str) -> Recipe:
         author_id=user_id,
         title=data.get("title", "Untitled Recipe"),
         description=data.get("description"),
-        yield_quantity=data.get("yield_quantity", 4),
-        yield_unit=data.get("yield_unit", "servings"),
+        yield_quantity=data.get("yield_quantity"),  # None if not specified
+        yield_unit=data.get("yield_unit"),
         prep_time_minutes=data.get("prep_time_minutes"),
         cook_time_minutes=data.get("cook_time_minutes"),
         difficulty=data.get("difficulty"),
@@ -534,6 +559,9 @@ def create_admin(app):
     # Register meal plan views
     admin.add_view(MealPlanAdmin)
     admin.add_view(MealPlanShareAdmin)
+
+    # Register URL check cache view
+    admin.add_view(URLCheckAdmin)
 
     # Register custom views
     admin.add_view(RecipeImportView)

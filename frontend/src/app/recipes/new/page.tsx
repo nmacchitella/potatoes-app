@@ -347,6 +347,28 @@ function NewRecipeContent() {
     currentFormData.ingredients.some(i => i.name) &&
     currentFormData.instructions.some(i => i.instruction_text);
 
+  // Full-screen loading overlay for importing
+  if (importing || recipeParsing) {
+    return (
+      <div className="min-h-screen bg-cream flex flex-col items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-6">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-gold border-t-transparent" />
+          <div className="text-center">
+            <h2 className="font-serif text-2xl text-charcoal mb-2">
+              {importing ? 'Importing Recipe' : 'Parsing Recipe'}
+            </h2>
+            <p className="text-warm-gray">
+              {importing
+                ? 'Extracting recipe from URL... This may take a few seconds.'
+                : 'Analyzing your recipe text... This may take a few seconds.'
+              }
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-cream py-8 px-4 md:px-8 has-bottom-nav">
       <MobileNavWrapper />
@@ -415,9 +437,6 @@ function NewRecipeContent() {
               {importError && (
                 <p className="text-red-600 text-sm mt-3">{importError}</p>
               )}
-              {importing && (
-                <p className="text-warm-gray text-sm mt-3">Importing recipe... This may take a few seconds.</p>
-              )}
             </div>
 
             {/* Divider */}
@@ -456,9 +475,6 @@ function NewRecipeContent() {
               </button>
               {recipePasteError && (
                 <p className="text-red-600 text-sm mt-3">{recipePasteError}</p>
-              )}
-              {recipeParsing && (
-                <p className="text-warm-gray text-sm mt-3">Analyzing your recipe... This may take a few seconds.</p>
               )}
             </div>
 
