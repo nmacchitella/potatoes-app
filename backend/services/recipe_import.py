@@ -371,11 +371,11 @@ def get_youtube_transcript(video_id: str) -> Tuple[str, str]:
         return full_text, ""
 
     except TranscriptsDisabled:
-        raise ValueError("Transcripts are disabled for this video")
+        raise ValueError("This video has captions disabled. Try copying the recipe from the video description or comments and using 'Paste Recipe' instead.")
     except NoTranscriptFound:
-        raise ValueError("No transcript available for this video")
+        raise ValueError("This video doesn't have captions available. Try copying the recipe from the video description or comments and using 'Paste Recipe' instead.")
     except Exception as e:
-        raise ValueError(f"Failed to get transcript: {str(e)}")
+        raise ValueError(f"Couldn't get video transcript: {str(e)}. Try using 'Paste Recipe' with the recipe text instead.")
 
 
 async def parse_with_gemini(text: str, url: str, allow_multiple: bool = False) -> List[ImportedRecipe]:
@@ -700,7 +700,7 @@ async def import_recipe_from_url(url: str) -> List[ImportedRecipe]:
 
         transcript, _ = get_youtube_transcript(video_id)
         if len(transcript) < 100:
-            raise ValueError("Transcript is too short to extract recipe information")
+            raise ValueError("The video transcript is too short to extract a recipe. Try using 'Paste Recipe' with the recipe details instead.")
 
         # Parse with Gemini, allowing multiple recipes
         recipes = await parse_with_gemini(transcript, url, allow_multiple=True)
