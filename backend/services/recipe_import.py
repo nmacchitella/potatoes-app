@@ -903,6 +903,23 @@ Respond with a JSON array of recipe objects."""
         if isinstance(recipes_data, dict):
             recipes_data = [recipes_data]
 
+        # Invalid unit values that should be converted to None
+        invalid_units = {
+            'amount not specified', 'not specified', 'to taste', 'as needed',
+            'amount needed', 'some', 'optional', 'pinch', None
+        }
+
+        def clean_unit(unit):
+            """Clean unit value - return None for invalid/placeholder units."""
+            if not unit:
+                return None
+            unit_lower = unit.lower().strip()
+            if unit_lower in invalid_units or 'not specified' in unit_lower or 'as needed' in unit_lower:
+                return None
+            if len(unit) > 50:
+                return None
+            return unit
+
         # Convert to ImportedRecipe objects
         recipes = []
         for data in recipes_data:
@@ -912,7 +929,7 @@ Respond with a JSON array of recipe objects."""
                 ImportedIngredient(
                     name=ing.get('name', ''),
                     quantity=ing.get('quantity') or None,  # Convert 0 to None (schema requires gt=0)
-                    unit=ing.get('unit'),
+                    unit=clean_unit(ing.get('unit')),
                     preparation=ing.get('preparation'),
                     is_optional=ing.get('is_optional', False)
                 )
@@ -1174,20 +1191,48 @@ Return ONLY the JSON, no other text."""
     # Handle both old format (single recipe) and new format (recipes array)
     recipes_data = data.get('recipes', [data] if 'title' in data else [])
 
+    # Invalid unit values that should be converted to None
+    invalid_units = {
+        'amount not specified', 'not specified', 'to taste', 'as needed',
+        'amount needed', 'some', 'optional', 'pinch', None
+    }
+
+    def clean_unit(unit):
+        """Clean unit value - return None for invalid/placeholder units."""
+        if not unit:
+            return None
+        unit_lower = unit.lower().strip()
+        # Check for invalid patterns
+        if unit_lower in invalid_units or 'not specified' in unit_lower or 'as needed' in unit_lower:
+            return None
+        # If unit is too long (probably a description), truncate or nullify
+        if len(unit) > 50:
+            return None
+        return unit
+
+    def clean_quantity_max(quantity, quantity_max):
+        """Set quantity_max to None if it equals quantity (not a real range)."""
+        if quantity_max is None or quantity is None:
+            return quantity_max
+        if quantity_max <= quantity:
+            return None
+        return quantity_max
+
     recipes = []
     for recipe_data in recipes_data:
-        ingredients = [
-            ImportedIngredient(
+        ingredients = []
+        for ing in recipe_data.get('ingredients', []):
+            qty = ing.get('quantity') or None
+            qty_max = ing.get('quantity_max') or None
+            ingredients.append(ImportedIngredient(
                 name=ing.get('name', ''),
-                quantity=ing.get('quantity') or None,  # Convert 0 to None (schema requires gt=0)
-                quantity_max=ing.get('quantity_max') or None,  # Same for quantity_max
-                unit=ing.get('unit'),
+                quantity=qty,
+                quantity_max=clean_quantity_max(qty, qty_max),
+                unit=clean_unit(ing.get('unit')),
                 preparation=ing.get('preparation'),
                 is_optional=ing.get('is_optional', False),
                 notes=ing.get('notes'),
-            )
-            for ing in recipe_data.get('ingredients', [])
-        ]
+            ))
 
         def safe_int(val):
             """Convert to int, rounding floats if necessary."""
