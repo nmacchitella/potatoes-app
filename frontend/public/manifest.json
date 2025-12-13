@@ -2,7 +2,7 @@
   "name": "Potatoes - Recipe Collection",
   "short_name": "Potatoes",
   "description": "Your personal recipe collection app",
-  "start_url": "/recipes",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",

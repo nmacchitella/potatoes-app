@@ -1,6 +1,7 @@
-from sqladmin import Admin, ModelView
+from sqladmin import Admin, ModelView, BaseView, expose
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
+from starlette.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from database import engine, SessionLocal
 from models import (
@@ -11,6 +12,9 @@ from models import (
 from auth import verify_password
 import secrets
 import os
+import json
+import uuid
+from datetime import datetime
 
 # Get absolute path to templates directory
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
@@ -338,6 +342,160 @@ class MealPlanShareAdmin(ModelView, model=MealPlanShare):
     can_view_details = True
 
 
+# ============================================================================
+# CUSTOM VIEWS - RECIPE IMPORT
+# ============================================================================
+
+class RecipeImportView(BaseView):
+    name = "Import Recipes"
+    icon = "fa-solid fa-file-import"
+
+    @expose("/import-recipes", methods=["GET", "POST"])
+    async def import_recipes(self, request: Request):
+        db: Session = SessionLocal()
+        try:
+            # Get all users for the dropdown
+            users = db.query(User).order_by(User.username).all()
+
+            if request.method == "GET":
+                return await self.templates.TemplateResponse(
+                    request,
+                    "import_recipes.html",
+                    context={"users": users, "results": None}
+                )
+
+            # Handle POST - file upload
+            form = await request.form()
+            user_id = form.get("user_id")
+            files = form.getlist("files")
+
+            if not user_id:
+                return await self.templates.TemplateResponse(
+                    request,
+                    "import_recipes.html",
+                    context={"users": users, "results": None, "error": "Please select a user"}
+                )
+
+            # Verify user exists
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return await self.templates.TemplateResponse(
+                    request,
+                    "import_recipes.html",
+                    context={"users": users, "results": None, "error": "User not found"}
+                )
+
+            results = []
+            for file in files:
+                if not file.filename or not file.filename.endswith('.json'):
+                    results.append({"filename": file.filename or "unknown", "status": "skipped", "error": "Not a JSON file"})
+                    continue
+
+                try:
+                    content = await file.read()
+                    recipe_data = json.loads(content.decode('utf-8'))
+
+                    # Create the recipe
+                    recipe = create_recipe_from_json(db, recipe_data, user_id)
+                    results.append({"filename": file.filename, "status": "success", "title": recipe.title, "id": recipe.id})
+                except json.JSONDecodeError as e:
+                    results.append({"filename": file.filename, "status": "error", "error": f"Invalid JSON: {str(e)}"})
+                except Exception as e:
+                    results.append({"filename": file.filename, "status": "error", "error": str(e)})
+
+            db.commit()
+
+            success_count = len([r for r in results if r["status"] == "success"])
+            error_count = len([r for r in results if r["status"] == "error"])
+
+            return await self.templates.TemplateResponse(
+                request,
+                "import_recipes.html",
+                context={
+                    "users": users,
+                    "results": results,
+                    "success_count": success_count,
+                    "error_count": error_count,
+                    "selected_user": user
+                }
+            )
+
+        finally:
+            db.close()
+
+
+def create_recipe_from_json(db: Session, data: dict, user_id: str) -> Recipe:
+    """Create a Recipe and related objects from JSON data."""
+    recipe_id = str(uuid.uuid4())
+
+    # Create the recipe
+    recipe = Recipe(
+        id=recipe_id,
+        author_id=user_id,
+        title=data.get("title", "Untitled Recipe"),
+        description=data.get("description"),
+        yield_quantity=data.get("yield_quantity", 4),
+        yield_unit=data.get("yield_unit", "servings"),
+        prep_time_minutes=data.get("prep_time_minutes"),
+        cook_time_minutes=data.get("cook_time_minutes"),
+        difficulty=data.get("difficulty"),
+        privacy_level="public",
+        source_url=data.get("source_url"),
+        source_name=data.get("source_name"),
+        cover_image_url=data.get("cover_image_url"),
+        status="published",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(recipe)
+
+    # Create ingredients
+    for idx, ing_data in enumerate(data.get("ingredients", [])):
+        ingredient = RecipeIngredient(
+            id=str(uuid.uuid4()),
+            recipe_id=recipe_id,
+            sort_order=idx,
+            name=ing_data.get("name", ""),
+            quantity=ing_data.get("quantity"),
+            quantity_max=ing_data.get("quantity_max"),
+            unit=ing_data.get("unit"),
+            preparation=ing_data.get("preparation"),
+            is_optional=ing_data.get("is_optional", False),
+            notes=ing_data.get("notes"),
+        )
+        db.add(ingredient)
+
+    # Create instructions
+    for inst_data in data.get("instructions", []):
+        instruction = RecipeInstruction(
+            id=str(uuid.uuid4()),
+            recipe_id=recipe_id,
+            step_number=inst_data.get("step_number", 1),
+            instruction_text=inst_data.get("instruction_text", ""),
+            duration_minutes=inst_data.get("duration_minutes"),
+        )
+        db.add(instruction)
+
+    # Handle tags - find or create
+    for tag_name in data.get("tags", []):
+        if not tag_name:
+            continue
+        # Try to find existing tag
+        tag = db.query(Tag).filter(Tag.name == tag_name).first()
+        if not tag:
+            # Create new tag
+            tag = Tag(
+                id=str(uuid.uuid4()),
+                name=tag_name,
+                is_system=False,
+            )
+            db.add(tag)
+            db.flush()  # Get the tag ID
+        recipe.tags.append(tag)
+
+    return recipe
+
+
 def create_admin(app):
     """Create and configure the admin interface"""
     # Create authentication backend
@@ -376,5 +534,8 @@ def create_admin(app):
     # Register meal plan views
     admin.add_view(MealPlanAdmin)
     admin.add_view(MealPlanShareAdmin)
+
+    # Register custom views
+    admin.add_view(RecipeImportView)
 
     return admin

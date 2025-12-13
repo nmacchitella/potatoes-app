@@ -149,6 +149,7 @@ class Recipe(Base):
     instructions = relationship("RecipeInstruction", back_populates="recipe", cascade="all, delete-orphan", order_by="RecipeInstruction.step_number")
     tags = relationship("Tag", secondary=recipe_tags, back_populates="recipes")
     collections = relationship("Collection", secondary=collection_recipes, back_populates="recipes")
+    meal_plans = relationship("MealPlan", back_populates="recipe", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class RecipeIngredient(Base):
@@ -312,7 +313,7 @@ class MealPlan(Base):
 
     # Relationships
     user = relationship("User", backref="meal_plans")
-    recipe = relationship("Recipe", backref="meal_plans")
+    recipe = relationship("Recipe", back_populates="meal_plans")
 
 
 class MealPlanShare(Base):

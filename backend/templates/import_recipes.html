@@ -1,0 +1,157 @@
+{% extends "sqladmin/layout.html" %}
+
+{% block content %}
+<div class="container-xl">
+    <div class="page-header d-print-none">
+        <div class="row align-items-center">
+            <div class="col-auto">
+                <h2 class="page-title">
+                    <i class="fa-solid fa-file-import me-2"></i>
+                    Import Recipes from JSON
+                </h2>
+            </div>
+        </div>
+    </div>
+
+    <div class="page-body">
+        {% if error %}
+        <div class="alert alert-danger alert-dismissible" role="alert">
+            <div class="d-flex">
+                <div><i class="fa-solid fa-exclamation-circle me-2"></i></div>
+                <div>{{ error }}</div>
+            </div>
+            <a class="btn-close" data-bs-dismiss="alert" aria-label="close"></a>
+        </div>
+        {% endif %}
+
+        {% if results %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Import Results</h3>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-auto">
+                        <span class="badge bg-success fs-6">{{ success_count }} successful</span>
+                    </div>
+                    {% if error_count > 0 %}
+                    <div class="col-auto">
+                        <span class="badge bg-danger fs-6">{{ error_count }} failed</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-vcenter card-table">
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th>Status</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in results %}
+                            <tr>
+                                <td>{{ result.filename }}</td>
+                                <td>
+                                    {% if result.status == 'success' %}
+                                    <span class="badge bg-success">Success</span>
+                                    {% elif result.status == 'error' %}
+                                    <span class="badge bg-danger">Error</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Skipped</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if result.status == 'success' %}
+                                    <a href="{{ request.url_for('admin:details', identity='recipe', pk=result.id) }}">{{ result.title }}</a>
+                                    {% else %}
+                                    {{ result.error }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Upload Recipe Files</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label required">Select User (Recipe Owner)</label>
+                        <select name="user_id" class="form-select" required>
+                            <option value="">-- Select a user --</option>
+                            {% for user in users %}
+                            <option value="{{ user.id }}" {% if selected_user and selected_user.id == user.id %}selected{% endif %}>
+                                {{ user.username or user.email }} ({{ user.email }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-hint">All imported recipes will be owned by this user.</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label required">Recipe JSON Files</label>
+                        <input type="file" name="files" class="form-control" accept=".json" multiple required>
+                        <small class="form-hint">
+                            Select one or more JSON files. Each file should contain a single recipe in the expected format.
+                        </small>
+                    </div>
+
+                    <div class="mb-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fa-solid fa-upload me-2"></i>
+                            Import Recipes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3 class="card-title">Expected JSON Format</h3>
+            </div>
+            <div class="card-body">
+<pre><code>{
+  "title": "Recipe Title",
+  "description": "A brief description",
+  "yield_quantity": 4,
+  "yield_unit": "servings",
+  "prep_time_minutes": 15,
+  "cook_time_minutes": 30,
+  "difficulty": "easy",
+  "source_url": "https://example.com/recipe",
+  "source_name": "Example Blog",
+  "cover_image_url": "https://example.com/image.jpg",
+  "tags": ["italian", "pasta"],
+  "ingredients": [
+    {
+      "name": "pasta",
+      "quantity": 400,
+      "unit": "g",
+      "preparation": null,
+      "is_optional": false
+    }
+  ],
+  "instructions": [
+    {
+      "step_number": 1,
+      "instruction_text": "Boil the pasta...",
+      "duration_minutes": 10
+    }
+  ]
+}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
