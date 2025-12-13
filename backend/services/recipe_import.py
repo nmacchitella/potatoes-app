@@ -834,7 +834,7 @@ For EACH recipe found, provide a JSON object with:
 - title: Recipe name
 - description: Brief description (1-2 sentences)
 - ingredients: Array of {{name, quantity (number or null), unit (string or null), preparation (string or null), is_optional (boolean)}}
-- instructions: Array of {{step_number, instruction_text, duration_minutes (number or null)}}
+- instructions: Array of {{step_number, instruction_text, duration_minutes (estimated minutes for this step, based on the action described)}}
 - yield_quantity: Number of servings (number or null if not mentioned)
 - yield_unit: Usually "servings" or "portions" (or null if not mentioned)
 - prep_time_minutes: Preparation time (number or null)
@@ -1080,7 +1080,7 @@ The JSON should be an object with a "recipes" array:
         {{
           "step_number": 1,
           "instruction_text": "Step description",
-          "duration_minutes": null
+          "duration_minutes": 5
         }}
       ],
       "tags": ["dinner", "quick"]
@@ -1089,6 +1089,7 @@ The JSON should be an object with a "recipes" array:
 }}
 
 Rules:
+- duration_minutes: ALWAYS estimate the time for each step based on the action (e.g., "chop onions" = 2-3 min, "simmer for 20 minutes" = 20, "let rest" = 5-10, "bring to boil" = 5-10). Never leave as null.
 - If there are multiple distinct recipes, include each one in the array
 - quantity should be a decimal number or null if not specified
 - quantity_max is only used for ranges like "1-2 cups"
@@ -1137,7 +1138,7 @@ The JSON should be an object with a "recipes" array containing one recipe:
         {{
           "step_number": 1,
           "instruction_text": "Step description",
-          "duration_minutes": null
+          "duration_minutes": 5
         }}
       ],
       "tags": ["dinner", "quick"]
@@ -1146,6 +1147,7 @@ The JSON should be an object with a "recipes" array containing one recipe:
 }}
 
 Rules:
+- duration_minutes: ALWAYS estimate the time for each step based on the action (e.g., "chop onions" = 2-3 min, "simmer for 20 minutes" = 20, "let rest" = 5-10, "bring to boil" = 5-10). Never leave as null.
 - quantity should be a decimal number or null if not specified
 - quantity_max is only used for ranges like "1-2 cups"
 - unit should be lowercase and singular (cup, tablespoon, teaspoon, gram, etc.)
