@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from database import engine, Base
 from config import settings, logger
-from routers import auth_router, google_auth, recipe_router, collection_router, tag_router, social_router, notification_router, ingredient_router, search_router, meal_plan_router
+from routers import auth_router, google_auth, recipe_router, collection_router, tag_router, social_router, notification_router, ingredient_router, search_router, meal_plan_router, admin_router
+from admin import create_admin
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -59,6 +60,10 @@ app.include_router(notification_router.router, prefix="/api")
 app.include_router(ingredient_router.router, prefix="/api")
 app.include_router(search_router.router, prefix="/api")
 app.include_router(meal_plan_router.router, prefix="/api")
+app.include_router(admin_router.router, prefix="/api")
+
+# Create admin interface (must be after app creation and middleware setup)
+admin = create_admin(app)
 
 
 @app.get("/")
