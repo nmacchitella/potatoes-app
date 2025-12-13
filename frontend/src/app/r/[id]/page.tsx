@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { recipeApi } from '@/lib/api';
 import { formatIngredient } from '@/lib/constants';
 import { useStore } from '@/store/useStore';
+import { YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
 import type { RecipeWithScale } from '@/types';
 
 export default function PublicRecipePage() {
@@ -161,12 +162,21 @@ export default function PublicRecipePage() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Left Column */}
           <div className="lg:col-span-1">
-            {/* Cover Image */}
-            {recipe.cover_image_url && (
+            {/* Cover Image / YouTube Embed */}
+            {recipe.source_url && isYouTubeUrl(recipe.source_url) ? (
+              <div className="mb-4">
+                <YouTubeEmbed
+                  sourceUrl={recipe.source_url}
+                  thumbnailUrl={recipe.cover_image_url}
+                  title={recipe.title}
+                  videoStartSeconds={recipe.video_start_seconds}
+                />
+              </div>
+            ) : recipe.cover_image_url ? (
               <div className="aspect-[4/3] rounded-lg overflow-hidden mb-4">
                 <img src={recipe.cover_image_url} alt={recipe.title} className="w-full h-full object-cover" />
               </div>
-            )}
+            ) : null}
 
             {/* Title */}
             <h1 className="font-serif text-2xl text-charcoal mb-1">{recipe.title}</h1>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { recipeApi, tagApi, collectionApi } from '@/lib/api';
+import { recipeApi, tagApi, collectionApi, getErrorMessage } from '@/lib/api';
 import { RecipeIngredientsEdit, RecipeInstructionsEdit } from '@/components/recipes';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { RecipeIngredientInput, RecipeInstructionInput, Tag, ParsedIngredient, RecipeImportResponse, Collection } from '@/types';
@@ -20,6 +20,7 @@ interface RecipeFormData {
   privacyLevel: 'private' | 'public';
   sourceUrl: string;
   coverImageUrl: string;
+  videoStartSeconds?: number;
   ingredients: RecipeIngredientInput[];
   instructions: RecipeInstructionInput[];
   selectedTagIds: string[];
@@ -64,6 +65,7 @@ const importResponseToFormData = (data: RecipeImportResponse, availableTags: Tag
     privacyLevel: 'public',
     sourceUrl: data.source_url || '',
     coverImageUrl: data.cover_image_url || '',
+    videoStartSeconds: data.video_start_seconds,
     ingredients: data.ingredients.length > 0
       ? data.ingredients.map((ing, idx) => ({
           name: ing.name,
@@ -299,6 +301,7 @@ function NewRecipeContent() {
         privacy_level: data.privacyLevel,
         source_url: data.sourceUrl || undefined,
         cover_image_url: data.coverImageUrl || undefined,
+        video_start_seconds: data.videoStartSeconds,
         status,
         ingredients: data.ingredients.filter(i => i.name).map((ing, idx) => ({
           ...ing,
@@ -334,8 +337,8 @@ function NewRecipeContent() {
           router.push(`/recipes/${recipe.id}`);
         }
       }
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to create recipe');
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Failed to create recipe'));
       setSaving(false);
     }
   };

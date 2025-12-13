@@ -7,13 +7,19 @@ Imports recipes from URLs by:
 3. Falling back to LLM (Gemini) parsing if no structured data found
 
 Also supports YouTube videos:
-- Extracts transcript from YouTube videos
-- Parses recipes from video transcripts (can handle multiple recipes)
+- First tries to extract transcript from YouTube captions
+- Falls back to audio transcription with Gemini if captions unavailable
+- Parses recipes from video content (can handle multiple recipes per video)
 """
 
 import json
 import re
 import httpx
+import subprocess
+import tempfile
+import os
+from datetime import datetime
+from pathlib import Path
 from typing import Optional, List, Tuple
 from dataclasses import dataclass, asdict
 from bs4 import BeautifulSoup
@@ -21,7 +27,9 @@ import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 
-from config import settings
+from config import settings, logger
+from database import SessionLocal
+from models import URLCheck
 
 
 @dataclass
@@ -48,8 +56,8 @@ class ImportedRecipe:
     description: Optional[str] = None
     ingredients: List[ImportedIngredient] = None
     instructions: List[ImportedInstruction] = None
-    yield_quantity: float = 4
-    yield_unit: str = "servings"
+    yield_quantity: Optional[float] = None  # None means not specified
+    yield_unit: Optional[str] = None
     prep_time_minutes: Optional[int] = None
     cook_time_minutes: Optional[int] = None
     difficulty: Optional[str] = None
@@ -57,6 +65,7 @@ class ImportedRecipe:
     source_name: Optional[str] = None
     cover_image_url: Optional[str] = None
     tags: List[str] = None  # Suggested tags based on content
+    video_start_seconds: Optional[int] = None  # For YouTube: when this recipe starts in the video
 
     def __post_init__(self):
         if self.ingredients is None:
@@ -384,17 +393,560 @@ def get_youtube_transcript(video_id: str) -> Tuple[str, str]:
         if not transcript_data:
             raise ValueError("No transcript available for this video")
 
-        # Combine all text segments - FetchedTranscript is iterable
-        full_text = ' '.join([entry.text for entry in transcript_data])
+        # Combine all text segments with timestamps - FetchedTranscript is iterable
+        # Format: [MM:SS] text so Gemini can identify when each segment starts
+        segments = []
+        for entry in transcript_data:
+            start_seconds = int(entry.start)
+            minutes = start_seconds // 60
+            seconds = start_seconds % 60
+            segments.append(f"[{minutes:02d}:{seconds:02d}] {entry.text}")
+        full_text = '\n'.join(segments)
 
         return full_text, ""
 
     except TranscriptsDisabled:
-        raise ValueError("This video has captions disabled. Try copying the recipe from the video description or comments and using 'Paste Recipe' instead.")
+        raise ValueError("TRANSCRIPT_UNAVAILABLE: Captions disabled")
     except NoTranscriptFound:
-        raise ValueError("This video doesn't have captions available. Try copying the recipe from the video description or comments and using 'Paste Recipe' instead.")
+        raise ValueError("TRANSCRIPT_UNAVAILABLE: No transcript found")
     except Exception as e:
-        raise ValueError(f"Couldn't get video transcript: {str(e)}. Try using 'Paste Recipe' with the recipe text instead.")
+        raise ValueError(f"TRANSCRIPT_UNAVAILABLE: {str(e)}")
+
+
+def get_youtube_video_info(video_id: str) -> dict:
+    """
+    Get video metadata including title and description using yt-dlp.
+    Returns dict with 'title', 'description', and 'uploader' fields.
+    """
+    try:
+        cmd = [
+            'yt-dlp',
+            '--dump-json',
+            '--no-download',
+            '--no-playlist',
+            f'https://www.youtube.com/watch?v={video_id}'
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+        if result.returncode != 0:
+            logger.warning(f"yt-dlp failed to get video info: {result.stderr}")
+            return {}
+
+        data = json.loads(result.stdout)
+        return {
+            'title': data.get('title', ''),
+            'description': data.get('description', ''),
+            'uploader': data.get('uploader', ''),
+            'channel': data.get('channel', ''),
+        }
+    except subprocess.TimeoutExpired:
+        logger.warning("yt-dlp timed out getting video info")
+        return {}
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        logger.warning(f"Failed to get video info: {e}")
+        return {}
+
+
+# Domains to ignore when looking for recipe URLs in video descriptions
+BLOCKED_DOMAINS = {
+    # Social media
+    'youtube.com', 'youtu.be', 'instagram.com', 'facebook.com', 'twitter.com',
+    'x.com', 'tiktok.com', 'pinterest.com', 'linkedin.com', 'threads.net',
+    # Shopping/affiliate
+    'amazon.com', 'amzn.to', 'amazon.it', 'amazon.co.uk', 'amazon.de',
+    'ebay.com', 'etsy.com', 'shopify.com',
+    # Link shorteners
+    'bit.ly', 'goo.gl', 't.co', 'tinyurl.com', 'ow.ly',
+    # Other non-recipe
+    'patreon.com', 'ko-fi.com', 'buymeacoffee.com', 'paypal.com',
+    'discord.gg', 'discord.com', 'twitch.tv', 'spotify.com',
+    'apple.com', 'music.apple.com', 'podcasts.apple.com',
+}
+
+
+def extract_urls_from_text(text: str) -> List[str]:
+    """Extract all URLs from a text string."""
+    # Match http/https URLs
+    url_pattern = r'https?://[^\s<>"\')\]]+[^\s<>"\')\].,;:!?]'
+    urls = re.findall(url_pattern, text)
+    # Clean up any trailing punctuation that might have slipped through
+    cleaned = []
+    for url in urls:
+        # Remove trailing punctuation that's likely not part of the URL
+        url = re.sub(r'[.,;:!?)]+$', '', url)
+        if url:
+            cleaned.append(url)
+    return cleaned
+
+
+def get_url_domain(url: str) -> str:
+    """Extract the domain from a URL."""
+    try:
+        # Simple domain extraction without urllib
+        match = re.match(r'https?://(?:www\.)?([^/]+)', url)
+        if match:
+            return match.group(1).lower()
+    except Exception:
+        pass
+    return ''
+
+
+def filter_and_prioritize_recipe_urls(urls: List[str]) -> List[str]:
+    """
+    Filter out blocked domains and prioritize URLs likely to contain recipes.
+    Returns URLs sorted by likelihood of containing a recipe.
+    """
+    # Filter out blocked domains
+    filtered = []
+    for url in urls:
+        domain = get_url_domain(url)
+        # Check if domain matches any blocked domain
+        is_blocked = any(
+            domain == blocked or domain.endswith('.' + blocked)
+            for blocked in BLOCKED_DOMAINS
+        )
+        if not is_blocked:
+            filtered.append(url)
+
+    # Prioritize URLs with recipe indicators in path
+    def recipe_priority(url: str) -> int:
+        url_lower = url.lower()
+        # Highest priority: "recipe" or "recipes" in path
+        if '/recipe' in url_lower or '/recipes' in url_lower:
+            return 0
+        # High priority: other recipe-related terms
+        if any(term in url_lower for term in ['/ricetta', '/ricette', '/recette', '/rezept']):
+            return 1
+        # Medium priority: blog/article paths (often have recipes)
+        if any(term in url_lower for term in ['/blog', '/article', '/post']):
+            return 2
+        # Lower priority: everything else
+        return 3
+
+    filtered.sort(key=recipe_priority)
+    return filtered
+
+
+async def fetch_recipe_json_ld_from_url(url: str) -> Optional[dict]:
+    """
+    Fetch a URL and extract JSON-LD Recipe schema if present.
+    Returns the JSON-LD data dict or None if not found/failed.
+    """
+    try:
+        html, _ = await fetch_url_content(url)
+        json_ld = extract_json_ld_recipe(html)
+        if json_ld:
+            logger.info(f"Found JSON-LD Recipe at {url}")
+            return json_ld
+        else:
+            logger.debug(f"No JSON-LD Recipe found at {url}")
+            return None
+    except Exception as e:
+        logger.warning(f"Failed to fetch recipe from {url}: {e}")
+        return None
+
+
+# In-memory cache for URLs checked (populated from database)
+_checked_urls_cache: Optional[set] = None
+
+
+def get_checked_urls_without_recipes() -> set:
+    """
+    Load URLs that we've already checked and found to have no recipe.
+    These can be skipped in future checks to save time.
+    Uses database for persistent storage across sessions and production.
+    """
+    global _checked_urls_cache
+    if _checked_urls_cache is not None:
+        return _checked_urls_cache
+
+    _checked_urls_cache = set()
+
+    try:
+        db = SessionLocal()
+        try:
+            # Query all URLs that don't have recipes
+            results = db.query(URLCheck.url).filter(URLCheck.has_recipe == False).all()
+            _checked_urls_cache = {row[0] for row in results}
+            logger.info(f"Loaded {len(_checked_urls_cache)} previously checked URLs without recipes from database")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"Failed to load checked URLs from database: {e}")
+
+    return _checked_urls_cache
+
+
+def log_url_check(url: str, has_recipe: bool, error: Optional[str] = None):
+    """
+    Log URL check results to the database.
+    This helps identify domains that should be added to the blocklist.
+    """
+    global _checked_urls_cache
+    domain = get_url_domain(url)
+
+    try:
+        db = SessionLocal()
+        try:
+            # Upsert: insert or update if exists
+            existing = db.query(URLCheck).filter(URLCheck.url == url).first()
+            if existing:
+                existing.has_recipe = has_recipe
+                existing.error = error[:500] if error else None
+                existing.checked_at = datetime.now()
+            else:
+                url_check = URLCheck(
+                    url=url[:2048],
+                    domain=domain[:255],
+                    has_recipe=has_recipe,
+                    error=error[:500] if error else None
+                )
+                db.add(url_check)
+            db.commit()
+
+            # Update in-memory cache
+            if _checked_urls_cache is not None:
+                if has_recipe:
+                    _checked_urls_cache.discard(url)
+                else:
+                    _checked_urls_cache.add(url)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"Failed to log URL check to database: {e}")
+
+
+async def find_linked_recipe_data(description: str) -> Tuple[Optional[dict], Optional[str]]:
+    """
+    Search for recipe URLs in a video description and fetch JSON-LD data.
+    Returns (json_ld_data, source_url) or (None, None) if not found.
+
+    Skips URLs that were previously checked and found to have no recipe.
+    """
+    urls = extract_urls_from_text(description)
+    if not urls:
+        return None, None
+
+    prioritized = filter_and_prioritize_recipe_urls(urls)
+    if not prioritized:
+        logger.debug("No candidate recipe URLs found in description")
+        return None, None
+
+    # Filter out URLs we've already checked and found to have no recipe
+    checked_urls = get_checked_urls_without_recipes()
+    unchecked = [url for url in prioritized if url not in checked_urls]
+
+    skipped_count = len(prioritized) - len(unchecked)
+    if skipped_count > 0:
+        logger.info(f"Skipping {skipped_count} previously checked URLs without recipes")
+
+    if not unchecked:
+        logger.debug("All candidate URLs were previously checked (no recipes)")
+        return None, None
+
+    logger.info(f"Found {len(unchecked)} candidate recipe URLs to check...")
+
+    # Try top 3 unchecked URLs (in case first few fail)
+    for url in unchecked[:3]:
+        json_ld = await fetch_recipe_json_ld_from_url(url)
+        if json_ld:
+            log_url_check(url, has_recipe=True)
+            return json_ld, url
+        else:
+            log_url_check(url, has_recipe=False)
+
+    return None, None
+
+
+def download_youtube_audio(video_id: str) -> str:
+    """
+    Download audio from a YouTube video using yt-dlp.
+    Returns the path to the downloaded audio file.
+    """
+    # Create a temporary directory for the audio file
+    temp_dir = tempfile.mkdtemp()
+    output_path = os.path.join(temp_dir, f"{video_id}.m4a")
+
+    try:
+        # Use yt-dlp to download audio only in m4a format (good quality, small size)
+        cmd = [
+            'yt-dlp',
+            '-f', 'bestaudio[ext=m4a]/bestaudio',
+            '-o', output_path,
+            '--no-playlist',
+            '--quiet',
+            f'https://www.youtube.com/watch?v={video_id}'
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+
+        if result.returncode != 0:
+            raise ValueError(f"yt-dlp failed: {result.stderr}")
+
+        # Check if file was created (might have different extension)
+        if os.path.exists(output_path):
+            return output_path
+
+        # Check for other audio formats
+        for ext in ['.webm', '.opus', '.mp3', '.wav']:
+            alt_path = os.path.join(temp_dir, f"{video_id}{ext}")
+            if os.path.exists(alt_path):
+                return alt_path
+
+        # List what was actually downloaded
+        files = os.listdir(temp_dir)
+        if files:
+            return os.path.join(temp_dir, files[0])
+
+        raise ValueError("No audio file was downloaded")
+
+    except subprocess.TimeoutExpired:
+        raise ValueError("Audio download timed out")
+    except FileNotFoundError:
+        raise ValueError("yt-dlp not installed. Install with: pip install yt-dlp")
+
+
+async def transcribe_audio_with_gemini(
+    audio_path: str,
+    url: str,
+    video_description: Optional[str] = None,
+    video_title: Optional[str] = None,
+    linked_recipe_json_ld: Optional[dict] = None,
+    linked_recipe_url: Optional[str] = None
+) -> List[ImportedRecipe]:
+    """
+    Transcribe audio and extract recipes using Gemini's audio understanding.
+    This combines transcription and recipe extraction in one API call.
+
+    Data sources (in order of reliability for quantities):
+    1. linked_recipe_json_ld - Structured data from a linked recipe page (most precise)
+    2. video_description - Often contains ingredient lists
+    3. audio - The actual cooking video audio (best for techniques/instructions)
+
+    Gemini will intelligently combine all available sources.
+    """
+    if not settings.gemini_api_key:
+        raise ValueError("Gemini API key not configured")
+
+    genai.configure(api_key=settings.gemini_api_key)
+
+    # Define JSON schema for structured output
+    recipe_schema = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "description": {"type": "string"},
+                "ingredients": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "quantity": {"type": "number"},
+                            "unit": {"type": "string"},
+                            "preparation": {"type": "string"},
+                            "is_optional": {"type": "boolean"}
+                        },
+                        "required": ["name"]
+                    }
+                },
+                "instructions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "step_number": {"type": "integer"},
+                            "instruction_text": {"type": "string"},
+                            "duration_minutes": {"type": "integer"}
+                        },
+                        "required": ["step_number", "instruction_text"]
+                    }
+                },
+                "yield_quantity": {"type": "number"},
+                "yield_unit": {"type": "string"},
+                "prep_time_minutes": {"type": "integer"},
+                "cook_time_minutes": {"type": "integer"},
+                "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"]},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "video_start_seconds": {"type": "integer"}
+            },
+            "required": ["title", "description", "ingredients", "instructions", "tags", "difficulty", "video_start_seconds"]
+        }
+    }
+
+    # Upload the audio file to Gemini
+    logger.info(f"Uploading audio file for transcription: {audio_path}")
+    audio_file = genai.upload_file(audio_path)
+
+    # Use Gemini to transcribe and extract recipe
+    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+
+    # Build prompt with all available data sources
+    sources_intro = "You have access to the following data sources:\n\n"
+
+    # Source 1: Linked recipe page (highest priority for structured data)
+    linked_recipe_context = ""
+    if linked_recipe_json_ld:
+        linked_text = json_ld_to_text(linked_recipe_json_ld)
+        linked_recipe_context = f"""=== SOURCE 1: LINKED RECIPE PAGE (from {linked_recipe_url}) ===
+This is structured recipe data from a linked webpage. Use this as the PRIMARY source for:
+- Precise ingredient quantities and measurements
+- Cooking times
+- Servings/yield
+
+{linked_text[:4000]}
+=== END SOURCE 1 ===
+
+"""
+
+    # Source 2: Video description
+    description_context = ""
+    if video_description:
+        description_context = f"""=== SOURCE 2: VIDEO DESCRIPTION ===
+May contain ingredient lists, recipe notes, or additional context.
+
+{video_description[:3000]}
+=== END SOURCE 2 ===
+
+"""
+
+    # Source 3: Audio (always present)
+    audio_context = """=== SOURCE 3: VIDEO AUDIO ===
+The attached audio file. Use this as the PRIMARY source for:
+- Cooking techniques and tips
+- Step-by-step instructions
+- Chef's notes and variations
+=== END AUDIO SOURCE ===
+
+"""
+
+    title_context = ""
+    if video_title:
+        title_context = f"Video title: {video_title}\n\n"
+
+    prompt = f"""You are a recipe extraction assistant. Extract the recipe from this cooking video by combining multiple data sources.
+
+{title_context}{sources_intro}{linked_recipe_context}{description_context}{audio_context}
+For EACH recipe found, provide a JSON object with:
+- title: Recipe name
+- description: Brief description (1-2 sentences)
+- ingredients: Array of {{name, quantity (number or null), unit (string or null), preparation (string or null), is_optional (boolean)}}
+- instructions: Array of {{step_number, instruction_text, duration_minutes (number or null)}}
+- yield_quantity: Number of servings (number or null if not mentioned)
+- yield_unit: Usually "servings" or "portions" (or null if not mentioned)
+- prep_time_minutes: Preparation time (number or null)
+- cook_time_minutes: Cooking time (number or null)
+- difficulty: "easy", "medium", or "hard"
+- tags: Array of relevant tags like cuisine type, meal type, dietary info
+- video_start_seconds: The timestamp in seconds when this recipe starts in the audio
+
+IMPORTANT - How to combine sources:
+- For QUANTITIES: Prefer the LINKED RECIPE PAGE if available, then video description, then audio
+- For INSTRUCTIONS: Prefer the AUDIO (it has the actual cooking demonstration with tips)
+- For TIMES: Prefer the LINKED RECIPE PAGE if available
+- If sources conflict, use your judgment to pick the most sensible value
+- Include ALL ingredients and steps from ALL sources
+- If multiple recipes are shown, return an array with each recipe as a separate object
+- If only one recipe, still return it as an array with one object
+- video_start_seconds: Identify when each recipe section begins in the audio (in seconds from start)
+- Return ONLY valid JSON, no markdown or explanations
+- CRITICAL for ingredients: If a quantity or unit is unknown, unspecified, or "to taste", set quantity to null and unit to null. Do NOT use placeholder text like "amount needed", "as needed", "to taste", or similar phrases as the unit value.
+
+Respond with a JSON array of recipe objects."""
+
+    try:
+        response = model.generate_content(
+            [audio_file, prompt],
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+                response_schema=recipe_schema,
+                temperature=0.1,
+            )
+        )
+
+        # Parse the response
+        response_text = response.text.strip()
+
+        # Debug: log raw response
+        logger.debug(f"Raw Gemini audio response:\n{response_text[:2000]}")
+
+        # Clean up response if needed
+        if response_text.startswith('```'):
+            response_text = re.sub(r'^```(?:json)?\n?', '', response_text)
+            response_text = re.sub(r'\n?```$', '', response_text)
+
+        recipes_data = json.loads(response_text)
+
+        # Debug: log parsed JSON
+        logger.info(f"Parsed {len(recipes_data) if isinstance(recipes_data, list) else 1} recipe(s) from audio")
+
+        # Ensure it's a list
+        if isinstance(recipes_data, dict):
+            recipes_data = [recipes_data]
+
+        # Convert to ImportedRecipe objects
+        recipes = []
+        for data in recipes_data:
+            # Debug: log each recipe's key fields
+            logger.debug(f"Recipe data: title={data.get('title')}, yield_quantity={data.get('yield_quantity')}")
+            ingredients = [
+                ImportedIngredient(
+                    name=ing.get('name', ''),
+                    quantity=ing.get('quantity') or None,  # Convert 0 to None (schema requires gt=0)
+                    unit=ing.get('unit'),
+                    preparation=ing.get('preparation'),
+                    is_optional=ing.get('is_optional', False)
+                )
+                for ing in data.get('ingredients', [])
+            ]
+
+            instructions = [
+                ImportedInstruction(
+                    step_number=inst.get('step_number', idx + 1),
+                    instruction_text=inst.get('instruction_text', ''),
+                    duration_minutes=inst.get('duration_minutes')
+                )
+                for idx, inst in enumerate(data.get('instructions', []))
+            ]
+
+            recipe = ImportedRecipe(
+                title=data.get('title') or 'Untitled Recipe',
+                description=data.get('description'),
+                ingredients=ingredients,
+                instructions=instructions,
+                yield_quantity=data.get('yield_quantity'),  # None if not specified
+                yield_unit=data.get('yield_unit'),
+                prep_time_minutes=data.get('prep_time_minutes'),
+                cook_time_minutes=data.get('cook_time_minutes'),
+                difficulty=data.get('difficulty'),
+                source_url=url,
+                source_name=None,  # Will be set to video uploader by caller
+                tags=data.get('tags') or [],
+                video_start_seconds=data.get('video_start_seconds')
+            )
+            recipes.append(recipe)
+
+        return recipes
+
+    finally:
+        # Clean up: delete the uploaded file from Gemini
+        try:
+            audio_file.delete()
+        except Exception:
+            pass
+
+        # Clean up: delete the local audio file and temp directory
+        try:
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            temp_dir = os.path.dirname(audio_path)
+            if os.path.exists(temp_dir) and not os.listdir(temp_dir):
+                os.rmdir(temp_dir)
+        except Exception:
+            pass
 
 
 async def parse_with_gemini(text: str, url: str, allow_multiple: bool = False) -> List[ImportedRecipe]:
@@ -409,6 +961,60 @@ async def parse_with_gemini(text: str, url: str, allow_multiple: bool = False) -
 
     # Use Gemini with structured output
     model = genai.GenerativeModel('gemini-2.0-flash-exp')
+
+    # Define JSON schema for structured output
+    recipe_schema = {
+        "type": "object",
+        "properties": {
+            "recipes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "description": {"type": "string"},
+                        "ingredients": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "quantity": {"type": "number"},
+                                    "quantity_max": {"type": "number"},
+                                    "unit": {"type": "string"},
+                                    "preparation": {"type": "string"},
+                                    "is_optional": {"type": "boolean"},
+                                    "notes": {"type": "string"}
+                                },
+                                "required": ["name"]
+                            }
+                        },
+                        "instructions": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "step_number": {"type": "integer"},
+                                    "instruction_text": {"type": "string"},
+                                    "duration_minutes": {"type": "integer"}
+                                },
+                                "required": ["step_number", "instruction_text"]
+                            }
+                        },
+                        "yield_quantity": {"type": "number"},
+                        "yield_unit": {"type": "string"},
+                        "prep_time_minutes": {"type": "integer"},
+                        "cook_time_minutes": {"type": "integer"},
+                        "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"]},
+                        "tags": {"type": "array", "items": {"type": "string"}},
+                        "video_start_seconds": {"type": "integer"}
+                    },
+                    "required": ["title", "description", "ingredients", "instructions", "tags", "difficulty", "video_start_seconds"]
+                }
+            }
+        },
+        "required": ["recipes"]
+    }
 
     if allow_multiple:
         prompt = f"""Extract ALL recipe information from this content and return it as JSON.
@@ -425,6 +1031,7 @@ The JSON should be an object with a "recipes" array:
       "prep_time_minutes": 15,
       "cook_time_minutes": 30,
       "difficulty": "easy",
+      "video_start_seconds": 120,
       "ingredients": [
         {{
           "name": "ingredient name",
@@ -456,9 +1063,13 @@ Rules:
 - preparation is things like "chopped", "diced", "melted" - extract from ingredient text
 - difficulty should be "easy", "medium", or "hard" (guess based on complexity)
 - tags should be relevant categories like meal type, cuisine, dietary info (maximum 5 tags)
+- video_start_seconds: The timestamp (in seconds) when this recipe starts in the content.
+  Look for [MM:SS] timestamps in the transcript and convert to seconds (e.g., [02:30] = 150 seconds).
+  Use 0 if it's the first/only recipe or if no timestamps are available.
 - If information is not available, use null
 - Parse ALL ingredients and ALL instructions for each recipe
 - Even if there's only one recipe, still return it in the recipes array
+- CRITICAL: If a quantity or unit is unknown, unspecified, or "to taste", set quantity to null and unit to null. Do NOT use placeholder text like "amount needed", "as needed", "to taste", or similar phrases as unit values.
 
 Content:
 {text[:20000]}
@@ -510,6 +1121,7 @@ Rules:
 - tags should be relevant categories like meal type, cuisine, dietary info (maximum 5 tags)
 - If information is not available, use null
 - Parse ALL ingredients and ALL instructions from the recipe
+- CRITICAL: If a quantity or unit is unknown, unspecified, or "to taste", set quantity to null and unit to null. Do NOT use placeholder text like "amount needed", "as needed", "to taste", or similar phrases as unit values.
 
 Webpage content:
 {text[:15000]}
@@ -520,19 +1132,13 @@ Return ONLY the JSON, no other text."""
         prompt,
         generation_config=genai.GenerationConfig(
             response_mime_type="application/json",
+            response_schema=recipe_schema,
+            temperature=0.1,
         )
     )
 
-    # Parse the response
-    try:
-        data = json.loads(response.text)
-    except json.JSONDecodeError:
-        # Try to extract JSON from response if it has extra text
-        json_match = re.search(r'\{[\s\S]*\}', response.text)
-        if json_match:
-            data = json.loads(json_match.group())
-        else:
-            raise ValueError("Failed to parse Gemini response as JSON")
+    # Parse the response - with schema enforcement, JSON should always be valid
+    data = json.loads(response.text)
 
     # Handle both old format (single recipe) and new format (recipes array)
     recipes_data = data.get('recipes', [data] if 'title' in data else [])
@@ -542,8 +1148,8 @@ Return ONLY the JSON, no other text."""
         ingredients = [
             ImportedIngredient(
                 name=ing.get('name', ''),
-                quantity=ing.get('quantity'),
-                quantity_max=ing.get('quantity_max'),
+                quantity=ing.get('quantity') or None,  # Convert 0 to None (schema requires gt=0)
+                quantity_max=ing.get('quantity_max') or None,  # Same for quantity_max
                 unit=ing.get('unit'),
                 preparation=ing.get('preparation'),
                 is_optional=ing.get('is_optional', False),
@@ -572,13 +1178,14 @@ Return ONLY the JSON, no other text."""
             description=recipe_data.get('description'),
             ingredients=ingredients,
             instructions=instructions,
-            yield_quantity=recipe_data.get('yield_quantity') or 4,
-            yield_unit=recipe_data.get('yield_unit') or 'servings',
+            yield_quantity=recipe_data.get('yield_quantity'),  # None if not specified
+            yield_unit=recipe_data.get('yield_unit'),
             prep_time_minutes=safe_int(recipe_data.get('prep_time_minutes')),
             cook_time_minutes=safe_int(recipe_data.get('cook_time_minutes')),
             difficulty=recipe_data.get('difficulty'),
             source_url=url,
             tags=recipe_data.get('tags', []),
+            video_start_seconds=safe_int(recipe_data.get('video_start_seconds')),
         ))
 
     return recipes if recipes else [ImportedRecipe(title="Untitled Recipe", source_url=url)]
@@ -697,12 +1304,13 @@ def json_ld_to_text(data: dict) -> str:
     return '\n'.join(parts)
 
 
-async def import_recipe_from_url(url: str) -> List[ImportedRecipe]:
+async def import_recipe_from_url(url: str, use_audio_fallback: bool = True) -> List[ImportedRecipe]:
     """
     Main entry point: import recipe(s) from a URL.
 
     For YouTube videos:
-    - Extracts the transcript
+    - First tries to extract transcript from captions
+    - Falls back to audio transcription with Gemini if captions unavailable
     - Parses with Gemini (can return multiple recipes)
 
     For regular URLs:
@@ -717,18 +1325,86 @@ async def import_recipe_from_url(url: str) -> List[ImportedRecipe]:
         if not video_id:
             raise ValueError("Could not extract video ID from YouTube URL")
 
-        transcript, _ = get_youtube_transcript(video_id)
-        if len(transcript) < 100:
-            raise ValueError("The video transcript is too short to extract a recipe. Try using 'Paste Recipe' with the recipe details instead.")
-
-        # Parse with Gemini, allowing multiple recipes
-        recipes = await parse_with_gemini(transcript, url, allow_multiple=True)
-
-        # Add YouTube thumbnail to all recipes
         thumbnail_url = get_youtube_thumbnail_url(video_id)
+        recipes = None
+
+        # Fetch video metadata (title, description) for better extraction
+        logger.info(f"Fetching video metadata for {video_id}...")
+        video_info = get_youtube_video_info(video_id)
+        video_description = video_info.get('description', '')
+        video_title = video_info.get('title', '')
+        video_uploader = video_info.get('uploader') or video_info.get('channel', '')
+
+        if video_description:
+            logger.info(f"Got video description ({len(video_description)} chars)")
+
+        # Search for linked recipe URLs in the description
+        linked_json_ld = None
+        linked_recipe_url = None
+        if video_description:
+            logger.info("Searching for recipe URLs in description...")
+            linked_json_ld, linked_recipe_url = await find_linked_recipe_data(video_description)
+            if linked_json_ld:
+                logger.info(f"Found linked recipe data from {linked_recipe_url}")
+
+        # Try transcript first
+        try:
+            transcript, _ = get_youtube_transcript(video_id)
+            if len(transcript) >= 100:
+                # Combine all available sources for better context
+                parts = []
+
+                # Include linked recipe data if available (highest priority for quantities)
+                if linked_json_ld:
+                    linked_text = json_ld_to_text(linked_json_ld)
+                    parts.append(f"LINKED RECIPE PAGE (from {linked_recipe_url}):\n{linked_text}")
+
+                # Include video description
+                if video_description:
+                    parts.append(f"VIDEO DESCRIPTION:\n{video_description}")
+
+                # Include transcript
+                parts.append(f"TRANSCRIPT:\n{transcript}")
+
+                combined_text = "\n\n".join(parts)
+
+                # Parse with Gemini, allowing multiple recipes
+                recipes = await parse_with_gemini(combined_text, url, allow_multiple=True)
+                logger.info(f"Extracted {len(recipes)} recipes from transcript")
+        except ValueError as e:
+            error_msg = str(e)
+            if "TRANSCRIPT_UNAVAILABLE" in error_msg and use_audio_fallback:
+                logger.info(f"Transcript unavailable for {video_id}, trying audio transcription...")
+            else:
+                raise
+
+        # Fall back to audio transcription if transcript failed
+        if recipes is None and use_audio_fallback:
+            logger.info(f"Downloading audio for {video_id}...")
+            audio_path = download_youtube_audio(video_id)
+            logger.info(f"Transcribing audio with Gemini...")
+            recipes = await transcribe_audio_with_gemini(
+                audio_path,
+                url,
+                video_description=video_description,
+                video_title=video_title,
+                linked_recipe_json_ld=linked_json_ld,
+                linked_recipe_url=linked_recipe_url
+            )
+            logger.info(f"Extracted {len(recipes)} recipes from audio")
+
+        if recipes is None:
+            raise ValueError("Could not extract recipes from this video")
+
+        # Add YouTube thumbnail and source info to all recipes
         for recipe in recipes:
             if not recipe.cover_image_url:
                 recipe.cover_image_url = thumbnail_url
+            # Use video uploader as source name if not already set
+            if not recipe.source_name and video_uploader:
+                recipe.source_name = video_uploader
+            elif not recipe.source_name:
+                recipe.source_name = "YouTube"
 
         return recipes
 
@@ -782,4 +1458,5 @@ def recipe_to_dict(recipe: ImportedRecipe) -> dict:
         'source_name': recipe.source_name,
         'cover_image_url': recipe.cover_image_url,
         'tags': recipe.tags,
+        'video_start_seconds': recipe.video_start_seconds,
     }

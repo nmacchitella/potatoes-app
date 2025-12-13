@@ -44,7 +44,28 @@ export function isAxiosError(error: unknown): error is AxiosError<ApiErrorRespon
  */
 export function getErrorMessage(error: unknown, fallback = 'An error occurred'): string {
   if (isAxiosError(error)) {
-    return error.response?.data?.detail || error.response?.data?.message || error.message || fallback;
+    const detail = error.response?.data?.detail;
+
+    // Handle Pydantic validation errors (array of objects)
+    if (Array.isArray(detail)) {
+      // Extract first error message, or summarize
+      const firstError = detail[0];
+      if (firstError?.msg) {
+        // Format: "field: message" or just "message"
+        const loc = firstError.loc?.slice(-1)[0]; // Get last part of location
+        return loc && typeof loc === 'string'
+          ? `${loc}: ${firstError.msg}`
+          : firstError.msg;
+      }
+      return `Validation error: ${detail.length} field(s) invalid`;
+    }
+
+    // Handle string detail or message
+    if (typeof detail === 'string') {
+      return detail;
+    }
+
+    return error.response?.data?.message || error.message || fallback;
   }
   if (error instanceof Error) {
     return error.message;

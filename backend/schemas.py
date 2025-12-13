@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 
@@ -207,6 +207,14 @@ class RecipeIngredientBase(BaseModel):
     ingredient_group: Optional[str] = None
     notes: Optional[str] = None
 
+    @field_validator('quantity', 'quantity_max', mode='before')
+    @classmethod
+    def convert_zero_to_none(cls, v):
+        """Convert 0 to None since quantity=0 doesn't make sense."""
+        if v == 0:
+            return None
+        return v
+
     @model_validator(mode='after')
     def validate_quantity_range(self):
         if self.quantity is not None and self.quantity_max is not None:
@@ -359,8 +367,8 @@ class SharedCollection(BaseModel):
 class RecipeBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
-    yield_quantity: float = 4
-    yield_unit: str = "servings"
+    yield_quantity: Optional[float] = None  # None means not specified
+    yield_unit: Optional[str] = None
     prep_time_minutes: Optional[int] = None
     cook_time_minutes: Optional[int] = None
     difficulty: Optional[str] = None
@@ -368,6 +376,7 @@ class RecipeBase(BaseModel):
     source_url: Optional[str] = None
     source_name: Optional[str] = None
     cover_image_url: Optional[str] = None
+    video_start_seconds: Optional[int] = None  # For YouTube: when this recipe starts in the video
 
 
 class RecipeCreate(RecipeBase):
@@ -412,8 +421,8 @@ class RecipeSummary(BaseModel):
     title: str
     description: Optional[str] = None
     cover_image_url: Optional[str] = None
-    yield_quantity: float
-    yield_unit: str
+    yield_quantity: Optional[float] = None  # None means not specified
+    yield_unit: Optional[str] = None
     prep_time_minutes: Optional[int] = None
     cook_time_minutes: Optional[int] = None
     difficulty: Optional[str] = None
@@ -466,7 +475,7 @@ class Recipe(RecipeBase):
 class RecipeWithScale(Recipe):
     """Recipe with scaled ingredients"""
     scale_factor: float = 1.0
-    scaled_yield_quantity: float = 4
+    scaled_yield_quantity: Optional[float] = None
     cloned_by_me: Optional[ClonedByMeInfo] = None
 
 
@@ -572,8 +581,8 @@ class RecipeImportResponse(BaseModel):
     description: Optional[str] = None
     ingredients: List[ImportedIngredient] = []
     instructions: List[ImportedInstruction] = []
-    yield_quantity: float = 4
-    yield_unit: str = "servings"
+    yield_quantity: Optional[float] = None  # None means not specified
+    yield_unit: Optional[str] = None
     prep_time_minutes: Optional[int] = None
     cook_time_minutes: Optional[int] = None
     difficulty: Optional[str] = None
@@ -581,6 +590,7 @@ class RecipeImportResponse(BaseModel):
     source_name: Optional[str] = None
     cover_image_url: Optional[str] = None
     tags: List[str] = []
+    video_start_seconds: Optional[int] = None  # For YouTube: when this recipe starts in the video
 
 
 class RecipeImportMultiResponse(BaseModel):

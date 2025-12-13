@@ -185,6 +185,7 @@ export interface Recipe extends RecipeSummary {
   author_id: string;
   source_url?: string;
   source_name?: string;
+  video_start_seconds?: number;
   notes?: string;
   ingredients: RecipeIngredient[];
   instructions: RecipeInstruction[];
@@ -209,6 +210,7 @@ export interface RecipeCreateInput {
   privacy_level?: 'private' | 'public';
   source_url?: string;
   source_name?: string;
+  video_start_seconds?: number;
   cover_image_url?: string;
   notes?: string;
   status?: 'draft' | 'published';
@@ -375,6 +377,7 @@ export interface RecipeImportResponse {
   difficulty?: 'easy' | 'medium' | 'hard';
   source_url?: string;
   source_name?: string;
+  video_start_seconds?: number;
   cover_image_url?: string;
   tags: string[];
 }

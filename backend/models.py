@@ -124,8 +124,8 @@ class Recipe(Base):
     author_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
-    yield_quantity = Column(Float, default=4)
-    yield_unit = Column(String(50), default="servings")
+    yield_quantity = Column(Float, nullable=True)  # None means not specified
+    yield_unit = Column(String(50), nullable=True)
     prep_time_minutes = Column(Integer, nullable=True)
     cook_time_minutes = Column(Integer, nullable=True)
     difficulty = Column(String(20), nullable=True)  # easy, medium, hard
@@ -133,6 +133,7 @@ class Recipe(Base):
     source_url = Column(String(500), nullable=True)
     source_name = Column(String(200), nullable=True)
     cover_image_url = Column(String(500), nullable=True)
+    video_start_seconds = Column(Integer, nullable=True)  # For YouTube: when this recipe starts in the video
     status = Column(String(20), default="published")  # draft, published
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -333,3 +334,21 @@ class MealPlanShare(Base):
     # Relationships
     owner = relationship("User", foreign_keys=[owner_id], backref="meal_plan_shares_given")
     shared_with = relationship("User", foreign_keys=[shared_with_id], backref="meal_plan_shares_received")
+
+
+# ============================================================================
+# URL CHECK CACHE
+# ============================================================================
+
+class URLCheck(Base):
+    """
+    Cache of URLs checked for recipe data.
+    Used to avoid re-checking URLs we know don't have recipes.
+    """
+    __tablename__ = "url_checks"
+
+    url = Column(String(2048), primary_key=True)
+    domain = Column(String(255), nullable=False, index=True)
+    has_recipe = Column(Boolean, nullable=False, default=False)
+    error = Column(String(500), nullable=True)
+    checked_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -132,6 +132,7 @@ async def create_recipe(
         source_url=recipe_data.source_url,
         source_name=recipe_data.source_name,
         cover_image_url=recipe_data.cover_image_url,
+        video_start_seconds=recipe_data.video_start_seconds,
         status=recipe_data.status,
     )
     db.add(recipe)
@@ -189,7 +190,7 @@ async def get_recipe(
 
     # Calculate scale factor
     scale_factor = scale if scale else 1.0
-    scaled_yield = recipe.yield_quantity * scale_factor
+    scaled_yield = recipe.yield_quantity * scale_factor if recipe.yield_quantity else None
 
     # Build response with scaled data
     response = RecipeWithScale.model_validate(recipe)

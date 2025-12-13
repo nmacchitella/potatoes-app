@@ -9,7 +9,7 @@ import { abbreviateUnit, formatQuantity } from '@/lib/constants';
 import { convertIngredient, type UnitSystem } from '@/lib/unitConversion';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
-import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit } from '@/components/recipes';
+import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit, YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
 import type { RecipeWithScale, Collection, RecipeIngredient, RecipeIngredientInput, RecipeInstructionInput } from '@/types';
 
 /**
@@ -396,6 +396,15 @@ export default function RecipeDetailPage() {
                     />
                   </div>
                 )}
+              </div>
+            ) : recipe.source_url && isYouTubeUrl(recipe.source_url) ? (
+              <div className="mb-4">
+                <YouTubeEmbed
+                  sourceUrl={recipe.source_url}
+                  thumbnailUrl={recipe.cover_image_url}
+                  title={recipe.title}
+                  videoStartSeconds={recipe.video_start_seconds}
+                />
               </div>
             ) : recipe.cover_image_url ? (
               <div className="aspect-[4/3] rounded-lg overflow-hidden mb-4">
