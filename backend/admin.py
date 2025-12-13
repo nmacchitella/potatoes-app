@@ -10,6 +10,10 @@ from models import (
 )
 from auth import verify_password
 import secrets
+import os
+
+# Get absolute path to templates directory
+TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 
 
 class AdminAuth(AuthenticationBackend):
@@ -339,13 +343,14 @@ def create_admin(app):
     # Create authentication backend
     authentication_backend = AdminAuth(secret_key=secrets.token_urlsafe(32))
 
-    # Create admin instance
+    # Create admin instance with dark theme
     admin = Admin(
         app=app,
         engine=engine,
         title="Potatoes Admin",
         authentication_backend=authentication_backend,
         base_url="/admin",
+        templates_dir=TEMPLATES_DIR,
     )
 
     # Register user & auth views

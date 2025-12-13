@@ -41,38 +41,51 @@ const createEmptyFormData = (): RecipeFormData => ({
   selectedTagIds: [],
 });
 
-const importResponseToFormData = (data: RecipeImportResponse): RecipeFormData => ({
-  title: data.title,
-  description: data.description || '',
-  yieldQuantity: data.yield_quantity,
-  yieldUnit: data.yield_unit,
-  prepTime: data.prep_time_minutes || '',
-  cookTime: data.cook_time_minutes || '',
-  difficulty: (data.difficulty as 'easy' | 'medium' | 'hard') || '',
-  privacyLevel: 'private',
-  sourceUrl: data.source_url || '',
-  coverImageUrl: data.cover_image_url || '',
-  ingredients: data.ingredients.length > 0
-    ? data.ingredients.map((ing, idx) => ({
-        name: ing.name,
-        quantity: ing.quantity,
-        quantity_max: ing.quantity_max,
-        unit: ing.unit,
-        preparation: ing.preparation,
-        is_optional: ing.is_optional,
-        notes: ing.notes,
-        sort_order: idx,
-      }))
-    : [{ name: '', sort_order: 0 }],
-  instructions: data.instructions.length > 0
-    ? data.instructions.map(inst => ({
-        step_number: inst.step_number,
-        instruction_text: inst.instruction_text,
-        duration_minutes: inst.duration_minutes,
-      }))
-    : [{ step_number: 1, instruction_text: '' }],
-  selectedTagIds: [],
-});
+const importResponseToFormData = (data: RecipeImportResponse, availableTags: Tag[] = []): RecipeFormData => {
+  // Match imported tag names to existing tag IDs (max 5)
+  const matchedTagIds = (data.tags || [])
+    .slice(0, 5)
+    .map(tagName => {
+      const match = availableTags.find(t =>
+        t.name.toLowerCase() === tagName.toLowerCase()
+      );
+      return match?.id;
+    })
+    .filter((id): id is string => !!id);
+
+  return {
+    title: data.title,
+    description: data.description || '',
+    yieldQuantity: data.yield_quantity,
+    yieldUnit: data.yield_unit,
+    prepTime: data.prep_time_minutes || '',
+    cookTime: data.cook_time_minutes || '',
+    difficulty: (data.difficulty as 'easy' | 'medium' | 'hard') || '',
+    privacyLevel: 'public',
+    sourceUrl: data.source_url || '',
+    coverImageUrl: data.cover_image_url || '',
+    ingredients: data.ingredients.length > 0
+      ? data.ingredients.map((ing, idx) => ({
+          name: ing.name,
+          quantity: ing.quantity,
+          quantity_max: ing.quantity_max,
+          unit: ing.unit,
+          preparation: ing.preparation,
+          is_optional: ing.is_optional,
+          notes: ing.notes,
+          sort_order: idx,
+        }))
+      : [{ name: '', sort_order: 0 }],
+    instructions: data.instructions.length > 0
+      ? data.instructions.map(inst => ({
+          step_number: inst.step_number,
+          instruction_text: inst.instruction_text,
+          duration_minutes: inst.duration_minutes,
+        }))
+      : [{ step_number: 1, instruction_text: '' }],
+    selectedTagIds: matchedTagIds,
+  };
+};
 
 function NewRecipeContent() {
   const router = useRouter();
@@ -192,11 +205,11 @@ function NewRecipeContent() {
       const data = await recipeApi.importFromUrl(importUrl);
 
       if (data.recipes.length === 1) {
-        setFormData(importResponseToFormData(data.recipes[0]));
+        setFormData(importResponseToFormData(data.recipes[0], availableTags));
         setIsImportedMode(true);
         setImportUrl('');
       } else if (data.recipes.length > 1) {
-        const tabs = data.recipes.map(recipe => importResponseToFormData(recipe));
+        const tabs = data.recipes.map(recipe => importResponseToFormData(recipe, availableTags));
         setRecipeTabs(tabs);
         setActiveTabIndex(0);
         setIsImportedMode(true);
@@ -230,11 +243,11 @@ function NewRecipeContent() {
       const data = await recipeApi.parseFromText(recipePasteText);
 
       if (data.recipes.length === 1) {
-        setFormData(importResponseToFormData(data.recipes[0]));
+        setFormData(importResponseToFormData(data.recipes[0], availableTags));
         setIsImportedMode(true);
         setRecipePasteText('');
       } else if (data.recipes.length > 1) {
-        const tabs = data.recipes.map(recipe => importResponseToFormData(recipe));
+        const tabs = data.recipes.map(recipe => importResponseToFormData(recipe, availableTags));
         setRecipeTabs(tabs);
         setActiveTabIndex(0);
         setIsImportedMode(true);

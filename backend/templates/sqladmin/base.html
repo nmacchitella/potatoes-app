@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/tabler-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/fontawesome.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/select2.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/flatpickr.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('admin:statics', path='css/main.css') }}">
+  {% if admin.favicon_url %}
+  <link rel="icon" href="{{ admin.favicon_url }}">
+  {% endif %}
+
+  <!-- Dark Theme CSS -->
+  <style>
+    :root, [data-bs-theme="dark"] {
+        --tblr-body-bg: #1a1a2e;
+        --tblr-body-color: #e4e4e4;
+        --tblr-card-bg: #16213e;
+        --tblr-border-color: #0f3460;
+        --tblr-bg-surface: #16213e;
+        --tblr-bg-surface-secondary: #1a1a2e;
+        --tblr-primary: #e94560;
+        --tblr-link-color: #e94560;
+    }
+    html, body { background-color: #1a1a2e !important; color: #e4e4e4 !important; }
+    .page-wrapper, .page-body, .page { background-color: #1a1a2e !important; }
+    .page-center { background-color: #1a1a2e !important; }
+    .navbar, .navbar-vertical { background-color: #16213e !important; border-color: #0f3460 !important; }
+    .navbar-vertical .navbar-nav .nav-link { color: #b8b8b8 !important; }
+    .navbar-vertical .navbar-nav .nav-link:hover, .navbar-vertical .navbar-nav .nav-link.active { color: #fff !important; background-color: #0f3460 !important; }
+    .card { background-color: #16213e !important; border-color: #0f3460 !important; color: #e4e4e4 !important; }
+    .card-header { background-color: #0f3460 !important; border-color: #0f3460 !important; color: #fff !important; }
+    .card-body, .card-footer { background-color: #16213e !important; border-color: #0f3460 !important; }
+    .table { --tblr-table-bg: #16213e; color: #e4e4e4 !important; }
+    .table > :not(caption) > * > * { background-color: #16213e !important; border-color: #0f3460 !important; color: #e4e4e4 !important; }
+    .table-hover > tbody > tr:hover > * { background-color: #0f3460 !important; color: #fff !important; }
+    .form-control, .form-select { background-color: #1a1a2e !important; border-color: #0f3460 !important; color: #e4e4e4 !important; }
+    .form-control:focus, .form-select:focus { background-color: #1a1a2e !important; border-color: #e94560 !important; box-shadow: 0 0 0 0.25rem rgba(233,69,96,0.25) !important; }
+    .form-control::placeholder { color: #888 !important; }
+    .form-label, label { color: #e4e4e4 !important; }
+    .btn-primary { background-color: #e94560 !important; border-color: #e94560 !important; color: #fff !important; }
+    .btn-primary:hover { background-color: #d63d56 !important; border-color: #d63d56 !important; }
+    .page-title, h1, h2, h3, h4, h5, h6 { color: #fff !important; }
+    a { color: #e94560 !important; }
+    a:hover { color: #ff6b6b !important; }
+    .dropdown-menu { background-color: #16213e !important; border-color: #0f3460 !important; }
+    .dropdown-item { color: #e4e4e4 !important; }
+    .dropdown-item:hover { background-color: #0f3460 !important; color: #fff !important; }
+    .pagination .page-link { background-color: #16213e !important; border-color: #0f3460 !important; color: #e4e4e4 !important; }
+    .pagination .page-item.active .page-link { background-color: #e94560 !important; border-color: #e94560 !important; color: #fff !important; }
+    .text-muted, .text-secondary { color: #888 !important; }
+    .breadcrumb-item a { color: #e94560 !important; }
+    .breadcrumb-item.active { color: #888 !important; }
+    .select2-container--default .select2-selection--single,
+    .select2-container--default .select2-selection--multiple { background-color: #1a1a2e !important; border-color: #0f3460 !important; color: #e4e4e4 !important; }
+    .select2-container--default .select2-selection--single .select2-selection__rendered { color: #e4e4e4 !important; }
+    .select2-dropdown { background-color: #16213e !important; border-color: #0f3460 !important; }
+    .select2-results__option { color: #e4e4e4 !important; background-color: #16213e !important; }
+    .select2-results__option--highlighted { background-color: #0f3460 !important; }
+    .select2-search__field { background-color: #1a1a2e !important; border-color: #0f3460 !important; color: #e4e4e4 !important; }
+    input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px #1a1a2e inset !important; -webkit-text-fill-color: #e4e4e4 !important; }
+    .modal-content { background-color: #16213e !important; border-color: #0f3460 !important; color: #e4e4e4 !important; }
+    .modal-header, .modal-footer { border-color: #0f3460 !important; }
+    .alert-success { background-color: rgba(39,174,96,0.2) !important; border-color: #27ae60 !important; color: #27ae60 !important; }
+    .alert-danger { background-color: rgba(233,69,96,0.2) !important; border-color: #e94560 !important; color: #e94560 !important; }
+    .alert-warning { background-color: rgba(243,156,18,0.2) !important; border-color: #f39c12 !important; color: #f39c12 !important; }
+    .btn-outline-secondary { border-color: #0f3460 !important; color: #e4e4e4 !important; }
+    .btn-outline-secondary:hover { background-color: #0f3460 !important; color: #fff !important; }
+    .btn-danger { background-color: #e94560 !important; border-color: #e94560 !important; }
+    .btn-success { background-color: #27ae60 !important; border-color: #27ae60 !important; }
+    hr { border-color: #0f3460 !important; opacity: 1 !important; }
+    .empty { color: #888 !important; }
+    .nav-tabs .nav-link { color: #b8b8b8 !important; border-color: transparent !important; }
+    .nav-tabs .nav-link.active { background-color: #16213e !important; border-color: #0f3460 #0f3460 #16213e !important; color: #e94560 !important; }
+    code, pre { background-color: #0f3460 !important; color: #e4e4e4 !important; }
+    .form-check-input { background-color: #1a1a2e !important; border-color: #0f3460 !important; }
+    .form-check-input:checked { background-color: #e94560 !important; border-color: #e94560 !important; }
+  </style>
+
+  {% block head %}
+  {% endblock %}
+  <title>{{ admin.title }}</title>
+</head>
+
+<body>
+  {% block body %}
+  <main>
+    {% block main %}
+    {% endblock %}
+  </main>
+  {% endblock %}
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/jquery.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/tabler.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/popper.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/bootstrap.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/select2.full.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/flatpickr.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('admin:statics', path='js/main.js') }}"></script>
+  {% block tail %}
+  {% endblock %}
+</body>
+
+</html>

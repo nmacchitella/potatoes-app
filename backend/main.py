@@ -22,14 +22,14 @@ app = FastAPI(
     ]
 )
 
-# Add session middleware
+# Add session middleware (https_only=False for local development)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
-    session_cookie="session",
+    session_cookie="admin_session",
     max_age=3600,
     same_site="lax",
-    https_only=not settings.debug
+    https_only=False  # Must be False for localhost; Fly.io handles HTTPS at edge
 )
 
 # Configure CORS

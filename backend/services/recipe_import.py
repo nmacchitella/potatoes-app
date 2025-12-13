@@ -335,6 +335,12 @@ def extract_youtube_video_id(url: str) -> Optional[str]:
     return None
 
 
+def get_youtube_thumbnail_url(video_id: str) -> str:
+    """Get the highest quality thumbnail URL for a YouTube video."""
+    # maxresdefault is 1280x720, falls back gracefully if not available
+    return f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"
+
+
 def get_youtube_transcript(video_id: str) -> Tuple[str, str]:
     """
     Get transcript from a YouTube video.
@@ -430,7 +436,7 @@ Rules:
 - unit should be lowercase and singular (cup, tablespoon, teaspoon, gram, etc.)
 - preparation is things like "chopped", "diced", "melted" - extract from ingredient text
 - difficulty should be "easy", "medium", or "hard" (guess based on complexity)
-- tags should be relevant categories like meal type, cuisine, dietary info
+- tags should be relevant categories like meal type, cuisine, dietary info (maximum 5 tags)
 - If information is not available, use null
 - Parse ALL ingredients and ALL instructions for each recipe
 - Even if there's only one recipe, still return it in the recipes array
@@ -482,7 +488,7 @@ Rules:
 - unit should be lowercase and singular (cup, tablespoon, teaspoon, gram, etc.)
 - preparation is things like "chopped", "diced", "melted" - extract from ingredient text
 - difficulty should be "easy", "medium", or "hard" (guess based on complexity)
-- tags should be relevant categories like meal type, cuisine, dietary info
+- tags should be relevant categories like meal type, cuisine, dietary info (maximum 5 tags)
 - If information is not available, use null
 - Parse ALL ingredients and ALL instructions from the recipe
 
@@ -697,7 +703,15 @@ async def import_recipe_from_url(url: str) -> List[ImportedRecipe]:
             raise ValueError("Transcript is too short to extract recipe information")
 
         # Parse with Gemini, allowing multiple recipes
-        return await parse_with_gemini(transcript, url, allow_multiple=True)
+        recipes = await parse_with_gemini(transcript, url, allow_multiple=True)
+
+        # Add YouTube thumbnail to all recipes
+        thumbnail_url = get_youtube_thumbnail_url(video_id)
+        for recipe in recipes:
+            if not recipe.cover_image_url:
+                recipe.cover_image_url = thumbnail_url
+
+        return recipes
 
     # Regular URL handling
     html, final_url = await fetch_url_content(url)
