@@ -136,8 +136,8 @@ async def main():
     parser.add_argument(
         '--delay',
         type=float,
-        default=1.5,
-        help='Delay between requests in seconds (default: 1.5)'
+        default=5.0,
+        help='Delay between requests in seconds (default: 5.0)'
     )
     parser.add_argument(
         '--retry-failed',
