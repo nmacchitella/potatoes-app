@@ -279,7 +279,7 @@ export default function PublicRecipePage() {
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold text-white text-xs font-medium flex items-center justify-center">{inst.step_number}</span>
                     <div className="pt-0.5">
                       <p className="text-charcoal text-sm leading-relaxed">{inst.instruction_text}</p>
-                      {inst.duration_minutes && <span className="text-xs text-warm-gray mt-0.5 block">{inst.duration_minutes} min</span>}
+                      {inst.duration_minutes != null && inst.duration_minutes > 0 && <span className="text-xs text-warm-gray mt-0.5 block">{inst.duration_minutes} min</span>}
                     </div>
                   </li>
                 ))}
