@@ -1,13 +1,39 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from database import engine, Base
+from sqlalchemy.orm import Session
+from database import engine, Base, SessionLocal
 from config import settings, logger
 from routers import auth_router, google_auth, recipe_router, collection_router, tag_router, social_router, notification_router, ingredient_router, search_router, meal_plan_router, admin_router
 from admin import create_admin
+from models import User
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_admin_user():
+    """Promote user to admin based on ADMIN_EMAIL environment variable."""
+    if not settings.admin_email:
+        return
+
+    db: Session = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == settings.admin_email).first()
+
+        if user:
+            if not user.is_admin:
+                user.is_admin = True
+                db.commit()
+                logger.info(f"Promoted {settings.admin_email} to admin")
+        else:
+            logger.info(f"Admin email {settings.admin_email} not found - user must sign in first")
+    finally:
+        db.close()
+
+
+# Ensure admin user exists
+ensure_admin_user()
 
 logger.info(f"Starting {settings.app_name}")
 

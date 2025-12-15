@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # Admin user (promoted to admin on startup if set)
+    admin_email: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
