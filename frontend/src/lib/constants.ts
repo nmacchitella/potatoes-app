@@ -15,7 +15,7 @@ export const AUTH_CONFIG = {
   ACCESS_TOKEN_KEY: 'access_token',
   REFRESH_TOKEN_KEY: 'refresh_token',
   ACCESS_TOKEN_MAX_AGE_SECONDS: 15 * 60, // 15 minutes
-  REFRESH_TOKEN_MAX_AGE_SECONDS: 7 * 24 * 60 * 60, // 7 days
+  REFRESH_TOKEN_MAX_AGE_SECONDS: 30 * 24 * 60 * 60, // 30 days
 } as const;
 
 // Polling & Intervals

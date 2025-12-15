@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-key-change-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
-    refresh_token_expire_days: int = 7
+    refresh_token_expire_days: int = 30
 
     # OAuth
     google_client_id: str = ""
