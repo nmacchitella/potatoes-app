@@ -370,9 +370,9 @@ export default function RecipeDetailPage() {
         )}
 
         {/* Main Content Grid */}
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid lg:grid-cols-3 gap-6 overflow-hidden">
           {/* Left Column */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 min-w-0">
             {/* Cover Image */}
             {isEditing ? (
               <div className="mb-4">
@@ -461,14 +461,14 @@ export default function RecipeDetailPage() {
                   value={editForm.source_name}
                   onChange={e => setEditForm({ ...editForm, source_name: e.target.value })}
                   placeholder="Source name"
-                  className="text-xs text-warm-gray bg-transparent border-b border-border focus:border-gold outline-none flex-1"
+                  className="text-xs text-warm-gray bg-transparent border-b border-border focus:border-gold outline-none flex-1 min-w-0"
                 />
                 <input
                   type="text"
                   value={editForm.source_url}
                   onChange={e => setEditForm({ ...editForm, source_url: e.target.value })}
                   placeholder="URL"
-                  className="text-xs text-warm-gray bg-transparent border-b border-border focus:border-gold outline-none flex-1"
+                  className="text-xs text-warm-gray bg-transparent border-b border-border focus:border-gold outline-none flex-1 min-w-0"
                 />
               </div>
             ) : (recipe.source_url || recipe.source_name) && (
@@ -703,7 +703,7 @@ export default function RecipeDetailPage() {
           </div>
 
           {/* Right Column */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 min-w-0">
             {/* Ingredients */}
             <div className="bg-white rounded-lg border border-border p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">

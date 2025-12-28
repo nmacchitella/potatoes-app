@@ -251,7 +251,7 @@ export default function ImageUpload({
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleUrlSubmit()}
             placeholder="https://example.com/image.jpg"
-            className="input-field flex-1"
+            className="input-field flex-1 min-w-0"
             disabled={disabled}
           />
           <button

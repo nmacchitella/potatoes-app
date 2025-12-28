@@ -394,7 +394,7 @@ function NewRecipeContent() {
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto overflow-hidden">
         {/* Header */}
         <div className="mb-8">
           <Link href="/" className="text-warm-gray hover:text-gold text-sm uppercase tracking-wider mb-4 inline-block">
@@ -432,7 +432,7 @@ function NewRecipeContent() {
                   }}
                   onKeyDown={e => e.key === 'Enter' && !importing && handleInlineImport()}
                   placeholder="Paste a recipe link or YouTube video URL..."
-                  className="input-field flex-1"
+                  className="input-field flex-1 min-w-0"
                   disabled={importing}
                 />
                 <button
@@ -628,7 +628,7 @@ function NewRecipeContent() {
                           </div>
 
                           {collections.length > 0 && (
-                            <div className="flex-1 min-w-[150px]">
+                            <div className="flex-1 min-w-0">
                               <label className="label mb-1 block text-xs">Collection</label>
                               <select
                                 value={selectedCollectionId}
