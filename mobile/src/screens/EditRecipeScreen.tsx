@@ -1,12 +1,12 @@
-import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, Alert, ActivityIndicator, Modal } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import type { RootStackParamList, RecipeIngredientInput, RecipeInstructionInput } from '@/types';
-import { recipeApi, getErrorMessage } from '@/lib/api';
+import type { RootStackParamList, RecipeIngredientInput, RecipeInstructionInput, Tag } from '@/types';
+import { recipeApi, tagApi, getErrorMessage } from '@/lib/api';
 import { useImagePicker } from '@/hooks/useImagePicker';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -33,6 +33,18 @@ export default function EditRecipeScreen() {
   const [instructions, setInstructions] = useState<RecipeInstructionInput[]>([]);
   const [newInstruction, setNewInstruction] = useState('');
 
+  // New fields for parity with web
+  const [privacyLevel, setPrivacyLevel] = useState<'private' | 'public'>('private');
+  const [difficulty, setDifficulty] = useState<'' | 'easy' | 'medium' | 'hard'>('');
+  const [notes, setNotes] = useState('');
+  const [availableTags, setAvailableTags] = useState<Tag[]>([]);
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [showTagPicker, setShowTagPicker] = useState(false);
+
+  useEffect(() => {
+    tagApi.list().then(setAvailableTags).catch(console.error);
+  }, []);
+
   useEffect(() => {
     async function loadRecipe() {
       try {
@@ -41,6 +53,10 @@ export default function EditRecipeScreen() {
         setDescription(recipe.description || '');
         setPrepTime(recipe.prep_time_minutes?.toString() || '');
         setCookTime(recipe.cook_time_minutes?.toString() || '');
+        setPrivacyLevel(recipe.privacy_level || 'private');
+        setDifficulty(recipe.difficulty || '');
+        setNotes(recipe.notes || '');
+        setSelectedTagIds(recipe.tags?.map((t: Tag) => t.id) || []);
 
         if (recipe.cover_image_url) {
           setImage(recipe.cover_image_url);
@@ -126,6 +142,10 @@ export default function EditRecipeScreen() {
         cover_image_url: image || undefined,
         ingredients: ingredients.length > 0 ? ingredients : undefined,
         instructions: instructions.length > 0 ? instructions : undefined,
+        privacy_level: privacyLevel,
+        difficulty: difficulty || undefined,
+        notes: notes.trim() || undefined,
+        tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
       });
 
       Alert.alert('Success', 'Recipe updated!', [
@@ -358,6 +378,101 @@ export default function EditRecipeScreen() {
             </View>
           </View>
 
+          {/* Notes */}
+          <View className="mb-4">
+            <Text className="text-charcoal font-medium mb-2">Notes</Text>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Tips, variations, or additional notes..."
+              placeholderTextColor="#9A948D"
+              multiline
+              numberOfLines={4}
+              className="bg-white border border-border rounded-lg px-4 py-3 text-charcoal"
+              style={{ textAlignVertical: 'top', minHeight: 100 }}
+            />
+          </View>
+
+          {/* Privacy & Difficulty Row */}
+          <View className="flex-row mb-4">
+            {/* Privacy */}
+            <View className="flex-1 mr-2">
+              <Text className="text-charcoal font-medium mb-2">Privacy</Text>
+              <View className="flex-row bg-white border border-border rounded-lg overflow-hidden">
+                <TouchableOpacity
+                  onPress={() => setPrivacyLevel('private')}
+                  className={`flex-1 py-3 items-center ${privacyLevel === 'private' ? 'bg-gold' : ''}`}
+                >
+                  <Ionicons
+                    name="lock-closed"
+                    size={16}
+                    color={privacyLevel === 'private' ? 'white' : '#9A948D'}
+                  />
+                  <Text className={`text-xs mt-1 ${privacyLevel === 'private' ? 'text-white' : 'text-warm-gray'}`}>
+                    Private
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setPrivacyLevel('public')}
+                  className={`flex-1 py-3 items-center ${privacyLevel === 'public' ? 'bg-gold' : ''}`}
+                >
+                  <Ionicons
+                    name="globe"
+                    size={16}
+                    color={privacyLevel === 'public' ? 'white' : '#9A948D'}
+                  />
+                  <Text className={`text-xs mt-1 ${privacyLevel === 'public' ? 'text-white' : 'text-warm-gray'}`}>
+                    Public
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Difficulty */}
+            <View className="flex-1 ml-2">
+              <Text className="text-charcoal font-medium mb-2">Difficulty</Text>
+              <View className="flex-row bg-white border border-border rounded-lg overflow-hidden">
+                {(['easy', 'medium', 'hard'] as const).map((level) => (
+                  <TouchableOpacity
+                    key={level}
+                    onPress={() => setDifficulty(difficulty === level ? '' : level)}
+                    className={`flex-1 py-3 items-center ${difficulty === level ? 'bg-gold' : ''}`}
+                  >
+                    <Text
+                      className={`text-xs capitalize ${difficulty === level ? 'text-white font-medium' : 'text-warm-gray'}`}
+                    >
+                      {level}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          {/* Tags */}
+          <View className="mb-4">
+            <Text className="text-charcoal font-medium mb-2">Tags</Text>
+            <TouchableOpacity
+              onPress={() => setShowTagPicker(true)}
+              className="bg-white border border-border rounded-lg px-4 py-3"
+            >
+              {selectedTagIds.length > 0 ? (
+                <View className="flex-row flex-wrap gap-2">
+                  {selectedTagIds.map((tagId) => {
+                    const tag = availableTags.find((t) => t.id === tagId);
+                    return tag ? (
+                      <View key={tagId} className="bg-gold/10 border border-gold/30 rounded-full px-3 py-1 flex-row items-center">
+                        <Text className="text-gold text-sm">{tag.name}</Text>
+                      </View>
+                    ) : null;
+                  })}
+                </View>
+              ) : (
+                <Text className="text-warm-gray">Tap to add tags...</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
           {/* Save Button */}
           <TouchableOpacity
             onPress={handleSave}
@@ -373,6 +488,63 @@ export default function EditRecipeScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Tag Picker Modal */}
+      <Modal
+        visible={showTagPicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowTagPicker(false)}
+      >
+        <View className="flex-1 bg-black/50 justify-end">
+          <View className="bg-white rounded-t-3xl max-h-[70%]" style={{ paddingBottom: insets.bottom }}>
+            <View className="flex-row items-center justify-between px-4 py-4 border-b border-border">
+              <Text className="text-lg font-semibold text-charcoal">Select Tags</Text>
+              <TouchableOpacity onPress={() => setShowTagPicker(false)}>
+                <Ionicons name="close" size={24} color="#1A1A1A" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView className="px-4 py-4">
+              <View className="flex-row flex-wrap gap-2">
+                {availableTags.map((tag) => {
+                  const isSelected = selectedTagIds.includes(tag.id);
+                  return (
+                    <TouchableOpacity
+                      key={tag.id}
+                      onPress={() => {
+                        if (isSelected) {
+                          setSelectedTagIds(selectedTagIds.filter((id) => id !== tag.id));
+                        } else {
+                          setSelectedTagIds([...selectedTagIds, tag.id]);
+                        }
+                      }}
+                      className={`rounded-full px-4 py-2 border ${
+                        isSelected
+                          ? 'bg-gold border-gold'
+                          : 'bg-white border-border'
+                      }`}
+                    >
+                      <Text
+                        className={isSelected ? 'text-white font-medium' : 'text-charcoal'}
+                      >
+                        {tag.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+            <View className="px-4 py-4 border-t border-border">
+              <TouchableOpacity
+                onPress={() => setShowTagPicker(false)}
+                className="bg-gold py-3 rounded-xl items-center"
+              >
+                <Text className="text-white font-semibold">Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
