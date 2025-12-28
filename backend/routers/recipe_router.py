@@ -7,7 +7,7 @@ CRUD operations for recipes, including:
 - Recipe cloning
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import List, Optional
@@ -34,6 +34,7 @@ from services.recipe_service import (
     update_recipe_instructions,
     clone_recipe_content,
 )
+from services.image_service import upload_image, is_cloudinary_configured
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
 
@@ -323,6 +324,45 @@ async def update_recipe(
     db.refresh(recipe)
 
     return recipe
+
+
+@router.post("/{recipe_id}/upload-image")
+async def upload_recipe_image(
+    recipe_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload an image for a recipe.
+
+    Uploads the image to Cloudinary and updates the recipe's cover_image_url.
+    Returns the new image URL.
+    """
+    # Check if Cloudinary is configured
+    if not is_cloudinary_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Image upload is not configured. Please use an image URL instead.",
+        )
+
+    # Get and verify recipe ownership
+    recipe = db.query(Recipe).filter(
+        Recipe.id == recipe_id,
+        Recipe.author_id == current_user.id,
+        Recipe.deleted_at.is_(None)
+    ).first()
+
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    # Upload image to R2
+    image_url = await upload_image(file, prefix="recipes")
+
+    # Update recipe with new image URL
+    recipe.cover_image_url = image_url
+    db.commit()
+
+    return {"url": image_url}
 
 
 @router.delete("/{recipe_id}", status_code=204)

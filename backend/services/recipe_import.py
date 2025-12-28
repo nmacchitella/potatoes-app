@@ -782,7 +782,7 @@ async def transcribe_audio_with_gemini(
     audio_file = genai.upload_file(audio_path)
 
     # Use Gemini to transcribe and extract recipe
-    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+    model = genai.GenerativeModel('gemini-2.5-flash')
 
     # Build prompt with all available data sources
     sources_intro = "You have access to the following data sources:\n\n"
@@ -993,7 +993,7 @@ async def parse_with_gemini(text: str, url: str, allow_multiple: bool = False) -
     genai.configure(api_key=settings.gemini_api_key)
 
     # Use Gemini with structured output
-    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+    model = genai.GenerativeModel('gemini-2.5-flash')
 
     # Define JSON schema for structured output
     recipe_schema = {

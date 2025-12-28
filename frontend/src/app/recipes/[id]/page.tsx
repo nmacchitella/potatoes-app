@@ -10,6 +10,7 @@ import { convertIngredient, type UnitSystem } from '@/lib/unitConversion';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit, YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
+import { ImageUpload } from '@/components/ui';
 import type { RecipeWithScale, Collection, RecipeIngredient, RecipeIngredientInput, RecipeInstructionInput } from '@/types';
 
 /**
@@ -375,27 +376,13 @@ export default function RecipeDetailPage() {
             {/* Cover Image */}
             {isEditing ? (
               <div className="mb-4">
-                {editForm.cover_image_url ? (
-                  <div className="aspect-[4/3] rounded-lg overflow-hidden relative group">
-                    <img src={editForm.cover_image_url} alt="" className="w-full h-full object-cover" />
-                    <button
-                      onClick={() => setEditForm({ ...editForm, cover_image_url: '' })}
-                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ) : (
-                  <div className="aspect-[4/3] rounded-lg border-2 border-dashed border-border flex items-center justify-center">
-                    <input
-                      type="text"
-                      value={editForm.cover_image_url}
-                      onChange={e => setEditForm({ ...editForm, cover_image_url: e.target.value })}
-                      placeholder="Paste image URL..."
-                      className="text-xs text-center bg-transparent w-full px-4 outline-none"
-                    />
-                  </div>
-                )}
+                <ImageUpload
+                  value={editForm.cover_image_url}
+                  onChange={(url) => setEditForm({ ...editForm, cover_image_url: url })}
+                  onClear={() => setEditForm({ ...editForm, cover_image_url: '' })}
+                  recipeId={recipeId}
+                  disabled={saving}
+                />
               </div>
             ) : recipe.source_url && isYouTubeUrl(recipe.source_url) ? (
               <div className="mb-4">

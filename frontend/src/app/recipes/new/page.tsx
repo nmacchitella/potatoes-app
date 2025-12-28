@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { recipeApi, tagApi, collectionApi, getErrorMessage } from '@/lib/api';
 import { RecipeIngredientsEdit, RecipeInstructionsEdit } from '@/components/recipes';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
+import { ImageUpload } from '@/components/ui';
 import type { RecipeIngredientInput, RecipeInstructionInput, Tag, ParsedIngredient, RecipeImportResponse, Collection } from '@/types';
 
 // Form data structure for each recipe tab
@@ -96,6 +97,7 @@ function NewRecipeContent() {
   const initialCollection = searchParams.get('collection') || '';
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
 
   // Collection state
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -313,6 +315,17 @@ function NewRecipeContent() {
         })),
         tag_ids: data.selectedTagIds,
       });
+
+      // Upload pending image if one was selected
+      if (pendingImageFile) {
+        try {
+          await recipeApi.uploadImage(recipe.id, pendingImageFile);
+          setPendingImageFile(null);
+        } catch (err) {
+          console.error('Failed to upload image:', err);
+          // Don't block the flow if image upload fails
+        }
+      }
 
       // Add to collection if one is selected
       if (selectedCollectionId) {
@@ -974,28 +987,32 @@ function NewRecipeContent() {
                   </div>
                 )}
 
-                {isImportedMode && currentFormData.coverImageUrl && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="label mb-2 block">Cover Image URL</label>
-                      <input
-                        type="url"
-                        value={currentFormData.coverImageUrl}
-                        onChange={e => updateCurrentForm('coverImageUrl', e.target.value)}
-                        placeholder="https://..."
-                        className="input-field w-full"
-                      />
-                    </div>
-                    <div>
-                      <label className="label mb-2 block">Source URL</label>
-                      <input
-                        type="url"
-                        value={currentFormData.sourceUrl}
-                        onChange={e => updateCurrentForm('sourceUrl', e.target.value)}
-                        placeholder="Original recipe link"
-                        className="input-field w-full"
-                      />
-                    </div>
+                {/* Cover Image */}
+                <div>
+                  <label className="label mb-2 block">Cover Image</label>
+                  <ImageUpload
+                    value={currentFormData.coverImageUrl}
+                    onChange={(url) => updateCurrentForm('coverImageUrl', url)}
+                    onClear={() => {
+                      updateCurrentForm('coverImageUrl', '');
+                      setPendingImageFile(null);
+                    }}
+                    onFileSelect={setPendingImageFile}
+                    disabled={saving}
+                  />
+                </div>
+
+                {/* Source URL - only show if imported or if there's a source URL */}
+                {(isImportedMode || currentFormData.sourceUrl) && (
+                  <div>
+                    <label className="label mb-2 block">Source URL</label>
+                    <input
+                      type="url"
+                      value={currentFormData.sourceUrl}
+                      onChange={e => updateCurrentForm('sourceUrl', e.target.value)}
+                      placeholder="Original recipe link"
+                      className="input-field w-full"
+                    />
                   </div>
                 )}
               </div>

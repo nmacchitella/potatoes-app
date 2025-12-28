@@ -21,38 +21,30 @@ import {
   clearTokens,
   isTokenExpiringSoon,
   getSecondsUntilExpiry,
+  loadTokensFromStorage,
 } from './auth-storage';
 
 // ============================================================================
 // ERROR HANDLING UTILITIES
 // ============================================================================
 
-/** API error response structure from backend */
 interface ApiErrorResponse {
   detail?: string;
   message?: string;
 }
 
-/** Type guard to check if error is an Axios error */
 export function isAxiosError(error: unknown): error is AxiosError<ApiErrorResponse> {
   return axios.isAxiosError(error);
 }
 
-/**
- * Extract error message from an error object
- * Handles Axios errors, Error objects, and unknown errors
- */
 export function getErrorMessage(error: unknown, fallback = 'An error occurred'): string {
   if (isAxiosError(error)) {
     const detail = error.response?.data?.detail;
 
-    // Handle Pydantic validation errors (array of objects)
     if (Array.isArray(detail)) {
-      // Extract first error message, or summarize
       const firstError = detail[0];
       if (firstError?.msg) {
-        // Format: "field: message" or just "message"
-        const loc = firstError.loc?.slice(-1)[0]; // Get last part of location
+        const loc = firstError.loc?.slice(-1)[0];
         return loc && typeof loc === 'string'
           ? `${loc}: ${firstError.msg}`
           : firstError.msg;
@@ -60,7 +52,6 @@ export function getErrorMessage(error: unknown, fallback = 'An error occurred'):
       return `Validation error: ${detail.length} field(s) invalid`;
     }
 
-    // Handle string detail or message
     if (typeof detail === 'string') {
       return detail;
     }
@@ -76,25 +67,8 @@ export function getErrorMessage(error: unknown, fallback = 'An error occurred'):
   return fallback;
 }
 
-const getApiUrl = (): string => {
-  if (typeof window === 'undefined') {
-    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-  }
-
-  if (window.location.hostname === 'potatoes-frontend.fly.dev') {
-    return 'https://potatoes-backend.fly.dev/api';
-  }
-
-  if (window.location.hostname === 'potatoes-frontend-dev.fly.dev') {
-    return 'https://potatoes-backend-dev.fly.dev/api';
-  }
-
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  return `${protocol}//${hostname}:8000/api`;
-};
-
-const API_URL = getApiUrl();
+// API URL - configure based on environment
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://potatoes-backend.fly.dev/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -125,10 +99,6 @@ const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue = [];
 };
 
-/**
- * Perform token refresh
- * @returns New access token or null if refresh failed
- */
 async function performTokenRefresh(): Promise<string | null> {
   const refreshToken = getRefreshToken();
 
@@ -143,12 +113,11 @@ async function performTokenRefresh(): Promise<string | null> {
 
     const { access_token, refresh_token: new_refresh_token, expires_in } = response.data;
 
-    setAccessToken(access_token, expires_in);
-    setRefreshToken(new_refresh_token);
+    await setAccessToken(access_token, expires_in);
+    await setRefreshToken(new_refresh_token);
 
     api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
-    // Schedule next proactive refresh
     scheduleProactiveRefresh(expires_in);
 
     return access_token;
@@ -157,24 +126,18 @@ async function performTokenRefresh(): Promise<string | null> {
   }
 }
 
-/**
- * Schedule proactive token refresh before expiry
- * Refreshes 60 seconds before token expires
- */
 function scheduleProactiveRefresh(expiresIn?: number) {
-  // Clear existing timer
   if (refreshTimer) {
     clearTimeout(refreshTimer);
     refreshTimer = null;
   }
 
-  // Calculate when to refresh (60 seconds before expiry)
   const secondsUntilRefresh = expiresIn
-    ? Math.max(expiresIn - 60, 10) // At least 10 seconds
+    ? Math.max(expiresIn - 60, 10)
     : Math.max(getSecondsUntilExpiry() - 60, 10);
 
   if (secondsUntilRefresh <= 0) {
-    return; // Token already expired or no expiry info
+    return;
   }
 
   refreshTimer = setTimeout(async () => {
@@ -188,28 +151,24 @@ function scheduleProactiveRefresh(expiresIn?: number) {
 
 /**
  * Initialize auth state on app load
- * Attempts to refresh tokens if access token is expired but refresh token exists
  */
 export async function initializeAuth(): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+  await loadTokensFromStorage();
 
   const accessToken = getAccessToken();
   const refreshToken = getRefreshToken();
 
-  // No tokens at all
   if (!refreshToken) {
-    clearTokens();
+    await clearTokens();
     return false;
   }
 
-  // Access token exists and not expiring soon
-  if (accessToken && !isTokenExpiringSoon(120)) { // 2 minute buffer
+  if (accessToken && !isTokenExpiringSoon(120)) {
     api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
     scheduleProactiveRefresh();
     return true;
   }
 
-  // Try to refresh
   isRefreshing = true;
   const newToken = await performTokenRefresh();
   isRefreshing = false;
@@ -218,14 +177,10 @@ export async function initializeAuth(): Promise<boolean> {
     return true;
   }
 
-  // Refresh failed, clear everything
-  clearTokens();
+  await clearTokens();
   return false;
 }
 
-/**
- * Stop proactive refresh (call on logout)
- */
 export function stopProactiveRefresh() {
   if (refreshTimer) {
     clearTimeout(refreshTimer);
@@ -233,7 +188,7 @@ export function stopProactiveRefresh() {
   }
 }
 
-// Request interceptor - add token to requests
+// Request interceptor
 api.interceptors.request.use((config) => {
   const token = getAccessToken();
   if (token) {
@@ -242,7 +197,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor - handle 401 and refresh
+// Response interceptor
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -272,21 +227,21 @@ api.interceptors.response.use(
         return api(originalRequest);
       }
 
-      // Refresh failed
       processQueue(error, null);
       isRefreshing = false;
-      clearTokens();
+      await clearTokens();
       stopProactiveRefresh();
 
-      if (typeof window !== 'undefined' && window.location.pathname !== '/auth/login') {
-        window.location.href = '/auth/login';
-      }
       return Promise.reject(error);
     }
 
     return Promise.reject(error);
   }
 );
+
+// ============================================================================
+// AUTH API
+// ============================================================================
 
 export const authApi = {
   register: async (data: RegisterRequest): Promise<User> => {
@@ -303,7 +258,7 @@ export const authApi = {
     try {
       await api.post('/auth/logout', { refresh_token: refreshToken });
     } catch {
-      // Silently fail - we'll clear local tokens regardless
+      // Silently fail
     }
   },
 
@@ -322,16 +277,6 @@ export const authApi = {
     return response.data;
   },
 
-  deleteAccount: async (): Promise<{ message: string }> => {
-    const response = await api.delete<{ message: string }>('/auth/me');
-    return response.data;
-  },
-
-  googleLogin: async (): Promise<{ authorization_url: string }> => {
-    const response = await api.get<{ authorization_url: string }>('/auth/google/login');
-    return response.data;
-  },
-
   getUserProfile: async (): Promise<User> => {
     const response = await api.get<User>('/auth/profile');
     return response.data;
@@ -342,25 +287,8 @@ export const authApi = {
     return response.data;
   },
 
-  verifyEmail: async (token: string): Promise<{ message: string }> => {
-    const response = await api.post<{ message: string }>('/auth/verify-email', null, { params: { token } });
-    return response.data;
-  },
-
-  resendVerification: async (email: string): Promise<{ message: string }> => {
-    const response = await api.post<{ message: string }>('/auth/resend-verification', null, { params: { email } });
-    return response.data;
-  },
-
   forgotPassword: async (email: string): Promise<{ message: string }> => {
     const response = await api.post<{ message: string }>('/auth/forgot-password', null, { params: { email } });
-    return response.data;
-  },
-
-  resetPassword: async (token: string, newPassword: string): Promise<{ message: string }> => {
-    const response = await api.post<{ message: string }>('/auth/reset-password', null, {
-      params: { token, new_password: newPassword }
-    });
     return response.data;
   },
 
@@ -410,15 +338,6 @@ export const recipeApi = {
     return response.data;
   },
 
-  uploadImage: async (recipeId: string, file: File): Promise<{ url: string }> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await api.post<{ url: string }>(`/recipes/${recipeId}/upload-image`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return response.data;
-  },
-
   parseIngredients: async (text: string): Promise<{ ingredients: ParsedIngredient[] }> => {
     const response = await api.post<{ ingredients: ParsedIngredient[] }>('/recipes/parse-ingredients', { text });
     return response.data;
@@ -443,6 +362,31 @@ export const recipeApi = {
 
   getCollections: async (id: string): Promise<Collection[]> => {
     const response = await api.get<Collection[]>(`/recipes/${id}/collections`);
+    return response.data;
+  },
+
+  uploadImage: async (recipeId: string, imageUri: string): Promise<{ url: string }> => {
+    const formData = new FormData();
+
+    // Extract filename and determine mime type
+    const filename = imageUri.split('/').pop() || 'image.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+    // React Native requires this format for file uploads
+    formData.append('file', {
+      uri: imageUri,
+      name: filename,
+      type,
+    } as unknown as Blob);
+
+    const response = await api.post<{ url: string }>(
+      `/recipes/${recipeId}/upload-image`,
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }
+    );
     return response.data;
   },
 };
@@ -484,7 +428,6 @@ export const collectionApi = {
     await api.delete(`/collections/${collectionId}/recipes/${recipeId}`);
   },
 
-  // Sharing methods
   listSharedWithMe: async (): Promise<SharedCollection[]> => {
     const response = await api.get<SharedCollection[]>('/collections/shared-with-me');
     return response.data;
@@ -755,7 +698,6 @@ export const mealPlanApi = {
     return response.data;
   },
 
-  // Sharing methods
   listSharedWithMe: async (): Promise<SharedMealPlanAccess[]> => {
     const response = await api.get<SharedMealPlanAccess[]>('/meal-plan/shared-with-me');
     return response.data;
