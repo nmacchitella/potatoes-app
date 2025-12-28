@@ -159,7 +159,7 @@ def refresh_token(
 
     access_token = auth.create_access_token(data={"sub": user.email})
     auth.revoke_refresh_token(refresh_request.refresh_token, db)
-    new_refresh_token = auth.create_refresh_token(user.id, db, timedelta(days=7))
+    new_refresh_token = auth.create_refresh_token(user.id, db)
 
     return {
         "access_token": access_token,

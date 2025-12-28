@@ -20,7 +20,7 @@ Potatoes uses a **JWT-based authentication system** with refresh tokens, support
 - **Type:** JWT (JSON Web Token)
 - **Algorithm:** HS256
 - **Lifetime:** 15 minutes (configurable)
-- **Storage:** Frontend memory (Zustand store)
+- **Storage:** Frontend localStorage + cookies (for middleware access)
 - **Payload:**
   ```json
   {
@@ -34,7 +34,7 @@ Potatoes uses a **JWT-based authentication system** with refresh tokens, support
 - **Type:** Secure random string (32 bytes, URL-safe)
 - **Lifetime:** 7 days
 - **Storage:**
-  - Frontend: localStorage
+  - Frontend: localStorage + cookies (for middleware access)
   - Backend: Database (RefreshToken model)
 - **Features:**
   - Can be revoked (per-token or all user tokens)
@@ -67,7 +67,7 @@ Potatoes uses a **JWT-based authentication system** with refresh tokens, support
 
 **API Endpoints:**
 1. `POST /api/auth/register` - Create account
-2. `GET /api/auth/verify-email?token=...` - Verify email
+2. `POST /api/auth/verify-email?token=...` - Verify email
 
 ### Email/Password Login
 
@@ -181,7 +181,7 @@ Potatoes uses a **JWT-based authentication system** with refresh tokens, support
 1. User requests reset:     POST /api/auth/forgot-password
 2. Email sent with token:   Link to /reset-password?token=...
 3. User submits new pass:   POST /api/auth/reset-password
-4. All refresh tokens revoked (force re-login)
+4. Reset token deleted, user can login with new password
 ```
 
 ## Implementation Details
@@ -189,7 +189,7 @@ Potatoes uses a **JWT-based authentication system** with refresh tokens, support
 ### Password Hashing
 
 ```python
-# Using bcrypt via passlib
+# Using bcrypt directly
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(
         password.encode('utf-8'),
@@ -252,25 +252,37 @@ interface AuthState {
 ```typescript
 // Request interceptor - attach token
 api.interceptors.request.use((config) => {
-  const token = useStore.getState().token;
+  const token = getAccessToken(); // from localStorage
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Response interceptor - handle 401, refresh token
+// Response interceptor - handle 401, refresh token with request queuing
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Queue requests if refresh is in progress
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          return api.request(error.config);
+        });
+      }
+
       // Try refresh token
-      const refreshed = await refreshTokens();
-      if (refreshed) {
+      const newToken = await performTokenRefresh();
+      if (newToken) {
+        processQueue(null, newToken);
         return api.request(error.config);
       }
+
       // Refresh failed, logout
-      logout();
+      clearTokens();
+      window.location.href = '/auth/login';
     }
     return Promise.reject(error);
   }
@@ -285,7 +297,6 @@ api.interceptors.response.use(
 | **Refresh token rotation** | New refresh token issued on each refresh |
 | **Token revocation** | Refresh tokens stored in DB, can be revoked |
 | **Password hashing** | bcrypt with salt |
-| **OAuth state validation** | CSRF protection for OAuth flow |
 | **HTTPS only** | Enforced in production (Fly.io) |
 
 ## API Reference
@@ -296,10 +307,18 @@ api.interceptors.response.use(
 | `/api/auth/login-json` | POST | Login with email/password |
 | `/api/auth/refresh` | POST | Refresh access token |
 | `/api/auth/logout` | POST | Revoke refresh token |
+| `/api/auth/logout-all` | POST | Logout from all devices |
 | `/api/auth/me` | GET | Get current user |
-| `/api/auth/profile` | PUT | Update profile |
+| `/api/auth/me` | PUT | Update user (name/email) |
+| `/api/auth/me/password` | PUT | Change password |
+| `/api/auth/me` | DELETE | Delete account |
+| `/api/auth/profile` | GET | Get user profile |
+| `/api/auth/profile` | PATCH | Update profile |
+| `/api/auth/settings` | GET | Get user settings |
+| `/api/auth/settings` | PATCH | Update user settings |
 | `/api/auth/forgot-password` | POST | Request password reset |
 | `/api/auth/reset-password` | POST | Set new password |
-| `/api/auth/verify-email` | GET | Verify email address |
+| `/api/auth/verify-email` | POST | Verify email address |
+| `/api/auth/resend-verification` | POST | Resend verification email |
 | `/api/auth/google/login` | GET | Get Google OAuth URL |
 | `/api/auth/google/callback` | GET | OAuth callback handler |

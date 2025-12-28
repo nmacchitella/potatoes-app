@@ -35,20 +35,23 @@ Deploying Potatoes to production using Fly.io and GitHub Actions.
 
 ## CI/CD Pipeline
 
-### GitHub Actions Workflow
+### GitHub Actions Workflows
 
-Located at `.github/workflows/deploy.yml`:
+There are three workflow files for different deployment scenarios:
+
+#### Production Workflow (`.github/workflows/deploy-prod.yml`)
 
 ```yaml
-name: Deploy to Fly.io
+name: Deploy to Production
 
 on:
   push:
     branches:
-      - main  # Production deployment
+      - main
 
 jobs:
-  deploy-backend:
+  deploy-backend-prod:
+    name: Deploy Backend to Production
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -60,8 +63,10 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-  deploy-frontend:
+  deploy-frontend-prod:
+    name: Deploy Frontend to Production
     runs-on: ubuntu-latest
+    needs: deploy-backend-prod  # Wait for backend first
     defaults:
       run:
         working-directory: frontend
@@ -73,12 +78,33 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 ```
 
+#### Development Workflow (`.github/workflows/deploy-dev.yml`)
+
+Deploys to dev environment using `fly.dev.toml`:
+
+```yaml
+name: Deploy to Development
+
+on:
+  push:
+    branches:
+      - development
+
+jobs:
+  deploy-backend-dev:
+    # Uses: flyctl deploy --config fly.dev.toml --remote-only
+
+  deploy-frontend-dev:
+    needs: deploy-backend-dev
+    # Uses: flyctl deploy --config fly.dev.toml --remote-only
+```
+
 ### Branch Workflow
 
 | Branch | Deploys To | Notes |
 |--------|------------|-------|
-| `main` | Production | Automatic on push |
-| `development` | Dev environment | (if configured) |
+| `main` | Production | Sequential (backend first) |
+| `development` | Dev environment | Sequential (backend first) |
 
 ## Initial Setup
 
@@ -155,8 +181,10 @@ primary_region = "iad"
   DATABASE_URL = "sqlite:////data/potatoes.db"
   ALGORITHM = "HS256"
   ACCESS_TOKEN_EXPIRE_MINUTES = "15"
+  REFRESH_TOKEN_EXPIRE_DAYS = "7"
   FRONTEND_URL = "https://potatoes-frontend.fly.dev"
   BACKEND_URL = "https://potatoes-backend.fly.dev"
+  LOG_LEVEL = "INFO"
 
 [http_service]
   internal_port = 8000
@@ -195,6 +223,32 @@ primary_region = "iad"
   memory = '256mb'
   cpu_kind = 'shared'
   cpus = 1
+```
+
+### Development fly.dev.toml Files
+
+Development environments use separate config files:
+
+**Backend (fly.dev.toml):**
+```toml
+app = "potatoes-backend-dev"
+primary_region = "iad"
+
+[mounts]
+  source = "potatoes_data_dev"  # Separate dev volume
+  destination = "/data"
+
+[[vm]]
+  memory = '256mb'  # Smaller for dev
+```
+
+**Frontend (fly.dev.toml):**
+```toml
+app = "potatoes-frontend-dev"
+primary_region = "iad"
+
+[build.args]
+  NEXT_PUBLIC_API_URL = "https://potatoes-backend-dev.fly.dev/api"
 ```
 
 ## Manual Deployment
@@ -247,6 +301,7 @@ fly secrets unset KEY -a potatoes-backend
 | `MAIL_USERNAME` | backend | No | SMTP username |
 | `MAIL_PASSWORD` | backend | No | SMTP password |
 | `ADMIN_EMAIL` | backend | No | Auto-admin email |
+| `GEMINI_API_KEY` | backend | No | AI recipe parsing |
 | `CLOUDINARY_CLOUD_NAME` | backend | No | Image uploads |
 | `CLOUDINARY_API_KEY` | backend | No | Image uploads |
 | `CLOUDINARY_API_SECRET` | backend | No | Image uploads |

@@ -12,40 +12,78 @@ The mobile app is built with **Expo** (SDK 54) and **React Native**, sharing sim
 |------------|---------|
 | **Expo 54** | React Native framework & build tools |
 | **React Native 0.81** | Cross-platform UI |
+| **React 19** | UI library |
 | **React Navigation 7** | Native navigation |
-| **Zustand** | State management |
+| **Zustand 5** | State management with AsyncStorage persistence |
 | **NativeWind 4** | Tailwind CSS for React Native |
 | **Axios** | HTTP client |
 | **Expo SecureStore** | Secure token storage |
+| **Expo Image Picker** | Camera and photo library access |
+| **Expo Auth Session** | OAuth authentication |
 
 ## Project Structure
 
 ```
 mobile/
-├── App.tsx                 # Entry point
+├── App.tsx                 # Entry point with providers
 ├── app.json                # Expo configuration
 ├── index.ts                # Registration
+├── global.css              # Global Tailwind styles
+├── tailwind.config.js      # NativeWind/Tailwind config
 ├── src/
 │   ├── screens/            # Screen components
 │   │   ├── HomeScreen.tsx
 │   │   ├── LoginScreen.tsx
-│   │   ├── RecipeScreen.tsx
-│   │   └── ...
+│   │   ├── RegisterScreen.tsx
+│   │   ├── ProfileScreen.tsx
+│   │   ├── RecipeDetailScreen.tsx
+│   │   ├── AddRecipeScreen.tsx
+│   │   ├── EditRecipeScreen.tsx
+│   │   ├── CollectionDetailScreen.tsx
+│   │   ├── SearchScreen.tsx
+│   │   ├── SettingsScreen.tsx
+│   │   ├── NotificationsScreen.tsx
+│   │   ├── UserProfileScreen.tsx
+│   │   ├── EditProfileScreen.tsx
+│   │   ├── DayDetailScreen.tsx
+│   │   ├── FollowRequestsScreen.tsx
+│   │   ├── FollowListScreen.tsx
+│   │   └── ForgotPasswordScreen.tsx
 │   ├── components/         # Shared components
-│   │   ├── RecipeCard.tsx
-│   │   ├── Button.tsx
-│   │   └── ...
+│   │   ├── ui/             # Base UI components
+│   │   │   └── UserAvatar.tsx
+│   │   ├── recipes/        # Recipe components
+│   │   │   ├── RecipeCard.tsx
+│   │   │   ├── TagFilterBar.tsx
+│   │   │   └── TagSelector.tsx
+│   │   ├── calendar/       # Meal plan calendar
+│   │   │   ├── WeekView.tsx
+│   │   │   ├── MonthView.tsx
+│   │   │   ├── DayView.tsx
+│   │   │   └── RecipePickerModal.tsx
+│   │   ├── collections/    # Collection components
+│   │   │   └── AddToCollectionModal.tsx
+│   │   └── layout/         # Layout components
+│   │       ├── MobileSidebar.tsx
+│   │       └── TopBar.tsx
 │   ├── navigation/         # React Navigation setup
-│   │   ├── AppNavigator.tsx
-│   │   └── types.ts
+│   │   ├── RootNavigator.tsx
+│   │   ├── TabNavigator.tsx
+│   │   └── AuthStack.tsx
 │   ├── store/              # Zustand state
 │   │   └── useStore.ts
+│   ├── hooks/              # Custom hooks
+│   │   ├── useDebounce.ts
+│   │   ├── useGoogleAuth.ts
+│   │   ├── useImagePicker.ts
+│   │   ├── useMealPlan.ts
+│   │   └── useTags.ts
 │   ├── lib/                # Utilities
-│   │   ├── api.ts          # Axios client
-│   │   └── storage.ts      # SecureStore helpers
+│   │   ├── api.ts          # Axios client with auth
+│   │   └── auth-storage.ts # SecureStore token management
 │   └── types/              # TypeScript types
+│       └── index.ts
 ├── assets/                 # Images, fonts
-├── tailwind.config.js      # NativeWind config
 └── package.json
 ```
 
@@ -83,19 +121,25 @@ After `npm start`:
 
 ## Configuration
 
-### API URL
+### Environment Variables
 
-Update the backend URL in `src/lib/api.ts`:
+The app uses Expo environment variables:
 
-```typescript
-const API_BASE_URL = __DEV__
-  ? 'http://localhost:8000/api'  // Development
-  : 'https://potatoes-backend.fly.dev/api';  // Production
+```bash
+# .env or set before running
+EXPO_PUBLIC_API_URL=http://localhost:8000/api
+
+# Google OAuth (optional)
+EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS=your-ios-client-id
+EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=your-android-client-id
+EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB=your-web-client-id
 ```
 
+The API URL defaults to `https://potatoes-backend.fly.dev/api` if not set.
+
 For physical device testing, use your computer's local IP:
-```typescript
-const API_BASE_URL = 'http://192.168.1.100:8000/api';
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.100:8000/api
 ```
 
 ### app.json
@@ -105,20 +149,35 @@ const API_BASE_URL = 'http://192.168.1.100:8000/api';
   "expo": {
     "name": "Potatoes",
     "slug": "potatoes",
+    "scheme": "potatoes",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F59E0B"
+      "backgroundColor": "#F5F1E8"
     },
     "ios": {
+      "supportsTablet": true,
       "bundleIdentifier": "com.potatoes.app"
     },
     "android": {
-      "package": "com.potatoes.app"
-    }
+      "package": "com.potatoes.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F5F1E8"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser"
+    ]
   }
 }
 ```
@@ -129,107 +188,154 @@ const API_BASE_URL = 'http://192.168.1.100:8000/api';
 {
   "dependencies": {
     "expo": "~54.0.30",
+    "react": "19.1.0",
     "react-native": "0.81.5",
     "@react-navigation/native": "^7.1.26",
     "@react-navigation/native-stack": "^7.9.0",
     "@react-navigation/bottom-tabs": "^7.9.0",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "zustand": "^5.0.9",
     "axios": "^1.13.2",
     "nativewind": "^4.2.1",
+    "tailwindcss": "^3.3.2",
     "expo-secure-store": "~15.0.8",
     "expo-image": "~3.0.11",
     "expo-image-picker": "~17.0.10",
-    "expo-haptics": "~15.0.8"
+    "expo-haptics": "~15.0.8",
+    "expo-auth-session": "~7.0.10",
+    "expo-web-browser": "~15.0.10",
+    "@expo/vector-icons": "^15.0.3"
   }
 }
 ```
 
 ## Navigation
 
-Using React Navigation with stack and tab navigators:
+Using React Navigation with conditional rendering based on auth state:
 
 ```typescript
-// AppNavigator.tsx
-function AppNavigator() {
-  const isAuthenticated = useStore((s) => s.isAuthenticated);
+// RootNavigator.tsx
+export default function RootNavigator() {
+  const { isAuthenticated } = useStore();
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    async function initialize() {
+      const isLoggedIn = await initializeAuth();
+      if (isLoggedIn) {
+        await fetchUserProfile();
+      }
+      setIsInitializing(false);
+    }
+    initialize();
+  }, []);
+
+  if (isInitializing) {
+    return <LoadingScreen />;
+  }
 
   return (
-    <NavigationContainer>
+    <Stack.Navigator>
       {isAuthenticated ? (
-        <MainTabs />  // Bottom tab navigator
+        <>
+          <Stack.Screen name="Main" component={TabNavigator} />
+          <Stack.Screen name="RecipeDetail" component={RecipeDetailScreen} />
+          <Stack.Screen name="Search" component={SearchScreen} />
+          {/* ... more screens */}
+        </>
       ) : (
-        <AuthStack />  // Login/Register screens
+        <Stack.Screen name="Auth" component={AuthStack} />
       )}
-    </NavigationContainer>
+    </Stack.Navigator>
   );
 }
 ```
 
 ### Tab Structure
 
+The app has 3 main tabs with a centered floating action button:
+
 | Tab | Screen | Icon |
 |-----|--------|------|
-| Home | Recipe feed | Home |
-| Search | Search recipes/users | Search |
-| Add | Create recipe | Plus |
-| Plan | Meal planning | Calendar |
-| Profile | User profile | Person |
+| Home | Recipe feed & meal planning | Home |
+| Add | Create recipe (FAB) | Plus |
+| Profile | User profile | Avatar |
+
+Additional features like Search and Meal Planning are accessed via the sidebar/modal.
 
 ## State Management
 
-Zustand store mirrors the web frontend:
+Zustand store with AsyncStorage persistence:
 
 ```typescript
 // src/store/useStore.ts
 interface AppState {
   // Auth
   user: User | null;
-  token: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
 
   // Actions
-  setTokens: (access: string, refresh: string) => void;
-  logout: () => void;
+  setUser: (user: User | null) => void;
+  setTokens: (access: string, refresh: string, expiresIn?: number) => Promise<void>;
+  logout: () => Promise<void>;
   fetchUserProfile: () => Promise<void>;
+  updateUserProfile: (updates: UserProfileUpdate) => Promise<void>;
 }
 
-export const useStore = create<AppState>((set, get) => ({
-  user: null,
-  token: null,
-  refreshToken: null,
-  isAuthenticated: false,
+export const useStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      isAuthenticated: false,
+      isLoading: true,
 
-  setTokens: async (access, refresh) => {
-    await SecureStore.setItemAsync('accessToken', access);
-    await SecureStore.setItemAsync('refreshToken', refresh);
-    set({ token: access, refreshToken: refresh, isAuthenticated: true });
-  },
+      setTokens: async (accessToken, refreshToken, expiresIn) => {
+        await saveAccessToken(accessToken, expiresIn);
+        await saveRefreshToken(refreshToken);
+      },
 
-  logout: async () => {
-    await SecureStore.deleteItemAsync('accessToken');
-    await SecureStore.deleteItemAsync('refreshToken');
-    set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
-  },
-}));
+      logout: async () => {
+        stopProactiveRefresh();
+        await clearTokens();
+        set({ user: null, isAuthenticated: false });
+      },
+      // ...
+    }),
+    {
+      name: 'potatoes-store',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    }
+  )
+);
 ```
 
-## Secure Storage
+## Token Management
 
-Using Expo SecureStore for sensitive data:
+Secure token storage with automatic refresh:
 
 ```typescript
+// src/lib/auth-storage.ts
 import * as SecureStore from 'expo-secure-store';
 
-// Store token
+// Store tokens securely
 await SecureStore.setItemAsync('accessToken', token);
+await SecureStore.setItemAsync('refreshToken', refreshToken);
 
-// Retrieve token
-const token = await SecureStore.getItemAsync('accessToken');
-
-// Delete token
-await SecureStore.deleteItemAsync('accessToken');
+// Token expiry tracking
+export function isTokenExpiringSoon(thresholdSeconds: number): boolean;
+export function getSecondsUntilExpiry(): number;
 ```
+
+The API client (`src/lib/api.ts`) includes:
+- Automatic token refresh on 401 errors
+- Proactive token refresh before expiry
+- Request queue during refresh
+- Retry logic for failed requests
 
 ## Styling
 
@@ -252,28 +358,35 @@ function RecipeCard({ recipe }) {
 }
 ```
 
+Custom colors are defined in `tailwind.config.js`:
+- `cream` - #F5F1E8 (background)
+- `gold` - #C6A664 (primary)
+- `warm-gray` - #6B6560 (secondary text)
+
 ## API Client
 
-Axios instance with auth interceptor:
+Comprehensive API client with typed methods:
 
 ```typescript
 // src/lib/api.ts
-import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { authApi, recipeApi, collectionApi, tagApi, socialApi,
+         notificationApi, ingredientApi, searchApi, mealPlanApi } from '@/lib/api';
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-});
+// Auth
+await authApi.login({ email, password });
+await authApi.register({ email, name, password });
+await authApi.getCurrentUser();
 
-api.interceptors.request.use(async (config) => {
-  const token = await SecureStore.getItemAsync('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Recipes
+await recipeApi.list({ page, page_size, search, tag_ids });
+await recipeApi.create(recipeData);
+await recipeApi.uploadImage(recipeId, imageUri);
 
-export default api;
+// Collections
+await collectionApi.list();
+await collectionApi.addRecipe(collectionId, recipeId);
+
+// And more...
 ```
 
 ## Building for Production
@@ -315,7 +428,7 @@ npx expo run:android --variant release
 ### Hot Reload
 
 Changes auto-reload. If stuck:
-- Shake device → "Reload"
+- Shake device -> "Reload"
 - Press `r` in terminal
 
 ### Debugging
@@ -325,7 +438,7 @@ Changes auto-reload. If stuck:
 npx react-devtools
 ```
 
-Or use Expo's built-in debugger (shake device → "Debug Remote JS").
+Or use Expo's built-in debugger (shake device -> "Debug Remote JS").
 
 ### Testing on Physical Device
 
@@ -361,6 +474,18 @@ const styles = {
   }),
 };
 ```
+
+## Custom Hooks
+
+The app includes several custom hooks:
+
+| Hook | Purpose |
+|------|---------|
+| `useDebounce` | Debounce search input |
+| `useGoogleAuth` | Google OAuth flow |
+| `useImagePicker` | Camera/gallery image selection |
+| `useMealPlan` | Meal plan data management |
+| `useTags` | Tag fetching and caching |
 
 ## Future Improvements
 

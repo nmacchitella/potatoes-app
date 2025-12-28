@@ -26,12 +26,19 @@ System architecture overview for Potatoes.
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
 │  │Google OAuth │  │Collections  │  │Ingredients  │  │   Search    │    │
 │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                     │
+│  │Admin Router │  │Notifications│  │    Tags     │                     │
+│  └─────────────┘  └─────────────┘  └─────────────┘                     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                          SERVICES                                        │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
 │  │  JWT Auth       │  │  Email Service  │  │  Image Upload   │         │
 │  │  (python-jose)  │  │  (fastapi-mail) │  │  (Cloudinary)   │         │
 │  └─────────────────┘  └─────────────────┘  └─────────────────┘         │
+│  ┌─────────────────┐                                                    │
+│  │  Recipe Import  │                                                    │
+│  │  (Gemini AI)    │                                                    │
+│  └─────────────────┘                                                    │
 └─────────────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -75,6 +82,7 @@ System architecture overview for Potatoes.
 - `schemas.py` - Pydantic schemas
 - `auth.py` - Authentication logic
 - `routers/` - API endpoints
+- `services/` - Email, image upload, recipe import, notifications
 
 ### Mobile (Expo)
 
@@ -158,4 +166,4 @@ GitHub Actions
 | SQLite (single file) | PostgreSQL for multi-instance |
 | Single Fly.io machine | Horizontal scaling with shared DB |
 | In-memory caching | Redis for session/cache |
-| Local file storage | S3/Cloudflare R2 for images |
+| Cloudinary (images) | Already scalable, no changes needed |

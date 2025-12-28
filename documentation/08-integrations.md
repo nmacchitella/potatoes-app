@@ -197,6 +197,56 @@ Images are uploaded via the recipe creation/update endpoints. The frontend sends
 
 ---
 
+## Gemini AI (Recipe Import)
+
+Enable AI-powered recipe import from URLs and YouTube videos.
+
+### 1. Get Gemini API Key
+
+1. Go to [Google AI Studio](https://aistudio.google.com/)
+2. Click **Get API Key**
+3. Create a new API key or use existing
+4. Copy the API key
+
+### 2. Configure Environment
+
+**Local (.env):**
+```env
+GEMINI_API_KEY=your-gemini-api-key
+```
+
+**Production (Fly.io):**
+```bash
+fly secrets set GEMINI_API_KEY="your-gemini-api-key" -a potatoes-backend
+```
+
+### 3. Features
+
+With Gemini configured, users can:
+- **Import from URLs:** Paste any recipe website URL - AI extracts ingredients, instructions, times
+- **Import from YouTube:** Paste cooking video URLs - AI extracts recipes from video transcripts
+- **Multi-recipe videos:** Handles videos with multiple recipes (e.g., "5 Easy Dinners")
+
+The import flow:
+1. First tries to extract structured JSON-LD schema.org data
+2. Falls back to Gemini AI parsing if no structured data found
+3. For YouTube: extracts transcript, then uses Gemini to parse recipes
+
+### 4. Usage
+
+```python
+# In services/recipe_import.py
+from services.recipe_import import import_recipe_from_url
+
+# Import from website
+recipes = await import_recipe_from_url("https://example.com/recipe")
+
+# Import from YouTube
+recipes = await import_recipe_from_url("https://youtube.com/watch?v=...")
+```
+
+---
+
 ## Integration Status
 
 Check which integrations are configured:
@@ -206,6 +256,7 @@ Check which integrations are configured:
 | Google OAuth | No | Try `/api/auth/google/login` |
 | Email | No | Registration will skip verification if not configured |
 | Cloudinary | No | Image upload will fail gracefully |
+| Gemini AI | No | Recipe import will only work with structured JSON-LD data |
 
 ### Minimal Setup
 
@@ -214,6 +265,7 @@ For a working app with no integrations:
 2. Email verification is skipped
 3. No Google login option
 4. No image uploads
+5. Recipe import limited to sites with JSON-LD structured data
 
 This is fine for development and testing.
 
@@ -225,4 +277,5 @@ This is fine for development and testing.
 2. **Use app passwords** - Never use your main Google password
 3. **Rotate secrets** - Regenerate periodically, especially if compromised
 4. **Restrict OAuth origins** - Only add URLs you actually use
-5. **Monitor usage** - Check Google Cloud Console for OAuth usage
+5. **Monitor usage** - Check Google Cloud Console for OAuth and Gemini API usage
+6. **Set API quotas** - Configure usage limits in Google Cloud Console for Gemini

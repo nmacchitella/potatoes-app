@@ -6,7 +6,7 @@ Database models and relationships for Potatoes.
 
 - **ORM:** SQLAlchemy 2.0
 - **Database:** SQLite (development/production) or PostgreSQL
-- **Migrations:** Auto-create on startup (no Alembic currently)
+- **Migrations:** Alembic configured (auto-create on startup as fallback)
 
 ## Entity Relationship Diagram
 
@@ -159,6 +159,7 @@ class Recipe(Base):
     source_url = Column(String(500), nullable=True)
     source_name = Column(String(200), nullable=True)
     cover_image_url = Column(String(500), nullable=True)
+    video_start_seconds = Column(Integer, nullable=True)  # YouTube timestamp
     status = Column(String(20), default="published")   # draft, published
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, onupdate=func.now())
@@ -222,6 +223,38 @@ class Tag(Base):
     is_system = Column(Boolean, default=False)    # System vs user-created
 ```
 
+### Ingredient
+
+Master ingredients list for autocomplete and linking.
+
+```python
+class Ingredient(Base):
+    __tablename__ = "ingredients"
+
+    id = Column(String, primary_key=True)
+    name = Column(String(200), nullable=False)           # Display name
+    normalized_name = Column(String(200), index=True)    # Lowercase for matching
+    category = Column(String(50), nullable=True)         # produce, meat, dairy, etc.
+    is_system = Column(Boolean, default=False)
+    user_id = Column(String, ForeignKey("users.id"))     # NULL = system/global
+    created_at = Column(DateTime, server_default=func.now())
+```
+
+### MeasurementUnit
+
+Master measurement units for autocomplete.
+
+```python
+class MeasurementUnit(Base):
+    __tablename__ = "measurement_units"
+
+    id = Column(String, primary_key=True)
+    name = Column(String(50), unique=True)        # "cup", "tablespoon"
+    abbreviation = Column(String(20), nullable=True)  # "c", "tbsp"
+    type = Column(String(30), nullable=True)      # volume, weight, count
+    is_system = Column(Boolean, default=False)
+```
+
 ### Collection
 
 User-created recipe collections (cookbooks).
@@ -240,6 +273,39 @@ class Collection(Base):
     sort_order = Column(Integer, default=0)
 ```
 
+### CollectionShare
+
+Tracks collection sharing with other users.
+
+```python
+class CollectionShare(Base):
+    __tablename__ = "collection_shares"
+
+    id = Column(String, primary_key=True)
+    collection_id = Column(String, ForeignKey("collections.id", ondelete='CASCADE'))
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'))  # shared with
+    permission = Column(String(20), default="viewer")  # viewer, editor
+    invited_by_id = Column(String, ForeignKey("users.id"))
+    created_at = Column(DateTime, server_default=func.now())
+```
+
+### UserSettings
+
+User preferences and notification settings.
+
+```python
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    user_id = Column(String, ForeignKey("users.id"), primary_key=True)
+    preferred_unit_system = Column(String(20), default="metric")  # imperial, metric
+    default_servings = Column(Integer, default=4)
+    email_new_follower = Column(Boolean, default=True)
+    email_follow_request = Column(Boolean, default=True)
+    email_recipe_saved = Column(Boolean, default=False)
+    updated_at = Column(DateTime, onupdate=func.now())
+```
+
 ### MealPlan
 
 Scheduled meal entries.
@@ -256,6 +322,21 @@ class MealPlan(Base):
     servings = Column(Float, default=4)
     notes = Column(Text, nullable=True)
     recurrence_id = Column(String, nullable=True)  # For recurring meals
+```
+
+### MealPlanShare
+
+Sharing meal plans with other users (e.g., family members).
+
+```python
+class MealPlanShare(Base):
+    __tablename__ = "meal_plan_shares"
+
+    id = Column(String, primary_key=True)
+    owner_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'))
+    shared_with_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'))
+    permission = Column(String(20), default="viewer")  # viewer, editor
+    created_at = Column(DateTime, server_default=func.now())
 ```
 
 ### UserFollow
@@ -290,6 +371,21 @@ class Notification(Base):
     is_read = Column(Boolean, default=False)
     data = Column(JSON, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+```
+
+### URLCheck
+
+Cache for URL recipe detection (avoid re-checking failed URLs).
+
+```python
+class URLCheck(Base):
+    __tablename__ = "url_checks"
+
+    url = Column(String(2048), primary_key=True)
+    domain = Column(String(255), nullable=False, index=True)
+    has_recipe = Column(Boolean, default=False)
+    error = Column(String(500), nullable=True)
+    checked_at = Column(DateTime, server_default=func.now())
 ```
 
 ## Junction Tables
@@ -346,16 +442,20 @@ rm backend/potatoes.db
 ```python
 # database.py
 from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from config import settings
 
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./potatoes.db")
+# SQLite needs check_same_thread=False
+connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}  # SQLite only
+    settings.database_url,
+    connect_args=connect_args,
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
 def get_db():
     db = SessionLocal()
@@ -376,4 +476,6 @@ Key indexes for performance:
 | refresh_tokens | token | Token validation |
 | recipes | author_id | User's recipes |
 | meal_plans | user_id, planned_date | Date range queries |
+| meal_plans | recurrence_id | Recurring meal lookups |
 | ingredients | normalized_name | Autocomplete search |
+| url_checks | domain | URL cache by domain |

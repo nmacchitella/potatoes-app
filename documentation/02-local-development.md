@@ -107,7 +107,7 @@ cd backend
 source venv/bin/activate
 
 # Create test users with recipes and relationships
-python seed_users.py
+python scripts/seed_users.py
 ```
 
 This creates 5 test accounts:

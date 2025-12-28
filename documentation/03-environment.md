@@ -6,6 +6,14 @@ Complete reference for all environment variables used in Potatoes.
 
 Located in `backend/.env` (copy from `.env.example`).
 
+### Application
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `APP_NAME` | No | `Potatoes API` | Application name shown in API docs |
+| `DEBUG` | No | `False` | Enable debug mode |
+| `LOG_LEVEL` | No | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
+
 ### Database
 
 | Variable | Required | Default | Description |
@@ -31,7 +39,7 @@ DATABASE_URL=postgresql://user:pass@host:5432/potatoes
 | `SECRET_KEY` | Yes | - | JWT signing key. Generate with `openssl rand -hex 32`. **Never commit this.** |
 | `ALGORITHM` | No | `HS256` | JWT signing algorithm. Keep as HS256. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `15` | Access token lifetime in minutes. Short for security. |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | No | `7` | Refresh token lifetime in days. |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | No | `30` | Refresh token lifetime in days. |
 
 **Generate a secret key:**
 ```bash
@@ -51,6 +59,12 @@ openssl rand -hex 32
 FRONTEND_URL=https://potatoes-frontend.fly.dev
 BACKEND_URL=https://potatoes-backend.fly.dev
 ```
+
+### CORS
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `CORS_ORIGINS` | No | `["http://localhost:3000", "http://127.0.0.1:3000"]` | Additional CORS origins (JSON array). Production origins are hardcoded. |
 
 ### Google OAuth
 
@@ -100,6 +114,12 @@ See [Integrations Guide](08-integrations.md) for Gmail app password setup.
 | `CLOUDINARY_API_KEY` | No | - | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | No | - | Cloudinary API secret |
 
+### AI/Recipe Import
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `GEMINI_API_KEY` | No | - | Google Gemini API key for AI-powered recipe import from URLs and YouTube videos |
+
 ---
 
 ## Frontend Variables
@@ -126,7 +146,21 @@ NEXT_PUBLIC_API_URL=https://potatoes-backend.fly.dev/api
 
 ## Mobile Variables
 
-The mobile app uses hardcoded API URLs in the code. Update `mobile/src/lib/api.ts` to change the backend URL.
+The mobile app (Expo/React Native) uses environment variables prefixed with `EXPO_PUBLIC_`.
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `EXPO_PUBLIC_API_URL` | No | `https://potatoes-backend.fly.dev/api` | Backend API URL |
+| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS` | No | - | Google OAuth client ID for iOS |
+| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID` | No | - | Google OAuth client ID for Android |
+| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB` | No | - | Google OAuth client ID for Web/Expo Go |
+
+**Local development:**
+```env
+EXPO_PUBLIC_API_URL=http://localhost:8000/api
+```
+
+> **Note:** For local development on physical devices, use your machine's local IP instead of localhost.
 
 ---
 
@@ -142,6 +176,7 @@ DATABASE_URL=sqlite:///./potatoes.db
 SECRET_KEY=your-generated-secret-key-here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=30
 
 # URLs
 FRONTEND_URL=http://localhost:3000
@@ -162,6 +197,14 @@ MAIL_SSL_TLS=False
 
 # Admin (optional)
 ADMIN_EMAIL=
+
+# Image Upload (optional)
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+
+# AI Recipe Import (optional)
+GEMINI_API_KEY=
 ```
 
 ### Frontend `.env.local` (Local Development)
@@ -183,6 +226,11 @@ fly secrets set GOOGLE_CLIENT_ID="..." -a potatoes-backend
 fly secrets set GOOGLE_CLIENT_SECRET="..." -a potatoes-backend
 fly secrets set MAIL_USERNAME="..." -a potatoes-backend
 fly secrets set MAIL_PASSWORD="..." -a potatoes-backend
+fly secrets set CLOUDINARY_CLOUD_NAME="..." -a potatoes-backend
+fly secrets set CLOUDINARY_API_KEY="..." -a potatoes-backend
+fly secrets set CLOUDINARY_API_SECRET="..." -a potatoes-backend
+fly secrets set GEMINI_API_KEY="..." -a potatoes-backend
+fly secrets set ADMIN_EMAIL="..." -a potatoes-backend
 
 # Frontend (set at build time via fly.toml or Dockerfile ARG)
 # NEXT_PUBLIC_API_URL is set in fly.toml [env] section
