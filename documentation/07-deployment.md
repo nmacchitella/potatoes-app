@@ -37,9 +37,17 @@ Deploying Potatoes to production using Fly.io and GitHub Actions.
 
 ### GitHub Actions Workflows
 
-There are three workflow files for different deployment scenarios:
+There are three workflow files in `.github/workflows/`:
 
-#### Production Workflow (`.github/workflows/deploy-prod.yml`)
+| File | Trigger | Deployment Order |
+|------|---------|------------------|
+| `deploy.yml` | Push to `main` | Parallel (backend & frontend simultaneously) |
+| `deploy-prod.yml` | Push to `main` | Sequential (backend first, then frontend) |
+| `deploy-dev.yml` | Push to `development` | Sequential (backend first, then frontend) |
+
+> **Note:** Both `deploy.yml` and `deploy-prod.yml` trigger on `main`. You may want to disable one to avoid duplicate deployments.
+
+#### Production Workflow - Sequential (`.github/workflows/deploy-prod.yml`)
 
 ```yaml
 name: Deploy to Production
@@ -78,6 +86,47 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 ```
 
+#### Production Workflow - Parallel (`.github/workflows/deploy.yml`)
+
+Deploys backend and frontend simultaneously (faster but no dependency guarantee):
+
+```yaml
+name: Deploy to Fly.io
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    # No 'needs' - runs in parallel with backend
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+```
+
 #### Development Workflow (`.github/workflows/deploy-dev.yml`)
 
 Deploys to dev environment using `fly.dev.toml`:
@@ -103,8 +152,8 @@ jobs:
 
 | Branch | Deploys To | Notes |
 |--------|------------|-------|
-| `main` | Production | Sequential (backend first) |
-| `development` | Dev environment | Sequential (backend first) |
+| `main` | Production | Two workflows: `deploy.yml` (parallel) and `deploy-prod.yml` (sequential) |
+| `development` | Dev environment | Sequential via `deploy-dev.yml` (backend first) |
 
 ## Initial Setup
 

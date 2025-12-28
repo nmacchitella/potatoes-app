@@ -39,7 +39,7 @@ DATABASE_URL=postgresql://user:pass@host:5432/potatoes
 | `SECRET_KEY` | Yes | - | JWT signing key. Generate with `openssl rand -hex 32`. **Never commit this.** |
 | `ALGORITHM` | No | `HS256` | JWT signing algorithm. Keep as HS256. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `15` | Access token lifetime in minutes. Short for security. |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | No | `30` | Refresh token lifetime in days. |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | No | `7` | Refresh token lifetime in days. |
 
 **Generate a secret key:**
 ```bash
@@ -176,7 +176,7 @@ DATABASE_URL=sqlite:///./potatoes.db
 SECRET_KEY=your-generated-secret-key-here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=15
-REFRESH_TOKEN_EXPIRE_DAYS=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
 
 # URLs
 FRONTEND_URL=http://localhost:3000

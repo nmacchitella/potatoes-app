@@ -155,8 +155,8 @@ GitHub Actions
 | **Transport** | HTTPS enforced (Fly.io) |
 | **Authentication** | JWT with short-lived access tokens |
 | **Token Storage** | Refresh tokens in DB, can be revoked |
-| **Passwords** | bcrypt hashing via passlib |
-| **OAuth** | Google OAuth 2.0 with PKCE |
+| **Passwords** | bcrypt hashing |
+| **OAuth** | Google OAuth 2.0 (Authorization Code flow) |
 | **API** | CORS configured for frontend origin |
 
 ## Scalability Considerations

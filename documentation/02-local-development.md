@@ -150,7 +150,12 @@ potatoes/
 │   │   ├── social_router.py
 │   │   └── ...
 │   └── services/
-│       └── email_service.py
+│       ├── email_service.py
+│       ├── image_service.py
+│       ├── ingredient_parser.py
+│       ├── notification_service.py
+│       ├── recipe_import.py
+│       └── recipe_service.py
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # Next.js App Router pages
