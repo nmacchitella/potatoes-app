@@ -220,7 +220,9 @@ export interface RecipeCreateInput {
   collection_ids?: string[];
 }
 
-export interface RecipeUpdateInput extends Partial<RecipeCreateInput> {}
+export interface RecipeUpdateInput extends Omit<Partial<RecipeCreateInput>, 'cover_image_url'> {
+  cover_image_url?: string | null;
+}
 
 export interface RecipeListResponse {
   items: RecipeSummary[];

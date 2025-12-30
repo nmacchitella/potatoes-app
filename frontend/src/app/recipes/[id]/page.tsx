@@ -282,7 +282,7 @@ export default function RecipeDetailPage() {
         difficulty: editForm.difficulty || undefined,
         yield_quantity: editForm.yield_quantity ? parseFloat(editForm.yield_quantity) : undefined,
         yield_unit: editForm.yield_unit || undefined,
-        cover_image_url: editForm.cover_image_url || undefined,
+        cover_image_url: editForm.cover_image_url || null,
         notes: editForm.notes || undefined,
         privacy_level: editForm.privacy_level,
         ingredients: editIngredients.filter(ing => ing.name.trim()).map((ing, idx) => ({

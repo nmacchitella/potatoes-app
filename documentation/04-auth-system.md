@@ -32,7 +32,7 @@ Potatoes uses a **JWT-based authentication system** with refresh tokens, support
 ### Refresh Tokens
 
 - **Type:** Secure random string (32 bytes, URL-safe)
-- **Lifetime:** 7 days
+- **Lifetime:** 30 days (configurable via `REFRESH_TOKEN_EXPIRE_DAYS`)
 - **Storage:**
   - Frontend: localStorage + cookies (for middleware access)
   - Backend: Database (RefreshToken model)
