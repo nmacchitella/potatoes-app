@@ -2,12 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth
+from pydantic import BaseModel
 from database import get_db
 from config import settings
 import auth
 import models
 import httpx
 from datetime import timedelta
+
+
+class GoogleMobileTokenRequest(BaseModel):
+    access_token: str
 
 router = APIRouter(prefix="/auth/google", tags=["google-auth"])
 
@@ -127,4 +132,72 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OAuth callback failed: {str(e)}"
+        )
+
+
+@router.post("/mobile")
+async def google_mobile_auth(
+    token_request: GoogleMobileTokenRequest,
+    db: Session = Depends(get_db)
+):
+    """Handle Google OAuth from mobile apps using native Google Sign-In"""
+    try:
+        async with httpx.AsyncClient() as client:
+            # Validate the access token with Google
+            userinfo_response = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {token_request.access_token}"}
+            )
+
+            if userinfo_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid Google access token"
+                )
+
+            user_info = userinfo_response.json()
+
+            email = user_info.get("email")
+            if not email:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email not provided by Google"
+                )
+
+            name = user_info.get("name", email.split("@")[0])
+            google_id = user_info.get("id")
+
+            # Find or create user
+            db_user = db.query(models.User).filter(models.User.email == email).first()
+
+            if db_user:
+                if not db_user.oauth_provider:
+                    db_user.oauth_provider = "google"
+                    db_user.oauth_id = google_id
+                if not db_user.is_verified:
+                    db_user.is_verified = True
+                db.commit()
+                db.refresh(db_user)
+            else:
+                db_user = models.User(
+                    email=email,
+                    name=name,
+                    hashed_password=None,
+                    oauth_provider="google",
+                    oauth_id=google_id,
+                    is_verified=True
+                )
+                db.add(db_user)
+                db.commit()
+                db.refresh(db_user)
+
+            # Return tokens
+            return auth.create_token_pair(db_user, db)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Mobile authentication failed: {str(e)}"
         )
