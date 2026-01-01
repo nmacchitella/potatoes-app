@@ -1,86 +1,89 @@
-import { useEffect } from 'react';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
-import { makeRedirectUri } from 'expo-auth-session';
+import { useState, useCallback, useEffect } from 'react';
+import { Alert } from 'react-native';
+import {
+  GoogleSignin,
+  statusCodes,
+} from '@react-native-google-signin/google-signin';
 import { useStore } from '@/store/useStore';
 import { initializeAuth } from '@/lib/api';
 
-// Complete the auth session to dismiss the web browser
-WebBrowser.maybeCompleteAuthSession();
-
-// You'll need to set these up in Google Cloud Console
-const GOOGLE_CLIENT_ID_IOS = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS || '';
-const GOOGLE_CLIENT_ID_ANDROID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID || '';
-const GOOGLE_CLIENT_ID_WEB = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB || '';
+// Configure Google Sign-In on module load
+GoogleSignin.configure({
+  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+});
 
 export function useGoogleAuth() {
   const { setTokens, fetchUserProfile } = useStore();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const redirectUri = makeRedirectUri({
-    scheme: 'potatoes',
-    path: 'auth/callback',
-  });
+  const handleGoogleToken = async (googleAccessToken: string) => {
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://potatoes-backend.fly.dev/api';
+    if (__DEV__) console.log('Sending token to backend:', apiUrl);
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    iosClientId: GOOGLE_CLIENT_ID_IOS,
-    androidClientId: GOOGLE_CLIENT_ID_ANDROID,
-    webClientId: GOOGLE_CLIENT_ID_WEB,
-    redirectUri,
-    scopes: ['openid', 'profile', 'email'],
-  });
-
-  useEffect(() => {
-    handleGoogleResponse();
-  }, [response]);
-
-  async function handleGoogleResponse() {
-    if (response?.type === 'success') {
-      const { authentication } = response;
-      if (authentication?.accessToken) {
-        try {
-          // Send the Google access token to your backend
-          // Your backend should exchange it for your own JWT tokens
-          const backendResponse = await fetch(
-            `${process.env.EXPO_PUBLIC_API_URL || 'https://potatoes-backend.fly.dev/api'}/auth/google/mobile`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                access_token: authentication.accessToken,
-                id_token: authentication.idToken,
-              }),
-            }
-          );
-
-          if (!backendResponse.ok) {
-            throw new Error('Failed to authenticate with backend');
-          }
-
-          const data = await backendResponse.json();
-          await setTokens(data.access_token, data.refresh_token, data.expires_in);
-          await initializeAuth();
-          await fetchUserProfile();
-        } catch (error) {
-          console.error('Google auth failed:', error);
-          throw error;
-        }
+    const response = await fetch(
+      `${apiUrl}/auth/google/mobile`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: googleAccessToken }),
       }
-    }
-  }
+    );
 
-  const signInWithGoogle = async () => {
-    try {
-      await promptAsync();
-    } catch (error) {
-      console.error('Google sign in error:', error);
-      throw error;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Backend error:', errorText);
+      throw new Error('Failed to authenticate with backend');
     }
+
+    const data = await response.json();
+    await setTokens(data.access_token, data.refresh_token, data.expires_in);
+    await initializeAuth();
+    await fetchUserProfile();
   };
+
+  const signInWithGoogle = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      if (__DEV__) console.log('Starting native Google Sign-In');
+
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+
+      if (__DEV__) console.log('Google Sign-In success, getting tokens');
+      const tokens = await GoogleSignin.getTokens();
+
+      if (tokens.accessToken) {
+        await handleGoogleToken(tokens.accessToken);
+      }
+    } catch (error: any) {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        if (__DEV__) console.log('User cancelled sign in');
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        if (__DEV__) console.log('Sign in already in progress');
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert('Error', 'Play services not available');
+      } else {
+        console.error('Google Sign-In error:', error);
+        throw error;
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setTokens, fetchUserProfile]);
+
+  const signOutFromGoogle = useCallback(async () => {
+    try {
+      await GoogleSignin.signOut();
+    } catch (e) {
+      // Ignore Google sign out errors
+      if (__DEV__) console.log('Google sign out error (ignored):', e);
+    }
+  }, []);
 
   return {
     signInWithGoogle,
-    isLoading: !request,
+    signOutFromGoogle,
+    isLoading,
   };
 }

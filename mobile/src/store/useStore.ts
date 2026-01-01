@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import type { User, UserProfileUpdate } from '@/types';
 import { authApi, stopProactiveRefresh } from '@/lib/api';
 import {
@@ -49,6 +50,13 @@ export const useStore = create<AppState>()(
         const refreshToken = getRefreshToken();
 
         stopProactiveRefresh();
+
+        // Sign out from Google
+        try {
+          await GoogleSignin.signOut();
+        } catch (e) {
+          // Ignore Google sign out errors
+        }
 
         if (refreshToken) {
           authApi.logout(refreshToken);

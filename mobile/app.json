@@ -15,10 +15,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.potatoes.app"
+      "bundleIdentifier": "com.giaggi92.potatoes",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.potatoes.app",
+      "package": "com.giaggi92.potatoes",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F5F1E8"
@@ -31,12 +34,18 @@
     },
     "plugins": [
       "expo-secure-store",
-      "expo-web-browser"
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.225541124646-pffilsd209a54ui3en3ccknualdkdrg0"
+        }
+      ]
     ],
     "extra": {
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "4eb57bc5-97d2-493b-a175-c661d12ba4eb"
       }
-    }
+    },
+    "owner": "giaggi92"
   }
 }
