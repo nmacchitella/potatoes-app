@@ -188,6 +188,16 @@ export function stopProactiveRefresh() {
   }
 }
 
+/**
+ * Set auth header directly after fresh login (avoids race condition with storage)
+ */
+export function setAuthHeader(accessToken: string, expiresIn?: number) {
+  api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+  if (expiresIn) {
+    scheduleProactiveRefresh(expiresIn);
+  }
+}
+
 // Request interceptor
 api.interceptors.request.use((config) => {
   const token = getAccessToken();

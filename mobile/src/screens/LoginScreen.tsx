@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { AuthStackParamList } from '@/types';
 import { useStore } from '@/store/useStore';
-import { authApi, getErrorMessage, initializeAuth } from '@/lib/api';
+import { authApi, getErrorMessage, setAuthHeader } from '@/lib/api';
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
@@ -32,7 +32,7 @@ export default function LoginScreen() {
     try {
       const response = await authApi.login({ email, password });
       await setTokens(response.access_token, response.refresh_token, response.expires_in);
-      await initializeAuth();
+      setAuthHeader(response.access_token, response.expires_in);
       await fetchUserProfile();
     } catch (error) {
       Alert.alert('Login Failed', getErrorMessage(error));

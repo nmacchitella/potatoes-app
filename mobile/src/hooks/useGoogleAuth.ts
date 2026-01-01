@@ -5,7 +5,7 @@ import {
   statusCodes,
 } from '@react-native-google-signin/google-signin';
 import { useStore } from '@/store/useStore';
-import { initializeAuth } from '@/lib/api';
+import { setAuthHeader } from '@/lib/api';
 
 // Configure Google Sign-In on module load
 GoogleSignin.configure({
@@ -38,7 +38,7 @@ export function useGoogleAuth() {
 
     const data = await response.json();
     await setTokens(data.access_token, data.refresh_token, data.expires_in);
-    await initializeAuth();
+    setAuthHeader(data.access_token, data.expires_in);
     await fetchUserProfile();
   };
 
