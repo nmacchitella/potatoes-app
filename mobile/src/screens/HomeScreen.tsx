@@ -104,80 +104,87 @@ export default function HomeScreen() {
           />
         }
       >
-        {/* Week Calendar View */}
-        <WeekView
-          dates={mealPlan.dates}
-          offset={mealPlan.offset}
-          loading={mealPlan.loading}
-          getMealsForDate={mealPlan.getMealsForDate}
-          getMealsForSlot={mealPlan.getMealsForSlot}
-          isToday={mealPlan.isToday}
-          isPast={mealPlan.isPast}
-          onGoPrev={mealPlan.goPrev}
-          onGoNext={mealPlan.goNext}
-          onGoToday={mealPlan.goToday}
-          onDeleteMeal={mealPlan.deleteMeal}
-          onAddMeal={handleAddMeal}
-        />
-
-        {/* Tag Filter Bar */}
-        {!selectedCollection && (
-          <TagFilterBar
-            selectedTagIds={selectedTags}
-            onTagsChange={setSelectedTags}
+        {/* Calendar View - only show when pageView is 'calendar' */}
+        {pageView === 'calendar' && (
+          <WeekView
+            dates={mealPlan.dates}
+            offset={mealPlan.offset}
+            loading={mealPlan.loading}
+            getMealsForDate={mealPlan.getMealsForDate}
+            getMealsForSlot={mealPlan.getMealsForSlot}
+            isToday={mealPlan.isToday}
+            isPast={mealPlan.isPast}
+            onGoPrev={mealPlan.goPrev}
+            onGoNext={mealPlan.goNext}
+            onGoToday={mealPlan.goToday}
+            onDeleteMeal={mealPlan.deleteMeal}
+            onAddMeal={handleAddMeal}
           />
         )}
 
-        {/* Recipe Grid */}
-        <View className="p-4">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-charcoal font-semibold text-lg">
-              {collectionName || 'My Recipes'}
-            </Text>
-            {selectedCollection && (
-              <TouchableOpacity
-                onPress={() => {
-                  setSelectedCollection(null);
-                  setCollectionName(null);
-                }}
-                className="flex-row items-center"
-              >
-                <Ionicons name="close-circle" size={20} color="#9A948D" />
-                <Text className="text-warm-gray text-sm ml-1">Clear</Text>
-              </TouchableOpacity>
+        {/* Recipes View - only show when pageView is 'recipes' */}
+        {pageView === 'recipes' && (
+          <>
+            {/* Tag Filter Bar */}
+            {!selectedCollection && (
+              <TagFilterBar
+                selectedTagIds={selectedTags}
+                onTagsChange={setSelectedTags}
+              />
             )}
-          </View>
 
-          {loading ? (
-            <View className="items-center py-8">
-              <Text className="text-warm-gray">Loading recipes...</Text>
-            </View>
-          ) : recipes.length === 0 ? (
-            <View className="items-center py-8">
-              <Ionicons name="restaurant-outline" size={48} color="#9A948D" />
-              <Text className="text-warm-gray mt-2">No recipes yet</Text>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Main')}
-                className="mt-4 bg-gold px-6 py-3 rounded-full"
-              >
-                <Text className="text-white font-medium">Add your first recipe</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View className="flex-row flex-wrap -mx-1">
-              {recipes.map((recipe) => (
-                <View key={recipe.id} className="w-1/2 px-1 mb-2">
-                  <RecipeCard
-                    recipe={recipe}
-                    onPress={() =>
-                      navigation.navigate('RecipeDetail', { id: recipe.id })
-                    }
-                  />
+            {/* Recipe Grid */}
+            <View className="p-4">
+              <View className="flex-row items-center justify-between mb-3">
+                <Text className="text-charcoal font-semibold text-lg">
+                  {collectionName || 'My Recipes'}
+                </Text>
+                {selectedCollection && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedCollection(null);
+                      setCollectionName(null);
+                    }}
+                    className="flex-row items-center"
+                  >
+                    <Ionicons name="close-circle" size={20} color="#9A948D" />
+                    <Text className="text-warm-gray text-sm ml-1">Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {loading ? (
+                <View className="items-center py-8">
+                  <Text className="text-warm-gray">Loading recipes...</Text>
                 </View>
-              ))}
+              ) : recipes.length === 0 ? (
+                <View className="items-center py-8">
+                  <Ionicons name="restaurant-outline" size={48} color="#9A948D" />
+                  <Text className="text-warm-gray mt-2">No recipes yet</Text>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Main')}
+                    className="mt-4 bg-gold px-6 py-3 rounded-full"
+                  >
+                    <Text className="text-white font-medium">Add your first recipe</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View className="flex-row flex-wrap -mx-1">
+                  {recipes.map((recipe) => (
+                    <View key={recipe.id} className="w-1/2 px-1 mb-2">
+                      <RecipeCard
+                        recipe={recipe}
+                        onPress={() =>
+                          navigation.navigate('RecipeDetail', { id: recipe.id })
+                        }
+                      />
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
-          )}
-        </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Recipe Picker Modal */}
