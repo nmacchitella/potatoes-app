@@ -153,6 +153,11 @@ export interface RecipeAuthor {
   profile_image_url?: string;
 }
 
+export interface CollectionInfo {
+  id: string;
+  name: string;
+}
+
 export interface RecipeSummary {
   id: string;
   title: string;
@@ -167,6 +172,7 @@ export interface RecipeSummary {
   status: 'draft' | 'published';
   author: RecipeAuthor;
   tags: Tag[];
+  collections: CollectionInfo[];
   created_at: string;
 }
 

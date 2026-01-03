@@ -1,7 +1,11 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import type { RecipeSummary } from '@/types';
+
+type SortColumn = 'name' | 'time' | 'difficulty' | 'collections';
+type SortDirection = 'asc' | 'desc';
 
 interface RecipeGridProps {
   recipes: RecipeSummary[];
@@ -92,6 +96,86 @@ export default function RecipeGrid({
 
   const isManaging = manageMode?.enabled && manageMode?.selectedCollection;
 
+  // Sorting state for table view
+  const [sortColumn, setSortColumn] = useState<SortColumn>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const difficultyOrder = { easy: 1, medium: 2, hard: 3 };
+
+  const sortedRecipes = useMemo(() => {
+    if (viewMode !== 'table') return recipes;
+
+    return [...recipes].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortColumn) {
+        case 'name':
+          comparison = a.title.localeCompare(b.title);
+          break;
+        case 'time':
+          const timeA = (a.prep_time_minutes || 0) + (a.cook_time_minutes || 0);
+          const timeB = (b.prep_time_minutes || 0) + (b.cook_time_minutes || 0);
+          comparison = timeA - timeB;
+          break;
+        case 'difficulty':
+          const diffA = a.difficulty ? difficultyOrder[a.difficulty] : 0;
+          const diffB = b.difficulty ? difficultyOrder[b.difficulty] : 0;
+          comparison = diffA - diffB;
+          break;
+        case 'collections':
+          const collA = a.collections?.length || 0;
+          const collB = b.collections?.length || 0;
+          comparison = collA - collB;
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [recipes, sortColumn, sortDirection, viewMode]);
+
+  // Track which recipes have expanded collections
+  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
+
+  const toggleExpandCollections = (recipeId: string) => {
+    setExpandedCollections(prev => {
+      const next = new Set(prev);
+      if (next.has(recipeId)) {
+        next.delete(recipeId);
+      } else {
+        next.add(recipeId);
+      }
+      return next;
+    });
+  };
+
+  const SortIcon = ({ column }: { column: SortColumn }) => {
+    if (sortColumn !== column) {
+      return (
+        <svg className="w-3.5 h-3.5 text-warm-gray/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+        </svg>
+      );
+    }
+    return sortDirection === 'asc' ? (
+      <svg className="w-3.5 h-3.5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+      </svg>
+    ) : (
+      <svg className="w-3.5 h-3.5 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+      </svg>
+    );
+  };
+
   // Table View
   if (viewMode === 'table') {
     return (
@@ -99,14 +183,50 @@ export default function RecipeGrid({
         <table className="w-full">
           <thead>
             <tr className="border-b border-border">
-              <th className="text-left py-3 px-4 text-sm font-medium text-warm-gray">Recipe Name</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-warm-gray">Time</th>
-              <th className="text-left py-3 px-4 text-sm font-medium text-warm-gray">Difficulty</th>
+              <th className="text-left py-3 px-4">
+                <button
+                  onClick={() => handleSort('name')}
+                  className="flex items-center gap-1.5 text-sm font-medium text-warm-gray hover:text-charcoal transition-colors"
+                >
+                  Recipe Name
+                  <SortIcon column="name" />
+                </button>
+              </th>
+              <th className="text-left py-3 px-4">
+                <button
+                  onClick={() => handleSort('time')}
+                  className="flex items-center gap-1.5 text-sm font-medium text-warm-gray hover:text-charcoal transition-colors"
+                >
+                  Time
+                  <SortIcon column="time" />
+                </button>
+              </th>
+              <th className="text-left py-3 px-4">
+                <button
+                  onClick={() => handleSort('difficulty')}
+                  className="flex items-center gap-1.5 text-sm font-medium text-warm-gray hover:text-charcoal transition-colors"
+                >
+                  Difficulty
+                  <SortIcon column="difficulty" />
+                </button>
+              </th>
+              <th className="text-left py-3 px-4">
+                <button
+                  onClick={() => handleSort('collections')}
+                  className="flex items-center gap-1.5 text-sm font-medium text-warm-gray hover:text-charcoal transition-colors"
+                >
+                  Collections
+                  <SortIcon column="collections" />
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {recipes.map(recipe => {
+            {sortedRecipes.map(recipe => {
               const totalTime = (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0);
+              const collections = recipe.collections || [];
+              const isExpanded = expandedCollections.has(recipe.id);
+
               return (
                 <tr key={recipe.id} className="border-b border-border/50 hover:bg-cream-dark/30 transition-colors">
                   <td className="py-3 px-4">
@@ -130,6 +250,41 @@ export default function RecipeGrid({
                       </span>
                     ) : (
                       <span className="text-sm text-warm-gray">—</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    {collections.length === 0 ? (
+                      <span className="text-sm text-warm-gray">—</span>
+                    ) : collections.length === 1 ? (
+                      <span className="text-sm text-charcoal">{collections[0].name}</span>
+                    ) : (
+                      <div className="flex flex-col gap-1">
+                        {isExpanded ? (
+                          <>
+                            {collections.map(col => (
+                              <span key={col.id} className="text-sm text-charcoal">
+                                {col.name}
+                              </span>
+                            ))}
+                            <button
+                              onClick={() => toggleExpandCollections(recipe.id)}
+                              className="text-xs text-gold hover:text-gold-dark transition-colors text-left"
+                            >
+                              Show less
+                            </button>
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm text-charcoal">{collections[0].name}</span>
+                            <button
+                              onClick={() => toggleExpandCollections(recipe.id)}
+                              className="text-xs text-gold hover:text-gold-dark transition-colors whitespace-nowrap"
+                            >
+                              +{collections.length - 1} more
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>

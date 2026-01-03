@@ -75,38 +75,43 @@ export default function CollectionSidebar({
   }, [editingCollectionId]);
 
   return (
-    <nav className="space-y-1">
-      {!isManageMode && (
-        <button
-          onClick={() => onCollectionClick(null)}
-          className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-            !selectedCollection
-              ? 'bg-gold/10 text-gold-dark font-medium'
-              : 'text-charcoal hover:bg-cream-dark'
-          }`}
-        >
-          All Recipes
-        </button>
-      )}
-
-      <div className="mt-4 mb-2">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-warm-gray uppercase tracking-wide px-3">Collections</span>
+    <nav className="flex flex-col max-h-[calc(100vh-10rem)]">
+      {/* Fixed header section */}
+      <div className="flex-shrink-0">
+        {!isManageMode && (
           <button
-            onClick={onToggleManageMode}
-            className={`text-xs transition-colors pr-3 ${isManageMode ? 'text-gold font-medium' : 'text-warm-gray hover:text-gold'}`}
+            onClick={() => onCollectionClick(null)}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+              !selectedCollection
+                ? 'bg-gold/10 text-gold-dark font-medium'
+                : 'text-charcoal hover:bg-cream-dark'
+            }`}
           >
-            {isManageMode ? 'Done' : 'Manage'}
+            All Recipes
           </button>
+        )}
+
+        <div className="mt-4 mb-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-warm-gray uppercase tracking-wide px-3">Collections</span>
+            <button
+              onClick={onToggleManageMode}
+              className={`text-xs transition-colors pr-3 ${isManageMode ? 'text-gold font-medium' : 'text-warm-gray hover:text-gold'}`}
+            >
+              {isManageMode ? 'Done' : 'Manage'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {loadingCollections ? (
-        <div className="px-3 py-2">
-          <div className="animate-pulse h-4 bg-cream-dark rounded w-3/4" />
-        </div>
-      ) : (
-        collections.map(collection => (
+      {/* Scrollable collections list */}
+      <div className="flex-1 overflow-y-auto min-h-0 space-y-1">
+        {loadingCollections ? (
+          <div className="px-3 py-2">
+            <div className="animate-pulse h-4 bg-cream-dark rounded w-3/4" />
+          </div>
+        ) : (
+          collections.map(collection => (
           <div key={collection.id} className="group relative">
             {editingCollectionId === collection.id ? (
               <div className="flex items-center gap-1 px-2">
@@ -208,73 +213,74 @@ export default function CollectionSidebar({
             )}
           </div>
         ))
-      )}
+        )}
 
-      {/* New Collection Input */}
-      {isCreatingCollection ? (
-        <div className="flex items-center gap-1 px-2">
-          <input
-            ref={newCollectionInputRef}
-            type="text"
-            value={newCollectionName}
-            onChange={(e) => onNewCollectionNameChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onCreateCollection();
-              if (e.key === 'Escape') onCancelCreate();
-            }}
-            placeholder="Collection name..."
-            className="flex-1 px-2 py-1.5 text-sm border border-gold rounded focus:outline-none"
-            disabled={savingCollection}
-          />
-          <button
-            onClick={onCreateCollection}
-            disabled={savingCollection || !newCollectionName.trim()}
-            className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </button>
-          <button
-            onClick={onCancelCreate}
-            className="p-1 text-warm-gray hover:text-charcoal"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={onStartCreate}
-          className="block w-full text-left px-3 py-2 text-sm text-gold hover:text-gold-dark"
-        >
-          + New Collection
-        </button>
-      )}
-
-      {/* Shared with me section */}
-      {sharedCollections.length > 0 && (
-        <>
-          <div className="mt-6 mb-2 px-3">
-            <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">Shared with me</span>
-          </div>
-          {sharedCollections.map(collection => (
+        {/* New Collection Input */}
+        {isCreatingCollection ? (
+          <div className="flex items-center gap-1 px-2">
+            <input
+              ref={newCollectionInputRef}
+              type="text"
+              value={newCollectionName}
+              onChange={(e) => onNewCollectionNameChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onCreateCollection();
+                if (e.key === 'Escape') onCancelCreate();
+              }}
+              placeholder="Collection name..."
+              className="flex-1 px-2 py-1.5 text-sm border border-gold rounded focus:outline-none"
+              disabled={savingCollection}
+            />
             <button
-              key={collection.id}
-              onClick={() => onCollectionClick(collection.id)}
-              className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                selectedCollection === collection.id
-                  ? 'bg-gold/10 text-gold-dark font-medium'
-                  : 'text-charcoal hover:bg-cream-dark'
-              }`}
+              onClick={onCreateCollection}
+              disabled={savingCollection || !newCollectionName.trim()}
+              className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
             >
-              <span className="truncate block">{collection.name}</span>
-              <span className="text-[10px] text-warm-gray">by {collection.owner.name}</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
             </button>
-          ))}
-        </>
-      )}
+            <button
+              onClick={onCancelCreate}
+              className="p-1 text-warm-gray hover:text-charcoal"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onStartCreate}
+            className="block w-full text-left px-3 py-2 text-sm text-gold hover:text-gold-dark"
+          >
+            + New Collection
+          </button>
+        )}
+
+        {/* Shared with me section */}
+        {sharedCollections.length > 0 && (
+          <>
+            <div className="mt-6 mb-2 px-3">
+              <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">Shared with me</span>
+            </div>
+            {sharedCollections.map(collection => (
+              <button
+                key={collection.id}
+                onClick={() => onCollectionClick(collection.id)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  selectedCollection === collection.id
+                    ? 'bg-gold/10 text-gold-dark font-medium'
+                    : 'text-charcoal hover:bg-cream-dark'
+                }`}
+              >
+                <span className="truncate block">{collection.name}</span>
+                <span className="text-[10px] text-warm-gray">by {collection.owner.name}</span>
+              </button>
+            ))}
+          </>
+        )}
+      </div>
     </nav>
   );
 }

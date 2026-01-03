@@ -415,6 +415,15 @@ class RecipeAuthor(BaseModel):
         from_attributes = True
 
 
+class CollectionInfo(BaseModel):
+    """Minimal collection info for recipe lists"""
+    id: str
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
 class RecipeSummary(BaseModel):
     """Minimal recipe info for lists"""
     id: str
@@ -430,6 +439,7 @@ class RecipeSummary(BaseModel):
     status: str  # draft or published
     author: RecipeAuthor
     tags: List["Tag"] = []
+    collections: List[CollectionInfo] = []
     created_at: datetime
 
     class Config:
