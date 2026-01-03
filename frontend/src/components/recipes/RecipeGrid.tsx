@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import type { RecipeSummary } from '@/types';
 
-type SortColumn = 'name' | 'time' | 'difficulty' | 'collections';
+type SortColumn = 'name' | 'time' | 'collections';
 type SortDirection = 'asc' | 'desc';
 
 interface RecipeGridProps {
@@ -109,8 +109,6 @@ export default function RecipeGrid({
     }
   };
 
-  const difficultyOrder = { easy: 1, medium: 2, hard: 3 };
-
   const sortedRecipes = useMemo(() => {
     if (viewMode !== 'table') return recipes;
 
@@ -126,15 +124,14 @@ export default function RecipeGrid({
           const timeB = (b.prep_time_minutes || 0) + (b.cook_time_minutes || 0);
           comparison = timeA - timeB;
           break;
-        case 'difficulty':
-          const diffA = a.difficulty ? difficultyOrder[a.difficulty] : 0;
-          const diffB = b.difficulty ? difficultyOrder[b.difficulty] : 0;
-          comparison = diffA - diffB;
-          break;
         case 'collections':
-          const collA = a.collections?.length || 0;
-          const collB = b.collections?.length || 0;
-          comparison = collA - collB;
+          // Sort alphabetically by first collection name, recipes with no collections go last
+          const collNameA = a.collections?.[0]?.name || '';
+          const collNameB = b.collections?.[0]?.name || '';
+          if (!collNameA && !collNameB) comparison = 0;
+          else if (!collNameA) comparison = 1;
+          else if (!collNameB) comparison = -1;
+          else comparison = collNameA.localeCompare(collNameB);
           break;
       }
 
@@ -203,15 +200,6 @@ export default function RecipeGrid({
               </th>
               <th className="text-left py-3 px-4">
                 <button
-                  onClick={() => handleSort('difficulty')}
-                  className="flex items-center gap-1.5 text-sm font-medium text-warm-gray hover:text-charcoal transition-colors"
-                >
-                  Difficulty
-                  <SortIcon column="difficulty" />
-                </button>
-              </th>
-              <th className="text-left py-3 px-4">
-                <button
                   onClick={() => handleSort('collections')}
                   className="flex items-center gap-1.5 text-sm font-medium text-warm-gray hover:text-charcoal transition-colors"
                 >
@@ -239,18 +227,6 @@ export default function RecipeGrid({
                   </td>
                   <td className="py-3 px-4 text-sm text-warm-gray">
                     {totalTime > 0 ? `${totalTime} min` : '—'}
-                  </td>
-                  <td className="py-3 px-4">
-                    {recipe.difficulty ? (
-                      <span className={`text-sm capitalize ${
-                        recipe.difficulty === 'easy' ? 'text-green-600' :
-                        recipe.difficulty === 'medium' ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
-                        {recipe.difficulty}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-warm-gray">—</span>
-                    )}
                   </td>
                   <td className="py-3 px-4">
                     {collections.length === 0 ? (
