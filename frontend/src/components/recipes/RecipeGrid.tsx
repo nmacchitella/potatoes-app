@@ -17,6 +17,7 @@ interface RecipeGridProps {
     savingRecipeId: string | null;
     onRemoveRecipe: (recipeId: string, recipeName: string) => void;
   };
+  viewMode?: 'grid' | 'table';
 }
 
 export default function RecipeGrid({
@@ -24,8 +25,19 @@ export default function RecipeGrid({
   loading,
   emptyState,
   manageMode,
+  viewMode = 'grid',
 }: RecipeGridProps) {
   if (loading) {
+    if (viewMode === 'table') {
+      return (
+        <div className="animate-pulse space-y-2">
+          <div className="h-10 bg-cream-dark rounded" />
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-12 bg-cream-dark/50 rounded" />
+          ))}
+        </div>
+      );
+    }
     return (
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
         {[...Array(6)].map((_, i) => (
@@ -80,6 +92,56 @@ export default function RecipeGrid({
 
   const isManaging = manageMode?.enabled && manageMode?.selectedCollection;
 
+  // Table View
+  if (viewMode === 'table') {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="text-left py-3 px-4 text-sm font-medium text-warm-gray">Recipe Name</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-warm-gray">Time</th>
+              <th className="text-left py-3 px-4 text-sm font-medium text-warm-gray">Difficulty</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recipes.map(recipe => {
+              const totalTime = (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0);
+              return (
+                <tr key={recipe.id} className="border-b border-border/50 hover:bg-cream-dark/30 transition-colors">
+                  <td className="py-3 px-4">
+                    <Link
+                      href={`/recipes/${recipe.id}`}
+                      className="text-charcoal hover:text-gold transition-colors font-medium"
+                    >
+                      {recipe.title}
+                    </Link>
+                  </td>
+                  <td className="py-3 px-4 text-sm text-warm-gray">
+                    {totalTime > 0 ? `${totalTime} min` : '—'}
+                  </td>
+                  <td className="py-3 px-4">
+                    {recipe.difficulty ? (
+                      <span className={`text-sm capitalize ${
+                        recipe.difficulty === 'easy' ? 'text-green-600' :
+                        recipe.difficulty === 'medium' ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {recipe.difficulty}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-warm-gray">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // Grid View
   return (
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
       {recipes.map(recipe => (

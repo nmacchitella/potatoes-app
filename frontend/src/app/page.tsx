@@ -52,6 +52,7 @@ function RecipesPageContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagFilterMode, setTagFilterMode] = useState<'all' | 'any'>('all'); // 'all' = AND, 'any' = OR
+  const [recipeViewMode, setRecipeViewMode] = useState<'grid' | 'table'>('grid');
 
   // Shared collections state
   const [sharedCollections, setSharedCollections] = useState<SharedCollection[]>([]);
@@ -751,6 +752,8 @@ function RecipesPageContent() {
               onClearTags={() => setSelectedTags([])}
               tagFilterMode={tagFilterMode}
               onToggleTagFilterMode={() => setTagFilterMode(tagFilterMode === 'all' ? 'any' : 'all')}
+              viewMode={recipeViewMode}
+              onViewModeChange={setRecipeViewMode}
             />
 
             {/* Recipe Grid */}
@@ -771,6 +774,7 @@ function RecipesPageContent() {
                 savingRecipeId: savingRecipes,
                 onRemoveRecipe: handleRemoveRecipeFromCollection,
               }}
+              viewMode={recipeViewMode}
             />
 
             {/* Pagination */}

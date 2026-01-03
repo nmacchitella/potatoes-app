@@ -9,7 +9,8 @@ from models import (
     Recipe, RecipeIngredient, RecipeInstruction, Tag, Ingredient, MeasurementUnit,
     Collection, CollectionShare, UserSettings, MealPlan, MealPlanShare, URLCheck
 )
-from auth import verify_password
+from config import settings, logger
+import httpx
 import secrets
 import os
 import json
@@ -21,50 +22,122 @@ TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templa
 
 
 class AdminAuth(AuthenticationBackend):
+    """Admin authentication using Google OAuth, restricted to ADMIN_EMAIL."""
+
     async def login(self, request: Request) -> bool:
-        form = await request.form()
-        email = form.get("username")  # SQLAdmin uses 'username' field
-        password = form.get("password")
-
-        db: Session = SessionLocal()
-        try:
-            user = db.query(User).filter(User.email == email).first()
-            if not user:
-                return False
-
-            # Check password
-            if not user.hashed_password or not verify_password(password, user.hashed_password):
-                return False
-
-            # Check if user is admin
-            if not user.is_admin:
-                return False
-
-            # Store user info in session
-            request.session.update({"user_id": user.id, "user_email": user.email})
+        # Check if session was set by OAuth callback
+        if request.session.get("admin_authenticated"):
             return True
-        finally:
-            db.close()
+        # Login form is just a redirect to Google OAuth, so this returns False
+        # to show the login page with "Login with Google" button
+        return False
 
     async def logout(self, request: Request) -> bool:
         request.session.clear()
         return True
 
     async def authenticate(self, request: Request) -> bool:
-        user_id = request.session.get("user_id")
-        if not user_id:
+        # Check if user is authenticated via OAuth
+        if not request.session.get("admin_authenticated"):
             return False
 
-        # Verify user still exists and is still admin
-        db: Session = SessionLocal()
-        try:
-            user = db.query(User).filter(User.id == user_id).first()
-            if not user or not user.is_admin:
-                request.session.clear()
-                return False
-            return True
-        finally:
-            db.close()
+        # Verify the email still matches ADMIN_EMAIL
+        admin_email = request.session.get("admin_email")
+        if not admin_email or admin_email.lower() != settings.admin_email.lower():
+            request.session.clear()
+            return False
+
+        return True
+
+
+# ============================================================================
+# ADMIN OAUTH ROUTES
+# ============================================================================
+
+async def admin_google_login(request: Request):
+    """Initiate Google OAuth flow for admin login."""
+    if not settings.google_client_id or not settings.google_client_secret:
+        return RedirectResponse("/admin/login?error=oauth_not_configured", status_code=302)
+
+    if not settings.admin_email:
+        return RedirectResponse("/admin/login?error=admin_email_not_set", status_code=302)
+
+    # Build Google OAuth URL
+    redirect_uri = f"{settings.backend_url}/admin/auth/google/callback"
+    oauth_url = (
+        "https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={settings.google_client_id}&"
+        f"redirect_uri={redirect_uri}&"
+        "response_type=code&"
+        "scope=openid%20email%20profile&"
+        "access_type=offline"
+    )
+
+    return RedirectResponse(oauth_url, status_code=302)
+
+
+async def admin_google_callback(request: Request):
+    """Handle Google OAuth callback for admin login."""
+    code = request.query_params.get("code")
+
+    if not code:
+        logger.error("Admin OAuth callback: No code received")
+        return RedirectResponse("/admin/login?error=no_code", status_code=302)
+
+    try:
+        # Exchange code for tokens
+        redirect_uri = f"{settings.backend_url}/admin/auth/google/callback"
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": settings.google_client_id,
+                    "client_secret": settings.google_client_secret,
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+            )
+
+        if token_response.status_code != 200:
+            logger.error(f"Admin OAuth token exchange failed: {token_response.text}")
+            return RedirectResponse("/admin/login?error=token_exchange_failed", status_code=302)
+
+        token_data = token_response.json()
+        access_token = token_data.get("access_token")
+
+        # Fetch user info from Google
+        async with httpx.AsyncClient() as client:
+            userinfo_response = await client.get(
+                "https://www.googleapis.com/oauth2/v2/userinfo",
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+
+        if userinfo_response.status_code != 200:
+            logger.error(f"Admin OAuth userinfo fetch failed: {userinfo_response.text}")
+            return RedirectResponse("/admin/login?error=userinfo_failed", status_code=302)
+
+        user_info = userinfo_response.json()
+        email = user_info.get("email", "").lower()
+
+        # Check if email matches ADMIN_EMAIL
+        if email != settings.admin_email.lower():
+            logger.warning(f"Admin login denied for {email} - not authorized")
+            return RedirectResponse("/admin/login?error=unauthorized", status_code=302)
+
+        # Set admin session
+        request.session.update({
+            "admin_authenticated": True,
+            "admin_email": email,
+            "admin_name": user_info.get("name", ""),
+        })
+
+        logger.info(f"Admin login successful for {email}")
+        return RedirectResponse("/admin/", status_code=302)
+
+    except Exception as e:
+        logger.error(f"Admin OAuth error: {str(e)}")
+        return RedirectResponse("/admin/login?error=oauth_error", status_code=302)
 
 
 # ============================================================================
@@ -535,6 +608,10 @@ def create_admin(app):
         base_url="/admin",
         templates_dir=TEMPLATES_DIR,
     )
+
+    # Add OAuth routes for admin authentication
+    app.add_route("/admin/auth/google", admin_google_login, methods=["GET"])
+    app.add_route("/admin/auth/google/callback", admin_google_callback, methods=["GET"])
 
     # Register user & auth views
     admin.add_view(UserAdmin)
