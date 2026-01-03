@@ -38,7 +38,7 @@ export function GroceryListView() {
     );
   }
 
-  const hasItems = groceryList && groceryList.items.length > 0;
+  const hasItems = !!(groceryList && groceryList.items.length > 0);
   const hasCheckedItems = groceryList?.items.some(i => i.is_checked) || false;
   const checkedCount = groceryList?.items.filter(i => i.is_checked).length || 0;
   const totalCount = groceryList?.items.length || 0;
