@@ -6,4 +6,5 @@ export { IngredientAutocomplete, UnitAutocomplete } from './IngredientAutocomple
 export { RecipeIngredientsEdit } from './RecipeIngredientsEdit';
 export { RecipeInstructionsEdit } from './RecipeInstructionsEdit';
 export { RecipeTagsEdit } from './RecipeTagsEdit';
+export { SubRecipeSelect } from './SubRecipeSelect';
 export { YouTubeEmbed, isYouTubeUrl, extractYouTubeVideoId } from './YouTubeEmbed';

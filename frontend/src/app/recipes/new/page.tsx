@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi, tagApi, collectionApi, getErrorMessage } from '@/lib/api';
-import { RecipeIngredientsEdit, RecipeInstructionsEdit } from '@/components/recipes';
+import { RecipeIngredientsEdit, RecipeInstructionsEdit, SubRecipeSelect } from '@/components/recipes';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import { ImageUpload } from '@/components/ui';
-import type { RecipeIngredientInput, RecipeInstructionInput, Tag, ParsedIngredient, RecipeImportResponse, Collection } from '@/types';
+import type { RecipeIngredientInput, RecipeInstructionInput, Tag, ParsedIngredient, RecipeImportResponse, Collection, SubRecipeInput } from '@/types';
 
 // Form data structure for each recipe tab
 interface RecipeFormData {
@@ -25,6 +25,7 @@ interface RecipeFormData {
   ingredients: RecipeIngredientInput[];
   instructions: RecipeInstructionInput[];
   selectedTagIds: string[];
+  subRecipeInputs: SubRecipeInput[];
 }
 
 const createEmptyFormData = (): RecipeFormData => ({
@@ -41,6 +42,7 @@ const createEmptyFormData = (): RecipeFormData => ({
   ingredients: [{ name: '', sort_order: 0 }],
   instructions: [{ step_number: 1, instruction_text: '' }],
   selectedTagIds: [],
+  subRecipeInputs: [],
 });
 
 const importResponseToFormData = (data: RecipeImportResponse, availableTags: Tag[] = []): RecipeFormData => {
@@ -87,6 +89,7 @@ const importResponseToFormData = (data: RecipeImportResponse, availableTags: Tag
         }))
       : [{ step_number: 1, instruction_text: '' }],
     selectedTagIds: matchedTagIds,
+    subRecipeInputs: [],
   };
 };
 
@@ -125,6 +128,7 @@ function NewRecipeContent() {
     basics: true,
     ingredients: true,
     instructions: true,
+    subRecipes: false,
   });
 
   // Tags
@@ -314,6 +318,7 @@ function NewRecipeContent() {
           step_number: idx + 1,
         })),
         tag_ids: data.selectedTagIds,
+        sub_recipe_inputs: data.subRecipeInputs.length > 0 ? data.subRecipeInputs : undefined,
       });
 
       // Upload pending image if one was selected
@@ -748,6 +753,40 @@ function NewRecipeContent() {
                     )}
                   </div>
 
+                  {/* Sub-Recipes Section */}
+                  <div className="border border-border rounded-lg p-4">
+                    <button
+                      onClick={() => toggleSection('subRecipes')}
+                      className="w-full flex items-center justify-between text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium text-charcoal">Components</h4>
+                        <span className="text-xs text-warm-gray">(optional)</span>
+                      </div>
+                      <svg
+                        className={`w-4 h-4 text-warm-gray transition-transform ${expandedSections.subRecipes ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {expandedSections.subRecipes && (
+                      <div className="mt-4">
+                        <p className="text-xs text-warm-gray mb-3">
+                          Add other recipes as components (e.g., Lasagna = Ragù + Besciamella)
+                        </p>
+                        <SubRecipeSelect
+                          selectedSubRecipes={currentFormData.subRecipeInputs}
+                          onChange={subRecipes => updateCurrentForm('subRecipeInputs', subRecipes)}
+                          compact
+                        />
+                      </div>
+                    )}
+                  </div>
+
                   {/* Save buttons for manual entry */}
                   <div className="flex gap-3 pt-2">
                     <button
@@ -1070,6 +1109,39 @@ function NewRecipeContent() {
                 <RecipeInstructionsEdit
                   instructions={currentFormData.instructions}
                   onChange={instructions => updateCurrentForm('instructions', instructions)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Sub-Recipes Section */}
+          <div className="card">
+            <button
+              onClick={() => toggleSection('subRecipes')}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <div className="flex items-center gap-2">
+                <h2 className="font-serif text-2xl text-charcoal">Components</h2>
+                <span className="text-sm text-warm-gray">(optional)</span>
+              </div>
+              <svg
+                className={`w-5 h-5 text-warm-gray transition-transform ${expandedSections.subRecipes ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {expandedSections.subRecipes && (
+              <div className="mt-6">
+                <p className="text-sm text-warm-gray mb-4">
+                  Add other recipes as components (e.g., Lasagna = Ragù + Besciamella)
+                </p>
+                <SubRecipeSelect
+                  selectedSubRecipes={currentFormData.subRecipeInputs}
+                  onChange={subRecipes => updateCurrentForm('subRecipeInputs', subRecipes)}
                 />
               </div>
             )}

@@ -27,6 +27,18 @@ collection_recipes = Table(
     Column('added_at', DateTime(timezone=True), server_default=func.now())
 )
 
+# Sub-recipes junction table (composite recipes like Lasagna = Ragù + Besciamella)
+recipe_sub_recipes = Table(
+    'recipe_sub_recipes',
+    Base.metadata,
+    Column('parent_recipe_id', String, ForeignKey('recipes.id', ondelete='CASCADE'), primary_key=True),
+    Column('sub_recipe_id', String, ForeignKey('recipes.id', ondelete='CASCADE'), primary_key=True),
+    Column('sort_order', Integer, default=0),
+    Column('scale_factor', Float, default=1.0),  # e.g., 1.5x the ragù
+    Column('section_title', String(100), nullable=True),  # Optional override title
+    Column('added_at', DateTime(timezone=True), server_default=func.now())
+)
+
 
 class User(Base):
     __tablename__ = "users"
@@ -55,6 +67,7 @@ class User(Base):
     recipes = relationship("Recipe", back_populates="author", foreign_keys="Recipe.author_id", cascade="all, delete-orphan")
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
     settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    grocery_list = relationship("GroceryList", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -151,6 +164,15 @@ class Recipe(Base):
     tags = relationship("Tag", secondary=recipe_tags, back_populates="recipes")
     collections = relationship("Collection", secondary=collection_recipes, back_populates="recipes")
     meal_plans = relationship("MealPlan", back_populates="recipe", cascade="all, delete-orphan", passive_deletes=True)
+
+    # Sub-recipes (composite recipes like Lasagna = Ragù + Besciamella)
+    sub_recipes = relationship(
+        "Recipe",
+        secondary=recipe_sub_recipes,
+        primaryjoin="Recipe.id == recipe_sub_recipes.c.parent_recipe_id",
+        secondaryjoin="Recipe.id == recipe_sub_recipes.c.sub_recipe_id",
+        backref="parent_recipes"
+    )
 
 
 class RecipeIngredient(Base):
@@ -334,6 +356,66 @@ class MealPlanShare(Base):
     # Relationships
     owner = relationship("User", foreign_keys=[owner_id], backref="meal_plan_shares_given")
     shared_with = relationship("User", foreign_keys=[shared_with_id], backref="meal_plan_shares_received")
+
+
+# ============================================================================
+# GROCERY LIST MODELS
+# ============================================================================
+
+class GroceryList(Base):
+    """User's grocery list - one per user."""
+    __tablename__ = "grocery_lists"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, unique=True)
+    name = Column(String(200), default="My Grocery List")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="grocery_list")
+    items = relationship("GroceryListItem", back_populates="grocery_list", cascade="all, delete-orphan", order_by="GroceryListItem.sort_order")
+    shares = relationship("GroceryListShare", back_populates="grocery_list", cascade="all, delete-orphan")
+
+
+class GroceryListItem(Base):
+    """Individual item in a grocery list."""
+    __tablename__ = "grocery_list_items"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    grocery_list_id = Column(String, ForeignKey("grocery_lists.id", ondelete='CASCADE'), nullable=False)
+    name = Column(String(255), nullable=False)
+    quantity = Column(Float, nullable=True)
+    unit = Column(String(50), nullable=True)
+    category = Column(String(50), nullable=True)  # produce, dairy, meat, pantry, frozen, bakery, beverages, other
+    is_checked = Column(Boolean, default=False)
+    is_staple = Column(Boolean, default=False)
+    is_manual = Column(Boolean, default=False)  # True if user-added manually
+    source_recipe_ids = Column(JSON, nullable=True)  # List of recipe IDs this ingredient came from
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    grocery_list = relationship("GroceryList", back_populates="items")
+
+
+class GroceryListShare(Base):
+    """Tracks which users a grocery list is shared with."""
+    __tablename__ = "grocery_list_shares"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    grocery_list_id = Column(String, ForeignKey("grocery_lists.id", ondelete='CASCADE'), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    permission = Column(String(20), default="viewer")  # viewer, editor
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('grocery_list_id', 'user_id', name='uq_grocery_list_user'),
+    )
+
+    # Relationships
+    grocery_list = relationship("GroceryList", back_populates="shares")
+    user = relationship("User", foreign_keys=[user_id], backref="shared_grocery_lists")
 
 
 # ============================================================================

@@ -11,8 +11,8 @@ import logging
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from models import Recipe, RecipeIngredient, RecipeInstruction, Tag, Collection, Ingredient
-from schemas import RecipeIngredientCreate, RecipeInstructionCreate
+from models import Recipe, RecipeIngredient, RecipeInstruction, Tag, Collection, Ingredient, recipe_sub_recipes
+from schemas import RecipeIngredientCreate, RecipeInstructionCreate, SubRecipeInput
 from routers.ingredient_router import find_or_create_ingredient
 
 logger = logging.getLogger("potatoes.recipe_service")
@@ -193,3 +193,111 @@ def clone_recipe_content(
     clone.tags = original.tags.copy() if original.tags else []
 
     logger.info(f"Cloned recipe {original.id} to {clone.id} for user {user_id}")
+
+
+# ============================================================================
+# SUB-RECIPE MANAGEMENT
+# ============================================================================
+
+def validate_no_circular_reference(
+    db: Session,
+    parent_recipe_id: str,
+    sub_recipe_ids: List[str],
+) -> None:
+    """
+    Validate that adding sub-recipes won't create circular references.
+
+    Raises:
+        ValueError: If a circular reference would be created.
+    """
+    # Check if any of the sub-recipes are ancestors of the parent
+    for sub_recipe_id in sub_recipe_ids:
+        if sub_recipe_id == parent_recipe_id:
+            raise ValueError("A recipe cannot be a sub-recipe of itself")
+
+        # Check if parent_recipe is already a sub-recipe of sub_recipe_id
+        # (i.e., sub_recipe -> parent would create a cycle)
+        result = db.execute(
+            recipe_sub_recipes.select().where(
+                recipe_sub_recipes.c.parent_recipe_id == sub_recipe_id,
+                recipe_sub_recipes.c.sub_recipe_id == parent_recipe_id,
+            )
+        ).first()
+
+        if result:
+            raise ValueError(
+                f"Circular reference detected: recipe {sub_recipe_id} already uses this recipe as a sub-recipe"
+            )
+
+
+def update_recipe_sub_recipes(
+    db: Session,
+    recipe_id: str,
+    sub_recipe_inputs: List[SubRecipeInput],
+    user_id: str,
+) -> None:
+    """
+    Update sub-recipes for a recipe.
+
+    Validates:
+    - No circular references
+    - Sub-recipes exist and are accessible (user's own or public)
+    - One level only (sub-recipes can't have their own sub-recipes that we link)
+
+    Args:
+        db: Database session
+        recipe_id: ID of the parent recipe
+        sub_recipe_inputs: List of sub-recipe input data
+        user_id: ID of the user making the change
+
+    Raises:
+        ValueError: If validation fails
+    """
+    if not sub_recipe_inputs:
+        # Clear all sub-recipes
+        db.execute(
+            recipe_sub_recipes.delete().where(
+                recipe_sub_recipes.c.parent_recipe_id == recipe_id
+            )
+        )
+        return
+
+    sub_recipe_ids = [s.sub_recipe_id for s in sub_recipe_inputs]
+
+    # Validate no circular references
+    validate_no_circular_reference(db, recipe_id, sub_recipe_ids)
+
+    # Validate all sub-recipes exist and are accessible
+    accessible_recipes = db.query(Recipe).filter(
+        Recipe.id.in_(sub_recipe_ids),
+        Recipe.deleted_at.is_(None),
+        # Must be user's own recipe OR public
+        (Recipe.author_id == user_id) | (Recipe.privacy_level == "public")
+    ).all()
+
+    accessible_ids = {r.id for r in accessible_recipes}
+    missing_ids = set(sub_recipe_ids) - accessible_ids
+
+    if missing_ids:
+        raise ValueError(f"Sub-recipes not found or not accessible: {missing_ids}")
+
+    # Delete existing sub-recipe links
+    db.execute(
+        recipe_sub_recipes.delete().where(
+            recipe_sub_recipes.c.parent_recipe_id == recipe_id
+        )
+    )
+
+    # Insert new sub-recipe links
+    for sub_input in sub_recipe_inputs:
+        db.execute(
+            recipe_sub_recipes.insert().values(
+                parent_recipe_id=recipe_id,
+                sub_recipe_id=sub_input.sub_recipe_id,
+                sort_order=sub_input.sort_order,
+                scale_factor=sub_input.scale_factor,
+                section_title=sub_input.section_title,
+            )
+        )
+
+    logger.info(f"Updated {len(sub_recipe_inputs)} sub-recipes for recipe {recipe_id}")

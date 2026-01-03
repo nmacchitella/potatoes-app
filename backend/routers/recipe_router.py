@@ -16,7 +16,7 @@ import math
 
 from database import get_db
 from auth import get_current_user, get_current_user_optional
-from models import User, Recipe, Tag, Collection
+from models import User, Recipe, Tag, Collection, recipe_sub_recipes
 from schemas import (
     RecipeCreate, RecipeUpdate, Recipe as RecipeSchema,
     RecipeSummary, RecipeListResponse, RecipeWithScale, ForkedFromInfo, ClonedByMeInfo,
@@ -24,6 +24,7 @@ from schemas import (
     RecipeImportRequest, RecipeImportResponse, RecipeImportMultiResponse,
     RecipeParseTextRequest,
     Collection as CollectionSchema,
+    SubRecipeInfo,
 )
 from services.ingredient_parser import parse_ingredients_block, to_dict
 from services.recipe_import import import_recipe_from_url, recipe_to_dict, is_youtube_url, parse_with_gemini
@@ -33,6 +34,7 @@ from services.recipe_service import (
     update_recipe_ingredients,
     update_recipe_instructions,
     clone_recipe_content,
+    update_recipe_sub_recipes,
 )
 from services.image_service import upload_image, is_cloudinary_configured
 
@@ -156,6 +158,13 @@ async def create_recipe(
         ).all()
         recipe.collections = collections
 
+    # Add sub-recipes (composite recipes)
+    if recipe_data.sub_recipe_inputs:
+        try:
+            update_recipe_sub_recipes(db, recipe.id, recipe_data.sub_recipe_inputs, current_user.id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     db.commit()
     db.refresh(recipe)
 
@@ -176,6 +185,7 @@ async def get_recipe(
         joinedload(Recipe.instructions),
         joinedload(Recipe.tags),
         joinedload(Recipe.forked_from_user),
+        joinedload(Recipe.sub_recipes).joinedload(Recipe.ingredients),
     ).filter(
         Recipe.id == recipe_id,
         Recipe.deleted_at.is_(None)
@@ -197,6 +207,41 @@ async def get_recipe(
     response = RecipeWithScale.model_validate(recipe)
     response.scale_factor = scale_factor
     response.scaled_yield_quantity = scaled_yield
+
+    # Load sub-recipes with junction table metadata
+    if recipe.sub_recipes:
+        sub_recipe_infos = []
+        # Get junction table data for sort_order, scale_factor, section_title
+        junction_rows = db.execute(
+            recipe_sub_recipes.select().where(
+                recipe_sub_recipes.c.parent_recipe_id == recipe_id
+            ).order_by(recipe_sub_recipes.c.sort_order)
+        ).fetchall()
+
+        junction_map = {row.sub_recipe_id: row for row in junction_rows}
+
+        for sub_recipe in recipe.sub_recipes:
+            junction_data = junction_map.get(sub_recipe.id)
+            sub_scale = junction_data.scale_factor if junction_data else 1.0
+
+            sub_recipe_infos.append(SubRecipeInfo(
+                id=sub_recipe.id,
+                title=sub_recipe.title,
+                description=sub_recipe.description,
+                cover_image_url=sub_recipe.cover_image_url,
+                prep_time_minutes=sub_recipe.prep_time_minutes,
+                cook_time_minutes=sub_recipe.cook_time_minutes,
+                yield_quantity=sub_recipe.yield_quantity,
+                yield_unit=sub_recipe.yield_unit,
+                sort_order=junction_data.sort_order if junction_data else 0,
+                scale_factor=sub_scale,
+                section_title=junction_data.section_title if junction_data else None,
+                ingredients=sub_recipe.ingredients,
+            ))
+
+        # Sort by sort_order
+        sub_recipe_infos.sort(key=lambda x: x.sort_order)
+        response.sub_recipes = sub_recipe_infos
 
     # Add forked_from info if this is a cloned recipe
     if recipe.forked_from_recipe_id and recipe.forked_from_user:
@@ -315,6 +360,16 @@ async def update_recipe(
         ).all()
         recipe.collections = collections
         del update_data["collection_ids"]
+
+    # Handle sub-recipes separately
+    if "sub_recipe_inputs" in update_data:
+        try:
+            update_recipe_sub_recipes(
+                db, recipe.id, recipe_data.sub_recipe_inputs or [], current_user.id
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        del update_data["sub_recipe_inputs"]
 
     # Update remaining fields
     for field, value in update_data.items():

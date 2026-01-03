@@ -187,6 +187,29 @@ export interface ClonedByMeInfo {
   cloned_at: string;
 }
 
+// Sub-recipe types (composite recipes like Lasagna = Ragù + Besciamella)
+export interface SubRecipeInput {
+  sub_recipe_id: string;
+  sort_order?: number;
+  scale_factor?: number;
+  section_title?: string;
+}
+
+export interface SubRecipeInfo {
+  id: string;
+  title: string;
+  description?: string;
+  cover_image_url?: string;
+  prep_time_minutes?: number;
+  cook_time_minutes?: number;
+  yield_quantity?: number;
+  yield_unit?: string;
+  sort_order: number;
+  scale_factor: number;
+  section_title?: string;
+  ingredients: RecipeIngredient[];
+}
+
 export interface Recipe extends RecipeSummary {
   author_id: string;
   source_url?: string;
@@ -195,6 +218,7 @@ export interface Recipe extends RecipeSummary {
   notes?: string;
   ingredients: RecipeIngredient[];
   instructions: RecipeInstruction[];
+  sub_recipes: SubRecipeInfo[];
   updated_at: string;
   forked_from?: ForkedFromInfo;
 }
@@ -224,6 +248,7 @@ export interface RecipeCreateInput {
   instructions?: RecipeInstructionInput[];
   tag_ids?: string[];
   collection_ids?: string[];
+  sub_recipe_inputs?: SubRecipeInput[];
 }
 
 export interface RecipeUpdateInput extends Omit<Partial<RecipeCreateInput>, 'cover_image_url'> {
@@ -553,4 +578,84 @@ export interface MealPlanShareCreateInput {
 
 export interface MealPlanShareUpdateInput {
   permission: 'viewer' | 'editor';
+}
+
+// ============================================================================
+// GROCERY LIST TYPES
+// ============================================================================
+
+export interface GroceryListItem {
+  id: string;
+  name: string;
+  quantity?: number;
+  unit?: string;
+  category?: string;
+  is_checked: boolean;
+  is_staple: boolean;
+  is_manual: boolean;
+  source_recipe_ids?: string[];
+  sort_order: number;
+  created_at: string;
+}
+
+export interface GroceryListShareUser {
+  id: string;
+  name: string;
+  profile_image_url?: string;
+}
+
+export interface GroceryListShare {
+  id: string;
+  user_id: string;
+  permission: 'viewer' | 'editor';
+  created_at: string;
+  user: GroceryListShareUser;
+}
+
+export interface GroceryList {
+  id: string;
+  name: string;
+  items: GroceryListItem[];
+  items_by_category: Record<string, GroceryListItem[]>;
+  shares: GroceryListShare[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface GroceryListItemCreateInput {
+  name: string;
+  quantity?: number;
+  unit?: string;
+  category?: string;
+}
+
+export interface GroceryListItemUpdateInput {
+  name?: string;
+  quantity?: number;
+  unit?: string;
+  is_checked?: boolean;
+  category?: string;
+  sort_order?: number;
+}
+
+export interface GroceryListGenerateInput {
+  start_date: string;
+  end_date: string;
+  merge: boolean;
+}
+
+export interface GroceryListShareCreateInput {
+  user_id: string;
+  permission: 'viewer' | 'editor';
+}
+
+export interface GroceryListShareUpdateInput {
+  permission: 'viewer' | 'editor';
+}
+
+export interface SharedGroceryListAccess {
+  id: string;
+  owner: GroceryListShareUser;
+  permission: 'viewer' | 'editor';
+  created_at: string;
 }

@@ -9,9 +9,9 @@ import { abbreviateUnit, formatQuantity } from '@/lib/constants';
 import { convertIngredient, type UnitSystem } from '@/lib/unitConversion';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
-import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit, YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
+import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit, SubRecipeSelect, YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
 import { ImageUpload } from '@/components/ui';
-import type { RecipeWithScale, Collection, RecipeIngredient, RecipeIngredientInput, RecipeInstructionInput } from '@/types';
+import type { RecipeWithScale, Collection, RecipeIngredient, RecipeIngredientInput, RecipeInstructionInput, SubRecipeInput } from '@/types';
 
 /**
  * Format an ingredient for display
@@ -108,6 +108,7 @@ export default function RecipeDetailPage() {
   const [editIngredients, setEditIngredients] = useState<RecipeIngredientInput[]>([]);
   const [editInstructions, setEditInstructions] = useState<RecipeInstructionInput[]>([]);
   const [editTagIds, setEditTagIds] = useState<string[]>([]);
+  const [editSubRecipeInputs, setEditSubRecipeInputs] = useState<SubRecipeInput[]>([]);
 
   // Collection dropdown state
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -115,6 +116,9 @@ export default function RecipeDetailPage() {
   const [addingToCollection, setAddingToCollection] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Sub-recipes expanded state
+  const [expandedSubRecipes, setExpandedSubRecipes] = useState<Set<string>>(new Set());
 
   const recipeId = params.id as string;
 
@@ -175,6 +179,12 @@ export default function RecipeDetailPage() {
         instruction_group: inst.instruction_group,
       })));
       setEditTagIds(recipe.tags.map(t => t.id));
+      setEditSubRecipeInputs((recipe.sub_recipes || []).map((sr, idx) => ({
+        sub_recipe_id: sr.id,
+        sort_order: sr.sort_order ?? idx,
+        scale_factor: sr.scale_factor ?? 1,
+        section_title: sr.section_title,
+      })));
     }
   }, [isEditing, recipe]);
 
@@ -200,6 +210,18 @@ export default function RecipeDetailPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const toggleSubRecipe = (subRecipeId: string) => {
+    setExpandedSubRecipes(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(subRecipeId)) {
+        newSet.delete(subRecipeId);
+      } else {
+        newSet.add(subRecipeId);
+      }
+      return newSet;
+    });
+  };
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete this recipe?')) return;
@@ -294,6 +316,7 @@ export default function RecipeDetailPage() {
           step_number: idx + 1,
         })),
         tag_ids: editTagIds,
+        sub_recipe_inputs: editSubRecipeInputs,
       });
       // Refresh recipe data
       const updated = await recipeApi.get(recipeId);
@@ -704,6 +727,87 @@ export default function RecipeDetailPage() {
 
           {/* Right Column */}
           <div className="lg:col-span-2 space-y-6 min-w-0">
+            {/* Sub-Recipes (composite recipes like Lasagna = Ragù + Besciamella) */}
+            {(isEditing || (recipe.sub_recipes && recipe.sub_recipes.length > 0)) && (
+              <div className="bg-white rounded-lg border border-border p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <h2 className="font-serif text-xl text-charcoal">Components</h2>
+                  {!isEditing && recipe.sub_recipes && (
+                    <span className="text-xs text-warm-gray">({recipe.sub_recipes.length} sub-recipe{recipe.sub_recipes.length !== 1 ? 's' : ''})</span>
+                  )}
+                </div>
+
+                {isEditing ? (
+                  <div>
+                    <p className="text-xs text-warm-gray mb-3">
+                      Add other recipes as components (e.g., Lasagna = Ragù + Besciamella)
+                    </p>
+                    <SubRecipeSelect
+                      selectedSubRecipes={editSubRecipeInputs}
+                      onChange={setEditSubRecipeInputs}
+                      excludeRecipeId={recipeId}
+                      compact
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {recipe.sub_recipes?.map(subRecipe => {
+                      const isExpanded = expandedSubRecipes.has(subRecipe.id);
+                      const displayTitle = subRecipe.section_title || subRecipe.title;
+                      return (
+                        <div key={subRecipe.id} className="border border-border rounded-lg overflow-hidden">
+                          <button
+                            onClick={() => toggleSubRecipe(subRecipe.id)}
+                            className="w-full flex items-center justify-between p-3 bg-cream hover:bg-cream-dark transition-colors text-left"
+                          >
+                            <div className="flex items-center gap-2">
+                              <svg
+                                className={`w-4 h-4 text-warm-gray transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                              <span className="font-medium text-charcoal">{displayTitle}</span>
+                              {subRecipe.scale_factor !== 1 && (
+                                <span className="text-xs text-gold bg-gold/10 px-1.5 py-0.5 rounded">
+                                  {subRecipe.scale_factor}x
+                                </span>
+                              )}
+                            </div>
+                            <Link
+                              href={`/recipes/${subRecipe.id}`}
+                              onClick={e => e.stopPropagation()}
+                              className="text-xs text-gold hover:text-gold-dark"
+                            >
+                              View recipe →
+                            </Link>
+                          </button>
+                          {isExpanded && (
+                            <div className="p-3 border-t border-border bg-white">
+                              <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-1.5 pl-4">
+                                {subRecipe.ingredients.map(ing => {
+                                  // Apply sub-recipe scale factor and parent scale
+                                  const combinedScale = subRecipe.scale_factor * scale;
+                                  return (
+                                    <li key={ing.id} className="text-xs text-charcoal leading-relaxed list-disc marker:text-gold/60">
+                                      {formatIngredientWithUnit(ing, unitSystem || undefined, combinedScale)}
+                                      {ing.is_optional && <span className="text-warm-gray"> (optional)</span>}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Ingredients */}
             <div className="bg-white rounded-lg border border-border p-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">

@@ -384,6 +384,7 @@ class RecipeCreate(RecipeBase):
     instructions: List[RecipeInstructionCreate] = []
     tag_ids: List[str] = []
     collection_ids: List[str] = []
+    sub_recipe_inputs: List["SubRecipeInput"] = []  # Composite recipes
     status: str = "published"
 
 
@@ -404,6 +405,7 @@ class RecipeUpdate(BaseModel):
     instructions: Optional[List[RecipeInstructionCreate]] = None
     tag_ids: Optional[List[str]] = None
     collection_ids: Optional[List[str]] = None
+    sub_recipe_inputs: Optional[List["SubRecipeInput"]] = None  # Composite recipes
 
 
 class RecipeAuthor(BaseModel):
@@ -465,6 +467,36 @@ class ClonedByMeInfo(BaseModel):
         from_attributes = True
 
 
+# --- Sub-Recipe Schemas (composite recipes like Lasagna = Ragù + Besciamella) ---
+class SubRecipeInput(BaseModel):
+    """Input for linking a sub-recipe to a parent recipe"""
+    sub_recipe_id: str
+    sort_order: int = 0
+    scale_factor: float = Field(default=1.0, gt=0, description="Scale factor, e.g., 1.5 for 1.5x the sub-recipe")
+    section_title: Optional[str] = Field(None, max_length=100, description="Optional override title for this section")
+
+
+class SubRecipeInfo(BaseModel):
+    """Info about a sub-recipe in a composite recipe"""
+    id: str
+    title: str
+    description: Optional[str] = None
+    cover_image_url: Optional[str] = None
+    prep_time_minutes: Optional[int] = None
+    cook_time_minutes: Optional[int] = None
+    yield_quantity: Optional[float] = None
+    yield_unit: Optional[str] = None
+    # Junction table data
+    sort_order: int = 0
+    scale_factor: float = 1.0
+    section_title: Optional[str] = None
+    # Nested data for display
+    ingredients: List["RecipeIngredient"] = []
+
+    class Config:
+        from_attributes = True
+
+
 class Recipe(RecipeBase):
     """Full recipe with all details"""
     id: str
@@ -474,6 +506,7 @@ class Recipe(RecipeBase):
     ingredients: List[RecipeIngredient] = []
     instructions: List[RecipeInstruction] = []
     tags: List[Tag] = []
+    sub_recipes: List[SubRecipeInfo] = []  # Composite recipes
     created_at: datetime
     updated_at: datetime
     forked_from: Optional[ForkedFromInfo] = None
@@ -744,5 +777,129 @@ class SharedMealPlanAccess(BaseModel):
         from_attributes = True
 
 
+# ============================================================================
+# GROCERY LIST SCHEMAS
+# ============================================================================
+
+class GroceryListItemCreate(BaseModel):
+    """Create a manual grocery list item."""
+    name: str = Field(..., min_length=1, max_length=255)
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    category: Optional[str] = None
+
+
+class GroceryListItemUpdate(BaseModel):
+    """Update a grocery list item."""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    is_checked: Optional[bool] = None
+    category: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class GroceryListItemResponse(BaseModel):
+    """Grocery list item response."""
+    id: str
+    name: str
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    category: Optional[str] = None
+    is_checked: bool
+    is_staple: bool
+    is_manual: bool
+    source_recipe_ids: Optional[List[str]] = None
+    sort_order: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GroceryListShareUser(BaseModel):
+    """User info for grocery list sharing."""
+    id: str
+    name: str
+    profile_image_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GroceryListShareCreate(BaseModel):
+    """Create a grocery list share."""
+    user_id: str
+    permission: str = "viewer"  # viewer, editor
+
+
+class GroceryListShareUpdate(BaseModel):
+    """Update a grocery list share."""
+    permission: str  # viewer, editor
+
+
+class GroceryListShareResponse(BaseModel):
+    """Grocery list share response."""
+    id: str
+    user_id: str
+    permission: str
+    created_at: datetime
+    user: GroceryListShareUser
+
+    class Config:
+        from_attributes = True
+
+
+class GroceryListResponse(BaseModel):
+    """Full grocery list response."""
+    id: str
+    name: str
+    items: List[GroceryListItemResponse] = []
+    items_by_category: Dict[str, List[GroceryListItemResponse]] = {}
+    shares: List[GroceryListShareResponse] = []
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GroceryListGenerateRequest(BaseModel):
+    """Request to generate grocery list from meal plan."""
+    start_date: date
+    end_date: date
+    merge: bool = False  # True = merge with existing, False = replace
+
+
+class GroceryListBulkCheckRequest(BaseModel):
+    """Request to bulk check/uncheck items."""
+    item_ids: List[str]
+    is_checked: bool
+
+
+class SharedGroceryListOwner(BaseModel):
+    """Owner info for shared grocery lists."""
+    id: str
+    name: str
+    profile_image_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SharedGroceryListAccess(BaseModel):
+    """Info about a grocery list shared with the current user."""
+    id: str
+    owner: SharedGroceryListOwner
+    permission: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # Update forward references
 CollectionWithRecipes.model_rebuild()
+SubRecipeInfo.model_rebuild()
+RecipeCreate.model_rebuild()
+RecipeUpdate.model_rebuild()
