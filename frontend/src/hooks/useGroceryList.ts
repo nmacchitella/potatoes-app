@@ -14,7 +14,6 @@ export const CATEGORY_ORDER = [
   'frozen',
   'pantry',
   'beverages',
-  'other',
   'staples',
 ] as const;
 
@@ -26,7 +25,6 @@ export const CATEGORY_LABELS: Record<string, string> = {
   frozen: 'Frozen',
   pantry: 'Pantry',
   beverages: 'Beverages',
-  other: 'Other',
   staples: 'Check Pantry',
 };
 

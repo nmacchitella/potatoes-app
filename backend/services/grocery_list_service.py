@@ -27,12 +27,11 @@ CATEGORY_ORDER = [
     'frozen',
     'pantry',
     'beverages',
-    'other',
     'staples',  # "Check pantry" section - shown last
 ]
 
 # Default category for items without one
-DEFAULT_CATEGORY = 'other'
+DEFAULT_CATEGORY = 'pantry'
 
 
 def normalize_ingredient_name(name: str) -> str:
