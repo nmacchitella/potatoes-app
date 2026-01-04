@@ -584,6 +584,11 @@ export interface MealPlanShareUpdateInput {
 // GROCERY LIST TYPES
 // ============================================================================
 
+export interface SourceRecipeInfo {
+  id: string;
+  title: string;
+}
+
 export interface GroceryListItem {
   id: string;
   name: string;
@@ -594,6 +599,7 @@ export interface GroceryListItem {
   is_staple: boolean;
   is_manual: boolean;
   source_recipe_ids?: string[];
+  source_recipes: SourceRecipeInfo[];
   sort_order: number;
   created_at: string;
 }
@@ -634,6 +640,7 @@ export interface GroceryListItemUpdateInput {
   quantity?: number;
   unit?: string;
   is_checked?: boolean;
+  is_staple?: boolean;
   category?: string;
   sort_order?: number;
 }

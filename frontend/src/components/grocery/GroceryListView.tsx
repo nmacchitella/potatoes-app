@@ -11,6 +11,7 @@ export function GroceryListView() {
     loading,
     error,
     toggleItemChecked,
+    toggleItemStaple,
     addItem,
     deleteItem,
     clearCheckedItems,
@@ -114,6 +115,7 @@ export function GroceryListView() {
                 items={items}
                 defaultCollapsed={category === 'staples'}
                 onToggleItemChecked={toggleItemChecked}
+                onToggleItemStaple={toggleItemStaple}
                 onDeleteItem={deleteItem}
               />
             );

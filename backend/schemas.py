@@ -795,8 +795,15 @@ class GroceryListItemUpdate(BaseModel):
     quantity: Optional[float] = None
     unit: Optional[str] = None
     is_checked: Optional[bool] = None
+    is_staple: Optional[bool] = None
     category: Optional[str] = None
     sort_order: Optional[int] = None
+
+
+class SourceRecipeInfo(BaseModel):
+    """Minimal recipe info for grocery list items."""
+    id: str
+    title: str
 
 
 class GroceryListItemResponse(BaseModel):
@@ -810,6 +817,7 @@ class GroceryListItemResponse(BaseModel):
     is_staple: bool
     is_manual: bool
     source_recipe_ids: Optional[List[str]] = None
+    source_recipes: List[SourceRecipeInfo] = []
     sort_order: int
     created_at: datetime
 

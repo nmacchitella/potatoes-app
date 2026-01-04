@@ -10,12 +10,13 @@ from typing import List, Optional, Tuple
 
 from database import get_db
 from auth import get_current_user
-from models import User, GroceryList, GroceryListItem, GroceryListShare
+from models import User, GroceryList, GroceryListItem, GroceryListShare, Recipe
 from schemas import (
     GroceryListResponse, GroceryListItemCreate, GroceryListItemUpdate,
     GroceryListItemResponse, GroceryListGenerateRequest, GroceryListBulkCheckRequest,
     GroceryListShareCreate, GroceryListShareUpdate, GroceryListShareResponse,
     GroceryListShareUser, SharedGroceryListAccess, SharedGroceryListOwner,
+    SourceRecipeInfo,
 )
 from services.grocery_list_service import (
     get_or_create_grocery_list, get_grocery_list_with_items,
@@ -87,13 +88,46 @@ def require_grocery_list_access(
     return grocery_list, permission
 
 
-def build_grocery_list_response(grocery_list: GroceryList) -> GroceryListResponse:
+def build_grocery_list_response(grocery_list: GroceryList, db: Session) -> GroceryListResponse:
     """Build full grocery list response with items grouped by category."""
-    items = [GroceryListItemResponse.model_validate(item) for item in grocery_list.items]
+    # Collect all recipe IDs from items
+    all_recipe_ids = set()
+    for item in grocery_list.items:
+        if item.source_recipe_ids:
+            all_recipe_ids.update(item.source_recipe_ids)
+
+    # Fetch recipe titles in one query
+    recipe_titles = {}
+    if all_recipe_ids:
+        recipes = db.query(Recipe.id, Recipe.title).filter(Recipe.id.in_(all_recipe_ids)).all()
+        recipe_titles = {r.id: r.title for r in recipes}
+
+    def build_item_response(item: GroceryListItem) -> GroceryListItemResponse:
+        source_recipes = []
+        if item.source_recipe_ids:
+            for recipe_id in item.source_recipe_ids:
+                if recipe_id in recipe_titles:
+                    source_recipes.append(SourceRecipeInfo(id=recipe_id, title=recipe_titles[recipe_id]))
+        return GroceryListItemResponse(
+            id=item.id,
+            name=item.name,
+            quantity=item.quantity,
+            unit=item.unit,
+            category=item.category,
+            is_checked=item.is_checked,
+            is_staple=item.is_staple,
+            is_manual=item.is_manual,
+            source_recipe_ids=item.source_recipe_ids,
+            source_recipes=source_recipes,
+            sort_order=item.sort_order,
+            created_at=item.created_at
+        )
+
+    items = [build_item_response(item) for item in grocery_list.items]
     items_by_category = {}
 
     for cat, cat_items in group_items_by_category(grocery_list.items).items():
-        items_by_category[cat] = [GroceryListItemResponse.model_validate(item) for item in cat_items]
+        items_by_category[cat] = [build_item_response(item) for item in cat_items]
 
     shares = []
     for share in grocery_list.shares:
@@ -139,7 +173,7 @@ async def get_grocery_list(
         joinedload(GroceryList.shares).joinedload(GroceryListShare.user)
     ).filter(GroceryList.id == grocery_list.id).first()
 
-    return build_grocery_list_response(grocery_list)
+    return build_grocery_list_response(grocery_list, db)
 
 
 @router.post("/generate", response_model=GroceryListResponse)
@@ -171,7 +205,7 @@ async def generate_grocery_list(
         joinedload(GroceryList.shares).joinedload(GroceryListShare.user)
     ).filter(GroceryList.id == grocery_list.id).first()
 
-    return build_grocery_list_response(grocery_list)
+    return build_grocery_list_response(grocery_list, db)
 
 
 @router.delete("/clear")
@@ -513,4 +547,4 @@ async def get_shared_grocery_list(
         joinedload(GroceryList.shares).joinedload(GroceryListShare.user)
     ).filter(GroceryList.id == grocery_list.id).first()
 
-    return build_grocery_list_response(grocery_list)
+    return build_grocery_list_response(grocery_list, db)

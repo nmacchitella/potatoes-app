@@ -38,6 +38,7 @@ interface UseGroceryListReturn {
 
   // Item operations
   toggleItemChecked: (itemId: string) => Promise<void>;
+  toggleItemStaple: (itemId: string, isStaple: boolean) => Promise<void>;
   addItem: (data: GroceryListItemCreateInput) => Promise<void>;
   deleteItem: (itemId: string) => Promise<void>;
   clearCheckedItems: () => Promise<void>;
@@ -166,6 +167,52 @@ export function useGroceryList(): UseGroceryListReturn {
     } catch (err) {
       console.error('Failed to update item:', err);
       // Revert on error
+      loadGroceryList();
+    }
+  }, [groceryList, loadGroceryList]);
+
+  // Toggle item staple status
+  const toggleItemStaple = useCallback(async (itemId: string, isStaple: boolean) => {
+    if (!groceryList) return;
+
+    const item = groceryList.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Determine old and new category
+    const oldCategory = item.category || 'other';
+    const newCategory = isStaple ? 'staples' : (oldCategory === 'staples' ? 'other' : oldCategory);
+
+    // Optimistic update
+    setGroceryList(prev => {
+      if (!prev) return prev;
+
+      const updatedItem = { ...item, is_staple: isStaple, category: newCategory };
+
+      // Remove from old category and add to new
+      const newItemsByCategory = { ...prev.items_by_category };
+
+      // Remove from old category
+      if (newItemsByCategory[oldCategory]) {
+        newItemsByCategory[oldCategory] = newItemsByCategory[oldCategory].filter(i => i.id !== itemId);
+      }
+
+      // Add to new category
+      if (!newItemsByCategory[newCategory]) {
+        newItemsByCategory[newCategory] = [];
+      }
+      newItemsByCategory[newCategory] = [...newItemsByCategory[newCategory], updatedItem];
+
+      return {
+        ...prev,
+        items: prev.items.map(i => i.id === itemId ? updatedItem : i),
+        items_by_category: newItemsByCategory,
+      };
+    });
+
+    try {
+      await groceryListApi.updateItem(itemId, { is_staple: isStaple, category: newCategory });
+    } catch (err) {
+      console.error('Failed to update item:', err);
       loadGroceryList();
     }
   }, [groceryList, loadGroceryList]);
@@ -333,6 +380,7 @@ export function useGroceryList(): UseGroceryListReturn {
 
     // Item operations
     toggleItemChecked,
+    toggleItemStaple,
     addItem,
     deleteItem,
     clearCheckedItems,
