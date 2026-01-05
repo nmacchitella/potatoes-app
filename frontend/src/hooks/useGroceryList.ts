@@ -177,8 +177,8 @@ export function useGroceryList(): UseGroceryListReturn {
     if (!item) return;
 
     // Determine old and new category
-    const oldCategory = item.category || 'other';
-    const newCategory = isStaple ? 'staples' : (oldCategory === 'staples' ? 'other' : oldCategory);
+    const oldCategory = item.category || 'pantry';
+    const newCategory = isStaple ? 'staples' : (oldCategory === 'staples' ? 'pantry' : oldCategory);
 
     // Optimistic update
     setGroceryList(prev => {
@@ -221,7 +221,7 @@ export function useGroceryList(): UseGroceryListReturn {
       const newItem = await groceryListApi.addItem(data);
       setGroceryList(prev => {
         if (!prev) return prev;
-        const category = newItem.category || 'other';
+        const category = newItem.category || 'pantry';
         return {
           ...prev,
           items: [...prev.items, newItem],
@@ -247,7 +247,7 @@ export function useGroceryList(): UseGroceryListReturn {
     // Optimistic update
     setGroceryList(prev => {
       if (!prev) return prev;
-      const category = item.category || 'other';
+      const category = item.category || 'pantry';
       return {
         ...prev,
         items: prev.items.filter(i => i.id !== itemId),
