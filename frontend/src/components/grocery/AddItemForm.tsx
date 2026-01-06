@@ -40,11 +40,30 @@ export function AddItemForm({ onAddItem }: AddItemFormProps) {
     }
   };
 
-  const handleIngredientSelect = (ingredient: Ingredient) => {
-    setName(ingredient.name);
-    // Auto-set category from the selected ingredient
-    if (ingredient.category) {
-      setSelectedCategory(ingredient.category.toLowerCase());
+  const handleIngredientSelect = async (ingredient: Ingredient) => {
+    // Auto-add the ingredient immediately
+    const category = ingredient.category ? ingredient.category.toLowerCase() : undefined;
+    setIsAdding(true);
+    try {
+      await onAddItem({
+        name: ingredient.name,
+        category,
+      });
+      // Reset form
+      setName('');
+      setQuantity('');
+      setUnit('');
+      setSelectedCategory(undefined);
+      setShowExpanded(false);
+    } catch (err) {
+      console.error('Failed to add item:', err);
+      // On error, populate the form so user can try again
+      setName(ingredient.name);
+      if (category) {
+        setSelectedCategory(category);
+      }
+    } finally {
+      setIsAdding(false);
     }
   };
 

@@ -546,6 +546,93 @@ export interface MealPlanShareUpdateInput {
 }
 
 // ============================================================================
+// GROCERY LIST TYPES
+// ============================================================================
+
+export interface SourceRecipeInfo {
+  id: string;
+  title: string;
+}
+
+export interface GroceryListItem {
+  id: string;
+  name: string;
+  quantity?: number;
+  unit?: string;
+  category?: string;
+  is_checked: boolean;
+  is_staple: boolean;
+  is_manual: boolean;
+  source_recipe_ids?: string[];
+  source_recipes: SourceRecipeInfo[];
+  sort_order: number;
+  created_at: string;
+}
+
+export interface GroceryListShareUser {
+  id: string;
+  name: string;
+  profile_image_url?: string;
+}
+
+export interface GroceryListShare {
+  id: string;
+  user_id: string;
+  permission: 'viewer' | 'editor';
+  created_at: string;
+  user: GroceryListShareUser;
+}
+
+export interface GroceryList {
+  id: string;
+  name: string;
+  items: GroceryListItem[];
+  items_by_category: Record<string, GroceryListItem[]>;
+  shares: GroceryListShare[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface GroceryListItemCreateInput {
+  name: string;
+  quantity?: number;
+  unit?: string;
+  category?: string;
+}
+
+export interface GroceryListItemUpdateInput {
+  name?: string;
+  quantity?: number;
+  unit?: string;
+  is_checked?: boolean;
+  is_staple?: boolean;
+  category?: string;
+  sort_order?: number;
+}
+
+export interface GroceryListGenerateInput {
+  start_date: string;
+  end_date: string;
+  merge: boolean;
+}
+
+export interface GroceryListShareCreateInput {
+  user_id: string;
+  permission: 'viewer' | 'editor';
+}
+
+export interface GroceryListShareUpdateInput {
+  permission: 'viewer' | 'editor';
+}
+
+export interface SharedGroceryListAccess {
+  id: string;
+  owner: GroceryListShareUser;
+  permission: 'viewer' | 'editor';
+  created_at: string;
+}
+
+// ============================================================================
 // NAVIGATION TYPES
 // ============================================================================
 
@@ -563,6 +650,7 @@ export type RootStackParamList = {
   DayDetail: { date: string };
   FollowRequests: undefined;
   FollowList: { userId: string; mode: 'followers' | 'following' };
+  GroceryList: undefined;
 };
 
 export type AuthStackParamList = {
@@ -573,6 +661,7 @@ export type AuthStackParamList = {
 
 export type MainTabParamList = {
   Home: undefined;
+  Grocery: undefined;
   Add: undefined;
   Profile: undefined;
 };

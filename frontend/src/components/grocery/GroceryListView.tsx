@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { useGroceryList, CATEGORY_ORDER } from '@/hooks/useGroceryList';
 import { GroceryCategorySection } from './GroceryCategorySection';
 import { AddItemForm } from './AddItemForm';
 import { GenerateModal } from './GenerateModal';
+import { groceryListApi } from '@/lib/api';
 
 export function GroceryListView() {
   const {
@@ -20,8 +22,37 @@ export function GroceryListView() {
     generateFromMealPlan,
     isGenerateModalOpen,
     setIsGenerateModalOpen,
-    openShareModal,
   } = useGroceryList();
+
+  // Share link state
+  const [isSharePopupOpen, setIsSharePopupOpen] = useState(false);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleShareClick = async () => {
+    setIsSharePopupOpen(true);
+    if (!shareLink) {
+      setIsGeneratingLink(true);
+      try {
+        const { share_token } = await groceryListApi.getOrCreateShareLink();
+        const link = `${window.location.origin}/grocery/share/${share_token}`;
+        setShareLink(link);
+      } catch (err) {
+        console.error('Failed to generate share link:', err);
+      } finally {
+        setIsGeneratingLink(false);
+      }
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (shareLink) {
+      await navigator.clipboard.writeText(shareLink);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   if (loading) {
     return (
@@ -66,15 +97,71 @@ export function GroceryListView() {
             </svg>
             Generate
           </button>
-          <button
-            onClick={openShareModal}
-            className="p-2 text-warm-gray hover:text-charcoal transition-colors"
-            title="Share list"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-            </svg>
-          </button>
+          <div className="relative">
+            <button
+              onClick={handleShareClick}
+              className="p-2 text-warm-gray hover:text-charcoal transition-colors"
+              title="Share list"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+            </button>
+
+            {/* Share popup */}
+            {isSharePopupOpen && (
+              <>
+                {/* Backdrop */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsSharePopupOpen(false)}
+                />
+                {/* Popup */}
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-border z-50 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-charcoal">Share grocery list</h3>
+                    <button
+                      onClick={() => setIsSharePopupOpen(false)}
+                      className="text-warm-gray hover:text-charcoal"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <p className="text-sm text-warm-gray mb-3">
+                    Anyone with this link can view your grocery list
+                  </p>
+                  {isGeneratingLink ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-gold border-t-transparent" />
+                    </div>
+                  ) : shareLink ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={shareLink}
+                        readOnly
+                        className="flex-1 px-3 py-2 text-sm bg-cream border border-border rounded-lg text-charcoal truncate"
+                      />
+                      <button
+                        onClick={handleCopyLink}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          copied
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gold text-white hover:bg-gold/90'
+                        }`}
+                      >
+                        {copied ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-red-500">Failed to generate link</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

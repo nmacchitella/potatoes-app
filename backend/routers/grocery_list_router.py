@@ -7,6 +7,7 @@ CRUD operations for grocery lists with sharing support.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Tuple
+import secrets
 
 from database import get_db
 from auth import get_current_user
@@ -548,3 +549,103 @@ async def get_shared_grocery_list(
     ).filter(GroceryList.id == grocery_list.id).first()
 
     return build_grocery_list_response(grocery_list, db)
+
+
+# ============================================================================
+# PUBLIC SHARE ENDPOINTS
+# ============================================================================
+
+@router.post("/share-link")
+async def get_or_create_share_link(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get or create a public share link for the grocery list."""
+    grocery_list = get_or_create_grocery_list(db, current_user)
+
+    # Generate token if not exists
+    if not grocery_list.share_token:
+        grocery_list.share_token = secrets.token_urlsafe(16)
+        db.commit()
+        db.refresh(grocery_list)
+
+    return {"share_token": grocery_list.share_token}
+
+
+@router.delete("/share-link")
+async def disable_share_link(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Disable the public share link by removing the token."""
+    grocery_list = get_or_create_grocery_list(db, current_user)
+
+    grocery_list.share_token = None
+    db.commit()
+
+    return {"disabled": True}
+
+
+@router.get("/public/{token}", response_model=GroceryListResponse)
+async def get_public_grocery_list(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Get a grocery list by public share token. No authentication required."""
+    grocery_list = db.query(GroceryList).options(
+        joinedload(GroceryList.items),
+        joinedload(GroceryList.user)
+    ).filter(
+        GroceryList.share_token == token
+    ).first()
+
+    if not grocery_list:
+        raise HTTPException(status_code=404, detail="Grocery list not found")
+
+    # Build a simplified response without shares info
+    all_recipe_ids = set()
+    for item in grocery_list.items:
+        if item.source_recipe_ids:
+            all_recipe_ids.update(item.source_recipe_ids)
+
+    recipe_titles = {}
+    if all_recipe_ids:
+        recipes = db.query(Recipe.id, Recipe.title).filter(Recipe.id.in_(all_recipe_ids)).all()
+        recipe_titles = {r.id: r.title for r in recipes}
+
+    def build_item_response(item: GroceryListItem) -> GroceryListItemResponse:
+        source_recipes = []
+        if item.source_recipe_ids:
+            for recipe_id in item.source_recipe_ids:
+                if recipe_id in recipe_titles:
+                    source_recipes.append(SourceRecipeInfo(id=recipe_id, title=recipe_titles[recipe_id]))
+        return GroceryListItemResponse(
+            id=item.id,
+            name=item.name,
+            quantity=item.quantity,
+            unit=item.unit,
+            category=item.category,
+            is_checked=item.is_checked,
+            is_staple=item.is_staple,
+            is_manual=item.is_manual,
+            source_recipe_ids=item.source_recipe_ids,
+            source_recipes=source_recipes,
+            sort_order=item.sort_order,
+            created_at=item.created_at
+        )
+
+    items = [build_item_response(item) for item in grocery_list.items]
+    items_by_category = {}
+
+    for cat, cat_items in group_items_by_category(grocery_list.items).items():
+        items_by_category[cat] = [build_item_response(item) for item in cat_items]
+
+    return GroceryListResponse(
+        id=grocery_list.id,
+        name=grocery_list.name,
+        items=items,
+        items_by_category=items_by_category,
+        shares=[],  # Don't expose shares to public
+        created_at=grocery_list.created_at,
+        updated_at=grocery_list.updated_at
+    )

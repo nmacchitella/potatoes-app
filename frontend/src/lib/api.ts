@@ -873,6 +873,21 @@ export const groceryListApi = {
   leaveSharedGroceryList: async (ownerId: string): Promise<void> => {
     await api.delete(`/grocery-list/shares/leave/${ownerId}`);
   },
+
+  // Public share link methods
+  getOrCreateShareLink: async (): Promise<{ share_token: string }> => {
+    const response = await api.post<{ share_token: string }>('/grocery-list/share-link');
+    return response.data;
+  },
+
+  disableShareLink: async (): Promise<void> => {
+    await api.delete('/grocery-list/share-link');
+  },
+
+  getPublicGroceryList: async (token: string): Promise<GroceryList> => {
+    const response = await api.get<GroceryList>(`/grocery-list/public/${token}`);
+    return response.data;
+  },
 };
 
 export default api;

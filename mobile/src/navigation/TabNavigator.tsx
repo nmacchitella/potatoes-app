@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { MainTabParamList } from '@/types';
 import { useStore } from '@/store/useStore';
 import HomeScreen from '@/screens/HomeScreen';
+import GroceryListScreen from '@/screens/GroceryListScreen';
 import AddRecipeScreen from '@/screens/AddRecipeScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import UserAvatar from '@/components/ui/UserAvatar';

@@ -369,6 +369,7 @@ class GroceryList(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, unique=True)
     name = Column(String(200), default="My Grocery List")
+    share_token = Column(String(32), unique=True, index=True, nullable=True)  # Public share token
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

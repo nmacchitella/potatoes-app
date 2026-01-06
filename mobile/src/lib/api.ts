@@ -12,6 +12,9 @@ import type {
   MealPlan, MealPlanCreateInput, MealPlanUpdateInput, MealPlanMoveInput,
   MealPlanCopyInput, MealPlanRecurringInput, MealPlanListResponse,
   MealPlanShare, SharedMealPlanAccess, MealPlanShareCreateInput, MealPlanShareUpdateInput,
+  GroceryList, GroceryListItem, GroceryListItemCreateInput, GroceryListItemUpdateInput,
+  GroceryListGenerateInput, GroceryListShare, GroceryListShareCreateInput,
+  GroceryListShareUpdateInput, SharedGroceryListAccess,
 } from '@/types';
 import {
   getAccessToken,
@@ -741,6 +744,92 @@ export const mealPlanApi = {
 
   leaveSharedMealPlan: async (ownerId: string): Promise<void> => {
     await api.delete(`/meal-plan/shares/leave/${ownerId}`);
+  },
+};
+
+// ============================================================================
+// GROCERY LIST API
+// ============================================================================
+
+export const groceryListApi = {
+  get: async (): Promise<GroceryList> => {
+    const response = await api.get<GroceryList>('/grocery-list');
+    return response.data;
+  },
+
+  generate: async (data: GroceryListGenerateInput): Promise<GroceryList> => {
+    const response = await api.post<GroceryList>('/grocery-list/generate', data);
+    return response.data;
+  },
+
+  clear: async (checkedOnly: boolean = false): Promise<{ deleted: number }> => {
+    const response = await api.delete<{ deleted: number }>('/grocery-list/clear', {
+      params: { checked_only: checkedOnly }
+    });
+    return response.data;
+  },
+
+  // Item methods
+  addItem: async (data: GroceryListItemCreateInput): Promise<GroceryListItem> => {
+    const response = await api.post<GroceryListItem>('/grocery-list/items', data);
+    return response.data;
+  },
+
+  updateItem: async (itemId: string, data: GroceryListItemUpdateInput): Promise<GroceryListItem> => {
+    const response = await api.patch<GroceryListItem>(`/grocery-list/items/${itemId}`, data);
+    return response.data;
+  },
+
+  deleteItem: async (itemId: string): Promise<void> => {
+    await api.delete(`/grocery-list/items/${itemId}`);
+  },
+
+  bulkCheck: async (itemIds: string[], isChecked: boolean): Promise<GroceryListItem[]> => {
+    const response = await api.post<GroceryListItem[]>('/grocery-list/items/bulk-check', {
+      item_ids: itemIds,
+      is_checked: isChecked
+    });
+    return response.data;
+  },
+
+  // Sharing methods
+  listShares: async (): Promise<GroceryListShare[]> => {
+    const response = await api.get<GroceryListShare[]>('/grocery-list/shares');
+    return response.data;
+  },
+
+  share: async (data: GroceryListShareCreateInput): Promise<GroceryListShare> => {
+    const response = await api.post<GroceryListShare>('/grocery-list/shares', data);
+    return response.data;
+  },
+
+  updateShare: async (userId: string, data: GroceryListShareUpdateInput): Promise<GroceryListShare> => {
+    const response = await api.put<GroceryListShare>(`/grocery-list/shares/${userId}`, data);
+    return response.data;
+  },
+
+  removeShare: async (userId: string): Promise<void> => {
+    await api.delete(`/grocery-list/shares/${userId}`);
+  },
+
+  listSharedWithMe: async (): Promise<SharedGroceryListAccess[]> => {
+    const response = await api.get<SharedGroceryListAccess[]>('/grocery-list/shared-with-me');
+    return response.data;
+  },
+
+  // Public share link methods
+  getOrCreateShareLink: async (): Promise<{ share_token: string }> => {
+    const response = await api.post<{ share_token: string }>('/grocery-list/share-link');
+    return response.data;
+  },
+
+  disableShareLink: async (): Promise<void> => {
+    await api.delete('/grocery-list/share-link');
+  },
+
+  getPublicGroceryList: async (token: string): Promise<GroceryList> => {
+    const response = await api.get<GroceryList>(`/grocery-list/public/${token}`);
+    return response.data;
   },
 };
 
