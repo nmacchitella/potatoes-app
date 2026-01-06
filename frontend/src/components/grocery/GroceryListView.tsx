@@ -106,6 +106,7 @@ export function GroceryListView() {
       {/* Items by category */}
       {hasItems && groceryList && (
         <>
+          {/* Render categories in order */}
           {CATEGORY_ORDER.map(category => {
             const items = groceryList.items_by_category[category] || [];
             return (
@@ -120,6 +121,23 @@ export function GroceryListView() {
               />
             );
           })}
+          {/* Render any additional categories not in CATEGORY_ORDER */}
+          {Object.keys(groceryList.items_by_category)
+            .filter(cat => !CATEGORY_ORDER.includes(cat as typeof CATEGORY_ORDER[number]))
+            .map(category => {
+              const items = groceryList.items_by_category[category] || [];
+              return (
+                <GroceryCategorySection
+                  key={category}
+                  category={category}
+                  items={items}
+                  defaultCollapsed={false}
+                  onToggleItemChecked={toggleItemChecked}
+                  onToggleItemStaple={toggleItemStaple}
+                  onDeleteItem={deleteItem}
+                />
+              );
+            })}
 
           {/* Clear buttons */}
           <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border">

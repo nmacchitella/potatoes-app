@@ -26,6 +26,13 @@ export const CATEGORY_LABELS: Record<string, string> = {
   pantry: 'Pantry',
   beverages: 'Beverages',
   staples: 'Check Pantry',
+  // Additional categories that might come from ingredients
+  spices: 'Spices & Seasonings',
+  condiments: 'Condiments',
+  grains: 'Grains & Pasta',
+  canned: 'Canned Goods',
+  snacks: 'Snacks',
+  other: 'Other',
 };
 
 interface UseGroceryListReturn {
