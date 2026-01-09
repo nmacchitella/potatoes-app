@@ -8,7 +8,7 @@ interface GroceryListSidebarProps {
   sharedWithMe: SharedGroceryListAccess[];
   selectedListId: string | null;
   onSelectList: (listId: string) => void;
-  onCreateList: (name?: string) => Promise<void>;
+  onCreateList: (name?: string) => Promise<GroceryListSummary>;
   onRenameList: (listId: string, name: string) => Promise<void>;
   onDeleteList: (listId: string) => Promise<void>;
   onAcceptShare: (shareId: string) => Promise<void>;
