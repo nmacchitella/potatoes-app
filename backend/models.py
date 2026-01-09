@@ -67,7 +67,7 @@ class User(Base):
     recipes = relationship("Recipe", back_populates="author", foreign_keys="Recipe.author_id", cascade="all, delete-orphan")
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
     settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    grocery_list = relationship("GroceryList", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    grocery_lists = relationship("GroceryList", back_populates="user", cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -363,18 +363,18 @@ class MealPlanShare(Base):
 # ============================================================================
 
 class GroceryList(Base):
-    """User's grocery list - one per user."""
+    """User's grocery list - users can have multiple lists."""
     __tablename__ = "grocery_lists"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, unique=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
     name = Column(String(200), default="My Grocery List")
     share_token = Column(String(32), unique=True, index=True, nullable=True)  # Public share token
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationships
-    user = relationship("User", back_populates="grocery_list")
+    user = relationship("User", back_populates="grocery_lists")
     items = relationship("GroceryListItem", back_populates="grocery_list", cascade="all, delete-orphan", order_by="GroceryListItem.sort_order")
     shares = relationship("GroceryListShare", back_populates="grocery_list", cascade="all, delete-orphan")
 
@@ -407,8 +407,10 @@ class GroceryListShare(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     grocery_list_id = Column(String, ForeignKey("grocery_lists.id", ondelete='CASCADE'), nullable=False)
     user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
-    permission = Column(String(20), default="viewer")  # viewer, editor
+    permission = Column(String(20), default="editor")  # editor (shared users can edit)
+    status = Column(String(20), default="pending")  # pending, accepted, declined
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint('grocery_list_id', 'user_id', name='uq_grocery_list_user'),
@@ -416,7 +418,7 @@ class GroceryListShare(Base):
 
     # Relationships
     grocery_list = relationship("GroceryList", back_populates="shares")
-    user = relationship("User", foreign_keys=[user_id], backref="shared_grocery_lists")
+    user = relationship("User", foreign_keys=[user_id], backref="received_grocery_shares")
 
 
 # ============================================================================

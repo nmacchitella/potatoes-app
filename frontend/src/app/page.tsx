@@ -52,7 +52,7 @@ function RecipesPageContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagFilterMode, setTagFilterMode] = useState<'all' | 'any'>('all'); // 'all' = AND, 'any' = OR
-  const [recipeViewMode, setRecipeViewMode] = useState<'grid' | 'table'>('grid');
+  const [recipeViewMode, setRecipeViewMode] = useState<'grid' | 'table'>('table');
 
   // Shared collections state
   const [sharedCollections, setSharedCollections] = useState<SharedCollection[]>([]);

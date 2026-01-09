@@ -613,7 +613,8 @@ export interface GroceryListShareUser {
 export interface GroceryListShare {
   id: string;
   user_id: string;
-  permission: 'viewer' | 'editor';
+  permission: 'editor';
+  status: 'pending' | 'accepted' | 'declined';
   created_at: string;
   user: GroceryListShareUser;
 }
@@ -626,6 +627,23 @@ export interface GroceryList {
   shares: GroceryListShare[];
   created_at: string;
   updated_at?: string;
+}
+
+export interface GroceryListSummary {
+  id: string;
+  name: string;
+  item_count: number;
+  share_token?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface GroceryListCreateInput {
+  name?: string;
+}
+
+export interface GroceryListUpdateInput {
+  name?: string;
 }
 
 export interface GroceryListItemCreateInput {
@@ -653,16 +671,18 @@ export interface GroceryListGenerateInput {
 
 export interface GroceryListShareCreateInput {
   user_id: string;
-  permission: 'viewer' | 'editor';
 }
 
 export interface GroceryListShareUpdateInput {
-  permission: 'viewer' | 'editor';
+  permission: 'editor';
 }
 
 export interface SharedGroceryListAccess {
   id: string;
+  grocery_list_id: string;
+  grocery_list_name: string;
   owner: GroceryListShareUser;
-  permission: 'viewer' | 'editor';
+  permission: 'editor';
+  status: 'pending' | 'accepted' | 'declined';
   created_at: string;
 }

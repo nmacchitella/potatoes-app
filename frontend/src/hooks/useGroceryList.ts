@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { groceryListApi, socialApi } from '@/lib/api';
 import type {
-  GroceryList, GroceryListItem, GroceryListShare,
+  GroceryList, GroceryListSummary, GroceryListShare,
   GroceryListItemCreateInput, SharedGroceryListAccess, UserSearchResult
 } from '@/types';
 
@@ -36,6 +36,16 @@ export const CATEGORY_LABELS: Record<string, string> = {
 };
 
 interface UseGroceryListReturn {
+  // Lists management
+  myLists: GroceryListSummary[];
+  sharedWithMe: SharedGroceryListAccess[];
+  loadingLists: boolean;
+  selectedListId: string | null;
+  setSelectedListId: (id: string | null) => void;
+  createList: (name?: string) => Promise<GroceryListSummary>;
+  renameList: (listId: string, name: string) => Promise<void>;
+  deleteList: (listId: string) => Promise<void>;
+
   // Grocery list data
   groceryList: GroceryList | null;
   loading: boolean;
@@ -55,30 +65,35 @@ interface UseGroceryListReturn {
   isGenerateModalOpen: boolean;
   setIsGenerateModalOpen: (open: boolean) => void;
 
-  // Sharing
-  isShareModalOpen: boolean;
+  // User sharing
   shares: GroceryListShare[];
   loadingShares: boolean;
-  sharedWithMe: SharedGroceryListAccess[];
   userSearchQuery: string;
   setUserSearchQuery: (query: string) => void;
   userSearchResults: UserSearchResult[];
   searchingUsers: boolean;
   sharingUser: string | null;
-  openShareModal: () => void;
-  closeShareModal: () => void;
-  handleShareWithUser: (userId: string, permission?: 'viewer' | 'editor') => Promise<void>;
-  handleUpdatePermission: (userId: string, permission: 'viewer' | 'editor') => Promise<void>;
+  handleShareWithUser: (userId: string) => Promise<void>;
   handleRemoveShare: (userId: string) => Promise<void>;
+  acceptShare: (shareId: string) => Promise<void>;
+  declineShare: (shareId: string) => Promise<void>;
+  leaveSharedList: (shareId: string) => Promise<void>;
 
   // Refresh
   refresh: () => Promise<void>;
+  refreshLists: () => Promise<void>;
 }
 
 export function useGroceryList(): UseGroceryListReturn {
-  // Grocery list data
+  // Lists state
+  const [myLists, setMyLists] = useState<GroceryListSummary[]>([]);
+  const [sharedWithMe, setSharedWithMe] = useState<SharedGroceryListAccess[]>([]);
+  const [loadingLists, setLoadingLists] = useState(true);
+  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+
+  // Selected list data
   const [groceryList, setGroceryList] = useState<GroceryList | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Generate state
@@ -86,38 +101,65 @@ export function useGroceryList(): UseGroceryListReturn {
   const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
 
   // Sharing state
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shares, setShares] = useState<GroceryListShare[]>([]);
   const [loadingShares, setLoadingShares] = useState(false);
-  const [sharedWithMe, setSharedWithMe] = useState<SharedGroceryListAccess[]>([]);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState<UserSearchResult[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [sharingUser, setSharingUser] = useState<string | null>(null);
 
-  // Load grocery list on mount
+  // Load all lists on mount
+  const loadLists = useCallback(async () => {
+    setLoadingLists(true);
+    try {
+      const [lists, shared] = await Promise.all([
+        groceryListApi.list(),
+        groceryListApi.listSharedWithMe(),
+      ]);
+      setMyLists(lists);
+      setSharedWithMe(shared);
+
+      // Auto-select first list if none selected and lists exist
+      if (!selectedListId && lists.length > 0) {
+        setSelectedListId(lists[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load grocery lists:', err);
+    } finally {
+      setLoadingLists(false);
+    }
+  }, [selectedListId]);
+
+  useEffect(() => {
+    loadLists();
+  }, []);
+
+  // Load selected list
   const loadGroceryList = useCallback(async () => {
+    if (!selectedListId) {
+      setGroceryList(null);
+      setShares([]);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const [list, shared] = await Promise.all([
-        groceryListApi.get(),
-        groceryListApi.listSharedWithMe(),
-      ]);
+      const list = await groceryListApi.get(selectedListId);
       setGroceryList(list);
       setShares(list.shares);
-      setSharedWithMe(shared);
     } catch (err) {
       console.error('Failed to load grocery list:', err);
       setError('Failed to load grocery list');
+      setGroceryList(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedListId]);
 
   useEffect(() => {
     loadGroceryList();
-  }, [loadGroceryList]);
+  }, [selectedListId]);
 
   // User search for sharing (debounced)
   useEffect(() => {
@@ -143,9 +185,37 @@ export function useGroceryList(): UseGroceryListReturn {
     return () => clearTimeout(timer);
   }, [userSearchQuery, shares]);
 
+  // Create new list
+  const createList = useCallback(async (name?: string): Promise<GroceryListSummary> => {
+    const newList = await groceryListApi.create(name ? { name } : undefined);
+    setMyLists(prev => [newList, ...prev]);
+    setSelectedListId(newList.id);
+    return newList;
+  }, []);
+
+  // Rename list
+  const renameList = useCallback(async (listId: string, name: string) => {
+    const updated = await groceryListApi.update(listId, { name });
+    setMyLists(prev => prev.map(l => l.id === listId ? updated : l));
+    if (groceryList && groceryList.id === listId) {
+      setGroceryList(prev => prev ? { ...prev, name } : null);
+    }
+  }, [groceryList]);
+
+  // Delete list
+  const deleteList = useCallback(async (listId: string) => {
+    await groceryListApi.delete(listId);
+    setMyLists(prev => prev.filter(l => l.id !== listId));
+    if (selectedListId === listId) {
+      // Select another list or null
+      const remaining = myLists.filter(l => l.id !== listId);
+      setSelectedListId(remaining.length > 0 ? remaining[0].id : null);
+    }
+  }, [selectedListId, myLists]);
+
   // Toggle item checked
   const toggleItemChecked = useCallback(async (itemId: string) => {
-    if (!groceryList) return;
+    if (!groceryList || !selectedListId) return;
 
     const item = groceryList.items.find(i => i.id === itemId);
     if (!item) return;
@@ -168,22 +238,20 @@ export function useGroceryList(): UseGroceryListReturn {
     });
 
     try {
-      await groceryListApi.updateItem(itemId, { is_checked: !item.is_checked });
+      await groceryListApi.updateItem(selectedListId, itemId, { is_checked: !item.is_checked });
     } catch (err) {
       console.error('Failed to update item:', err);
-      // Revert on error
       loadGroceryList();
     }
-  }, [groceryList, loadGroceryList]);
+  }, [groceryList, selectedListId, loadGroceryList]);
 
   // Toggle item staple status
   const toggleItemStaple = useCallback(async (itemId: string, isStaple: boolean) => {
-    if (!groceryList) return;
+    if (!groceryList || !selectedListId) return;
 
     const item = groceryList.items.find(i => i.id === itemId);
     if (!item) return;
 
-    // Determine old and new category
     const oldCategory = item.category || 'pantry';
     const newCategory = isStaple ? 'staples' : (oldCategory === 'staples' ? 'pantry' : oldCategory);
 
@@ -192,16 +260,12 @@ export function useGroceryList(): UseGroceryListReturn {
       if (!prev) return prev;
 
       const updatedItem = { ...item, is_staple: isStaple, category: newCategory };
-
-      // Remove from old category and add to new
       const newItemsByCategory = { ...prev.items_by_category };
 
-      // Remove from old category
       if (newItemsByCategory[oldCategory]) {
         newItemsByCategory[oldCategory] = newItemsByCategory[oldCategory].filter(i => i.id !== itemId);
       }
 
-      // Add to new category
       if (!newItemsByCategory[newCategory]) {
         newItemsByCategory[newCategory] = [];
       }
@@ -215,38 +279,40 @@ export function useGroceryList(): UseGroceryListReturn {
     });
 
     try {
-      await groceryListApi.updateItem(itemId, { is_staple: isStaple, category: newCategory });
+      await groceryListApi.updateItem(selectedListId, itemId, { is_staple: isStaple, category: newCategory });
     } catch (err) {
       console.error('Failed to update item:', err);
       loadGroceryList();
     }
-  }, [groceryList, loadGroceryList]);
+  }, [groceryList, selectedListId, loadGroceryList]);
 
   // Add item
   const addItem = useCallback(async (data: GroceryListItemCreateInput) => {
-    try {
-      const newItem = await groceryListApi.addItem(data);
-      setGroceryList(prev => {
-        if (!prev) return prev;
-        const category = newItem.category || 'pantry';
-        return {
-          ...prev,
-          items: [...prev.items, newItem],
-          items_by_category: {
-            ...prev.items_by_category,
-            [category]: [...(prev.items_by_category[category] || []), newItem],
-          },
-        };
-      });
-    } catch (err) {
-      console.error('Failed to add item:', err);
-      throw err;
-    }
-  }, []);
+    if (!selectedListId) throw new Error('No list selected');
+
+    const newItem = await groceryListApi.addItem(selectedListId, data);
+    setGroceryList(prev => {
+      if (!prev) return prev;
+      const category = newItem.category || 'pantry';
+      return {
+        ...prev,
+        items: [...prev.items, newItem],
+        items_by_category: {
+          ...prev.items_by_category,
+          [category]: [...(prev.items_by_category[category] || []), newItem],
+        },
+      };
+    });
+
+    // Update item count in list summary
+    setMyLists(prev => prev.map(l =>
+      l.id === selectedListId ? { ...l, item_count: l.item_count + 1 } : l
+    ));
+  }, [selectedListId]);
 
   // Delete item
   const deleteItem = useCallback(async (itemId: string) => {
-    if (!groceryList) return;
+    if (!groceryList || !selectedListId) return;
 
     const item = groceryList.items.find(i => i.id === itemId);
     if (!item) return;
@@ -265,33 +331,34 @@ export function useGroceryList(): UseGroceryListReturn {
       };
     });
 
+    // Update item count
+    setMyLists(prev => prev.map(l =>
+      l.id === selectedListId ? { ...l, item_count: Math.max(0, l.item_count - 1) } : l
+    ));
+
     try {
-      await groceryListApi.deleteItem(itemId);
+      await groceryListApi.deleteItem(selectedListId, itemId);
     } catch (err) {
       console.error('Failed to delete item:', err);
       loadGroceryList();
     }
-  }, [groceryList, loadGroceryList]);
+  }, [groceryList, selectedListId, loadGroceryList]);
 
   // Clear checked items
   const clearCheckedItems = useCallback(async () => {
-    try {
-      await groceryListApi.clear(true);
-      await loadGroceryList();
-    } catch (err) {
-      console.error('Failed to clear checked items:', err);
-    }
-  }, [loadGroceryList]);
+    if (!selectedListId) return;
+    await groceryListApi.clear(selectedListId, true);
+    await loadGroceryList();
+    await loadLists();
+  }, [selectedListId, loadGroceryList, loadLists]);
 
   // Clear all items
   const clearAllItems = useCallback(async () => {
-    try {
-      await groceryListApi.clear(false);
-      await loadGroceryList();
-    } catch (err) {
-      console.error('Failed to clear all items:', err);
-    }
-  }, [loadGroceryList]);
+    if (!selectedListId) return;
+    await groceryListApi.clear(selectedListId, false);
+    await loadGroceryList();
+    await loadLists();
+  }, [selectedListId, loadGroceryList, loadLists]);
 
   // Generate from meal plan
   const generateFromMealPlan = useCallback(async (
@@ -299,50 +366,33 @@ export function useGroceryList(): UseGroceryListReturn {
     endDate: string,
     merge: boolean
   ) => {
+    if (!selectedListId) throw new Error('No list selected');
+
     setIsGenerating(true);
     try {
-      const list = await groceryListApi.generate({
+      const list = await groceryListApi.generate(selectedListId, {
         start_date: startDate,
         end_date: endDate,
         merge,
       });
       setGroceryList(list);
       setIsGenerateModalOpen(false);
+      await loadLists();
     } catch (err) {
       console.error('Failed to generate grocery list:', err);
       throw err;
     } finally {
       setIsGenerating(false);
     }
-  }, []);
+  }, [selectedListId, loadLists]);
 
-  // Sharing handlers
-  const openShareModal = useCallback(async () => {
-    setIsShareModalOpen(true);
-    setLoadingShares(true);
-    try {
-      const sharesList = await groceryListApi.listShares();
-      setShares(sharesList);
-    } catch (err) {
-      console.error('Failed to load shares:', err);
-    } finally {
-      setLoadingShares(false);
-    }
-  }, []);
+  // Share with user
+  const handleShareWithUser = useCallback(async (userId: string) => {
+    if (!selectedListId) return;
 
-  const closeShareModal = useCallback(() => {
-    setIsShareModalOpen(false);
-    setUserSearchQuery('');
-    setUserSearchResults([]);
-  }, []);
-
-  const handleShareWithUser = useCallback(async (
-    userId: string,
-    permission: 'viewer' | 'editor' = 'viewer'
-  ) => {
     setSharingUser(userId);
     try {
-      const share = await groceryListApi.share({ user_id: userId, permission });
+      const share = await groceryListApi.share(selectedListId, { user_id: userId });
       setShares(prev => [...prev, share]);
       setUserSearchQuery('');
       setUserSearchResults([]);
@@ -352,32 +402,53 @@ export function useGroceryList(): UseGroceryListReturn {
     } finally {
       setSharingUser(null);
     }
-  }, []);
+  }, [selectedListId]);
 
-  const handleUpdatePermission = useCallback(async (
-    userId: string,
-    permission: 'viewer' | 'editor'
-  ) => {
-    try {
-      const updated = await groceryListApi.updateShare(userId, { permission });
-      setShares(prev => prev.map(s => s.user_id === userId ? updated : s));
-    } catch (err) {
-      console.error('Failed to update permission:', err);
-      throw err;
-    }
-  }, []);
-
+  // Remove share
   const handleRemoveShare = useCallback(async (userId: string) => {
-    try {
-      await groceryListApi.removeShare(userId);
-      setShares(prev => prev.filter(s => s.user_id !== userId));
-    } catch (err) {
-      console.error('Failed to remove share:', err);
-      throw err;
-    }
+    if (!selectedListId) return;
+
+    await groceryListApi.removeShare(selectedListId, userId);
+    setShares(prev => prev.filter(s => s.user_id !== userId));
+  }, [selectedListId]);
+
+  // Accept share invitation
+  const acceptShare = useCallback(async (shareId: string) => {
+    await groceryListApi.acceptShare(shareId);
+    setSharedWithMe(prev => prev.map(s =>
+      s.id === shareId ? { ...s, status: 'accepted' as const } : s
+    ));
   }, []);
+
+  // Decline share invitation
+  const declineShare = useCallback(async (shareId: string) => {
+    await groceryListApi.declineShare(shareId);
+    setSharedWithMe(prev => prev.filter(s => s.id !== shareId));
+  }, []);
+
+  // Leave shared list
+  const leaveSharedList = useCallback(async (shareId: string) => {
+    await groceryListApi.leaveSharedList(shareId);
+    setSharedWithMe(prev => prev.filter(s => s.id !== shareId));
+    if (selectedListId) {
+      const share = sharedWithMe.find(s => s.id === shareId);
+      if (share && share.grocery_list_id === selectedListId) {
+        setSelectedListId(null);
+      }
+    }
+  }, [selectedListId, sharedWithMe]);
 
   return {
+    // Lists management
+    myLists,
+    sharedWithMe,
+    loadingLists,
+    selectedListId,
+    setSelectedListId,
+    createList,
+    renameList,
+    deleteList,
+
     // Grocery list data
     groceryList,
     loading,
@@ -397,23 +468,22 @@ export function useGroceryList(): UseGroceryListReturn {
     isGenerateModalOpen,
     setIsGenerateModalOpen,
 
-    // Sharing
-    isShareModalOpen,
+    // User sharing
     shares,
     loadingShares,
-    sharedWithMe,
     userSearchQuery,
     setUserSearchQuery,
     userSearchResults,
     searchingUsers,
     sharingUser,
-    openShareModal,
-    closeShareModal,
     handleShareWithUser,
-    handleUpdatePermission,
     handleRemoveShare,
+    acceptShare,
+    declineShare,
+    leaveSharedList,
 
     // Refresh
     refresh: loadGroceryList,
+    refreshLists: loadLists,
   };
 }

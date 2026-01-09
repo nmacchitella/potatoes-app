@@ -11,7 +11,7 @@ from typing import List
 
 from database import get_db
 from auth import get_current_user
-from models import User, Notification, UserFollow
+from models import User, Notification, UserFollow, GroceryListShare
 from schemas import Notification as NotificationSchema, NotificationMarkRead
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -64,6 +64,17 @@ async def get_notifications(
                 ).first()
                 # Only actionable if follow exists and is still pending
                 notif_dict["is_actionable"] = follow is not None and follow.status == "pending"
+
+        elif notif.type == "grocery_share_invitation" and notif.data:
+            share_id = notif.data.get("share_id")
+            if share_id:
+                # Check if the grocery share is still pending
+                share = db.query(GroceryListShare).filter(
+                    GroceryListShare.id == share_id,
+                    GroceryListShare.user_id == current_user.id
+                ).first()
+                # Only actionable if share exists and is still pending
+                notif_dict["is_actionable"] = share is not None and share.status == "pending"
 
         result.append(notif_dict)
 

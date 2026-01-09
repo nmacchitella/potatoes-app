@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { socialApi } from '@/lib/api';
+import { socialApi, groceryListApi } from '@/lib/api';
 import type { Notification } from '@/types';
 
 interface NotificationItemProps {
@@ -34,6 +34,8 @@ const getNotificationIcon = (type: string): string => {
       return '🍽️';
     case 'recipe_cloned':
       return '📋';
+    case 'grocery_share_invitation':
+      return '🛒';
     default:
       return '🔔';
   }
@@ -99,11 +101,58 @@ export default function NotificationItem({
     }
   };
 
+  // Grocery share handlers
+  const handleAcceptGroceryShare = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const shareId = notification.metadata?.share_id;
+    if (!shareId) return;
+
+    setHandling('accept');
+    try {
+      await groceryListApi.acceptShare(shareId);
+      setHandled(true);
+      onFollowRequestHandled?.(notification.id);
+      if (!notification.is_read) {
+        onMarkAsRead(notification.id);
+      }
+    } catch (err) {
+      console.error('Failed to accept grocery share:', err);
+    } finally {
+      setHandling(null);
+    }
+  };
+
+  const handleDeclineGroceryShare = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const shareId = notification.metadata?.share_id;
+    if (!shareId) return;
+
+    setHandling('decline');
+    try {
+      await groceryListApi.declineShare(shareId);
+      setHandled(true);
+      onFollowRequestHandled?.(notification.id);
+      if (!notification.is_read) {
+        onMarkAsRead(notification.id);
+      }
+    } catch (err) {
+      console.error('Failed to decline grocery share:', err);
+    } finally {
+      setHandling(null);
+    }
+  };
+
   const isFollowRequest = notification.type === 'follow_request';
-  // Show buttons only if it's a follow request, still actionable from backend, and not locally handled
-  const showActions = isFollowRequest && notification.is_actionable === true && !handled;
-  // Show "handled" message if it's a follow request and either locally handled or backend says not actionable
-  const showHandledMessage = isFollowRequest && (handled || notification.is_actionable === false);
+  const isGroceryShareInvitation = notification.type === 'grocery_share_invitation';
+  const isActionable = isFollowRequest || isGroceryShareInvitation;
+  // Show buttons only if it's actionable, still actionable from backend, and not locally handled
+  const showActions = isActionable && notification.is_actionable === true && !handled;
+  // Show "handled" message if it's actionable and either locally handled or backend says not actionable
+  const showHandledMessage = isActionable && (handled || notification.is_actionable === false);
 
   const content = (
     <div
@@ -122,18 +171,18 @@ export default function NotificationItem({
         <p className="text-sm text-warm-gray truncate">{notification.message}</p>
         <p className="text-xs text-warm-gray/70 mt-1">{getTimeAgo(notification.created_at)}</p>
 
-        {/* Follow request actions */}
+        {/* Actionable notification buttons */}
         {showActions && (
           <div className="flex gap-2 mt-2">
             <button
-              onClick={handleAccept}
+              onClick={isGroceryShareInvitation ? handleAcceptGroceryShare : handleAccept}
               disabled={handling !== null}
               className="px-3 py-1 text-xs font-medium bg-gold text-white rounded hover:bg-gold/90 disabled:opacity-50 transition-colors"
             >
               {handling === 'accept' ? 'Accepting...' : 'Accept'}
             </button>
             <button
-              onClick={handleDecline}
+              onClick={isGroceryShareInvitation ? handleDeclineGroceryShare : handleDecline}
               disabled={handling !== null}
               className="px-3 py-1 text-xs font-medium bg-cream-dark text-warm-gray rounded hover:bg-border disabled:opacity-50 transition-colors"
             >
@@ -142,7 +191,9 @@ export default function NotificationItem({
           </div>
         )}
         {showHandledMessage && (
-          <p className="text-xs text-green-600 mt-2">Request handled</p>
+          <p className="text-xs text-green-600 mt-2">
+            {isGroceryShareInvitation ? 'Invitation handled' : 'Request handled'}
+          </p>
         )}
       </div>
       {!notification.is_read && (
@@ -151,8 +202,8 @@ export default function NotificationItem({
     </div>
   );
 
-  // Make clickable link if there's a link and either not a follow request or already handled
-  if (notification.link && (!isFollowRequest || showHandledMessage)) {
+  // Make clickable link if there's a link and either not actionable or already handled
+  if (notification.link && (!isActionable || showHandledMessage)) {
     return (
       <Link href={notification.link} className="block">
         {content}

@@ -2,27 +2,28 @@
 Grocery List Router
 
 CRUD operations for grocery lists with sharing support.
+Users can have multiple grocery lists.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func
 from typing import List, Optional, Tuple
 import secrets
 
 from database import get_db
 from auth import get_current_user
-from models import User, GroceryList, GroceryListItem, GroceryListShare, Recipe
+from models import User, GroceryList, GroceryListItem, GroceryListShare, Recipe, Notification
 from schemas import (
     GroceryListResponse, GroceryListItemCreate, GroceryListItemUpdate,
     GroceryListItemResponse, GroceryListGenerateRequest, GroceryListBulkCheckRequest,
     GroceryListShareCreate, GroceryListShareUpdate, GroceryListShareResponse,
     GroceryListShareUser, SharedGroceryListAccess, SharedGroceryListOwner,
-    SourceRecipeInfo,
+    SourceRecipeInfo, GroceryListCreate, GroceryListUpdate, GroceryListSummary,
 )
 from services.grocery_list_service import (
-    get_or_create_grocery_list, get_grocery_list_with_items,
     clear_grocery_list, generate_from_meal_plan, group_items_by_category,
-    normalize_ingredient_name, DEFAULT_CATEGORY
+    DEFAULT_CATEGORY
 )
 
 router = APIRouter(prefix="/grocery-list", tags=["grocery-list"])
@@ -39,7 +40,7 @@ def get_grocery_list_access(
 ) -> Tuple[Optional[GroceryList], Optional[str]]:
     """
     Check if user has access to a grocery list and return the permission level.
-    Returns (grocery_list, permission) where permission is 'owner', 'editor', 'viewer', or None.
+    Returns (grocery_list, permission) where permission is 'owner', 'editor', or None.
     """
     grocery_list = db.query(GroceryList).filter(GroceryList.id == grocery_list_id).first()
 
@@ -50,10 +51,11 @@ def get_grocery_list_access(
     if grocery_list.user_id == user.id:
         return grocery_list, "owner"
 
-    # Check if shared with user
+    # Check if shared with user (and accepted)
     share = db.query(GroceryListShare).filter(
         GroceryListShare.grocery_list_id == grocery_list_id,
-        GroceryListShare.user_id == user.id
+        GroceryListShare.user_id == user.id,
+        GroceryListShare.status == "accepted"
     ).first()
 
     if share:
@@ -66,7 +68,7 @@ def require_grocery_list_access(
     db: Session,
     grocery_list_id: str,
     user: User,
-    min_permission: str = "viewer"
+    min_permission: str = "editor"
 ) -> Tuple[GroceryList, str]:
     """
     Get grocery list and verify user has at least the minimum permission level.
@@ -80,8 +82,8 @@ def require_grocery_list_access(
     if not permission:
         raise HTTPException(status_code=404, detail="Grocery list not found")
 
-    # Permission hierarchy: owner > editor > viewer
-    permission_levels = {"viewer": 1, "editor": 2, "owner": 3}
+    # Permission hierarchy: editor > owner (owner can do everything editor can plus more)
+    permission_levels = {"editor": 1, "owner": 2}
 
     if permission_levels.get(permission, 0) < permission_levels.get(min_permission, 0):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -136,6 +138,7 @@ def build_grocery_list_response(grocery_list: GroceryList, db: Session) -> Groce
             id=share.id,
             user_id=share.user_id,
             permission=share.permission,
+            status=share.status,
             created_at=share.created_at,
             user=GroceryListShareUser(
                 id=share.user.id,
@@ -156,17 +159,90 @@ def build_grocery_list_response(grocery_list: GroceryList, db: Session) -> Groce
     )
 
 
+def create_share_notification(db: Session, share: GroceryListShare, grocery_list: GroceryList, owner: User):
+    """Create a notification for a new grocery list share invitation."""
+    notification = Notification(
+        user_id=share.user_id,
+        type="grocery_share_invitation",
+        title="Grocery List Shared",
+        message=f"{owner.name} wants to share their grocery list \"{grocery_list.name}\" with you",
+        link="/grocery",
+        data={
+            "share_id": share.id,
+            "grocery_list_id": grocery_list.id,
+            "grocery_list_name": grocery_list.name,
+            "owner_id": owner.id,
+            "owner_name": owner.name,
+        }
+    )
+    db.add(notification)
+
+
 # ============================================================================
-# GROCERY LIST ENDPOINTS
+# GROCERY LIST CRUD ENDPOINTS
 # ============================================================================
 
-@router.get("", response_model=GroceryListResponse)
-async def get_grocery_list(
+@router.get("", response_model=List[GroceryListSummary])
+async def list_grocery_lists(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get current user's grocery list, creating one if it doesn't exist."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    """List all grocery lists owned by the current user."""
+    grocery_lists = db.query(GroceryList).filter(
+        GroceryList.user_id == current_user.id
+    ).order_by(GroceryList.created_at.desc()).all()
+
+    # Get item counts
+    result = []
+    for gl in grocery_lists:
+        item_count = db.query(func.count(GroceryListItem.id)).filter(
+            GroceryListItem.grocery_list_id == gl.id
+        ).scalar()
+        result.append(GroceryListSummary(
+            id=gl.id,
+            name=gl.name,
+            item_count=item_count,
+            share_token=gl.share_token,
+            created_at=gl.created_at,
+            updated_at=gl.updated_at
+        ))
+
+    return result
+
+
+@router.post("", response_model=GroceryListSummary, status_code=201)
+async def create_grocery_list(
+    data: GroceryListCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new grocery list."""
+    grocery_list = GroceryList(
+        user_id=current_user.id,
+        name=data.name
+    )
+    db.add(grocery_list)
+    db.commit()
+    db.refresh(grocery_list)
+
+    return GroceryListSummary(
+        id=grocery_list.id,
+        name=grocery_list.name,
+        item_count=0,
+        share_token=grocery_list.share_token,
+        created_at=grocery_list.created_at,
+        updated_at=grocery_list.updated_at
+    )
+
+
+@router.get("/{list_id}", response_model=GroceryListResponse)
+async def get_grocery_list(
+    list_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific grocery list by ID."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "editor")
 
     # Reload with relationships
     grocery_list = db.query(GroceryList).options(
@@ -177,13 +253,65 @@ async def get_grocery_list(
     return build_grocery_list_response(grocery_list, db)
 
 
-@router.post("/generate", response_model=GroceryListResponse)
+@router.patch("/{list_id}", response_model=GroceryListSummary)
+async def update_grocery_list(
+    list_id: str,
+    data: GroceryListUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a grocery list (rename). Only owner can do this."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "owner")
+
+    if data.name is not None:
+        grocery_list.name = data.name
+
+    db.commit()
+    db.refresh(grocery_list)
+
+    item_count = db.query(func.count(GroceryListItem.id)).filter(
+        GroceryListItem.grocery_list_id == grocery_list.id
+    ).scalar()
+
+    return GroceryListSummary(
+        id=grocery_list.id,
+        name=grocery_list.name,
+        item_count=item_count,
+        share_token=grocery_list.share_token,
+        created_at=grocery_list.created_at,
+        updated_at=grocery_list.updated_at
+    )
+
+
+@router.delete("/{list_id}")
+async def delete_grocery_list(
+    list_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a grocery list. Only owner can do this."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "owner")
+
+    db.delete(grocery_list)
+    db.commit()
+
+    return {"deleted": True}
+
+
+# ============================================================================
+# GENERATE FROM MEAL PLAN
+# ============================================================================
+
+@router.post("/{list_id}/generate", response_model=GroceryListResponse)
 async def generate_grocery_list(
+    list_id: str,
     request: GroceryListGenerateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Generate grocery list from meal plan for date range."""
+    """Generate grocery list items from meal plan for date range."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "editor")
+
     if request.end_date < request.start_date:
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
@@ -194,6 +322,7 @@ async def generate_grocery_list(
 
     grocery_list = generate_from_meal_plan(
         db=db,
+        grocery_list=grocery_list,
         user=current_user,
         start_date=request.start_date,
         end_date=request.end_date,
@@ -209,14 +338,15 @@ async def generate_grocery_list(
     return build_grocery_list_response(grocery_list, db)
 
 
-@router.delete("/clear")
+@router.delete("/{list_id}/clear")
 async def clear_list(
+    list_id: str,
     checked_only: bool = Query(False, description="Only clear checked items"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Clear all items from grocery list, or just checked items."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "editor")
     count = clear_grocery_list(db, grocery_list, checked_only=checked_only)
     return {"deleted": count}
 
@@ -225,14 +355,15 @@ async def clear_list(
 # ITEM ENDPOINTS
 # ============================================================================
 
-@router.post("/items", response_model=GroceryListItemResponse, status_code=201)
+@router.post("/{list_id}/items", response_model=GroceryListItemResponse, status_code=201)
 async def add_item(
+    list_id: str,
     item_data: GroceryListItemCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Add a manual item to the grocery list."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "editor")
 
     # Get max sort_order
     max_order = db.query(GroceryListItem).filter(
@@ -255,15 +386,16 @@ async def add_item(
     return GroceryListItemResponse.model_validate(item)
 
 
-@router.patch("/items/{item_id}", response_model=GroceryListItemResponse)
+@router.patch("/{list_id}/items/{item_id}", response_model=GroceryListItemResponse)
 async def update_item(
+    list_id: str,
     item_id: str,
     item_data: GroceryListItemUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Update a grocery list item."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "editor")
 
     item = db.query(GroceryListItem).filter(
         GroceryListItem.id == item_id,
@@ -284,14 +416,15 @@ async def update_item(
     return GroceryListItemResponse.model_validate(item)
 
 
-@router.delete("/items/{item_id}")
+@router.delete("/{list_id}/items/{item_id}")
 async def delete_item(
+    list_id: str,
     item_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Delete a grocery list item."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "editor")
 
     item = db.query(GroceryListItem).filter(
         GroceryListItem.id == item_id,
@@ -307,14 +440,15 @@ async def delete_item(
     return {"deleted": True}
 
 
-@router.patch("/items/bulk-check")
+@router.patch("/{list_id}/items/bulk-check")
 async def bulk_check_items(
+    list_id: str,
     request: GroceryListBulkCheckRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Bulk check/uncheck multiple items."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "editor")
 
     updated = db.query(GroceryListItem).filter(
         GroceryListItem.grocery_list_id == grocery_list.id,
@@ -330,13 +464,14 @@ async def bulk_check_items(
 # SHARING ENDPOINTS
 # ============================================================================
 
-@router.get("/shares", response_model=List[GroceryListShareResponse])
+@router.get("/{list_id}/shares", response_model=List[GroceryListShareResponse])
 async def list_shares(
+    list_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List all users the grocery list is shared with."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    """List all users the grocery list is shared with. Only owner can see this."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "owner")
 
     shares = db.query(GroceryListShare).options(
         joinedload(GroceryListShare.user)
@@ -349,6 +484,7 @@ async def list_shares(
             id=share.id,
             user_id=share.user_id,
             permission=share.permission,
+            status=share.status,
             created_at=share.created_at,
             user=GroceryListShareUser(
                 id=share.user.id,
@@ -360,14 +496,15 @@ async def list_shares(
     ]
 
 
-@router.post("/shares", response_model=GroceryListShareResponse, status_code=201)
+@router.post("/{list_id}/shares", response_model=GroceryListShareResponse, status_code=201)
 async def share_grocery_list(
+    list_id: str,
     share_data: GroceryListShareCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Share grocery list with another user."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    """Share grocery list with another user. Only owner can do this."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "owner")
 
     # Can't share with yourself
     if share_data.user_id == current_user.id:
@@ -390,9 +527,14 @@ async def share_grocery_list(
     share = GroceryListShare(
         grocery_list_id=grocery_list.id,
         user_id=share_data.user_id,
-        permission=share_data.permission
+        permission="editor",  # Always editor for user shares
+        status="pending"
     )
     db.add(share)
+
+    # Create notification for the target user
+    create_share_notification(db, share, grocery_list, current_user)
+
     db.commit()
     db.refresh(share)
 
@@ -400,6 +542,7 @@ async def share_grocery_list(
         id=share.id,
         user_id=share.user_id,
         permission=share.permission,
+        status=share.status,
         created_at=share.created_at,
         user=GroceryListShareUser(
             id=target_user.id,
@@ -409,51 +552,15 @@ async def share_grocery_list(
     )
 
 
-@router.put("/shares/{user_id}", response_model=GroceryListShareResponse)
-async def update_share(
-    user_id: str,
-    share_data: GroceryListShareUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Update permission for a shared user."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
-
-    share = db.query(GroceryListShare).options(
-        joinedload(GroceryListShare.user)
-    ).filter(
-        GroceryListShare.grocery_list_id == grocery_list.id,
-        GroceryListShare.user_id == user_id
-    ).first()
-
-    if not share:
-        raise HTTPException(status_code=404, detail="Share not found")
-
-    share.permission = share_data.permission
-    db.commit()
-    db.refresh(share)
-
-    return GroceryListShareResponse(
-        id=share.id,
-        user_id=share.user_id,
-        permission=share.permission,
-        created_at=share.created_at,
-        user=GroceryListShareUser(
-            id=share.user.id,
-            name=share.user.name,
-            profile_image_url=share.user.profile_image_url
-        )
-    )
-
-
-@router.delete("/shares/{user_id}")
+@router.delete("/{list_id}/shares/{user_id}")
 async def remove_share(
+    list_id: str,
     user_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Remove sharing with a user."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    """Remove sharing with a user. Only owner can do this."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "owner")
 
     share = db.query(GroceryListShare).filter(
         GroceryListShare.grocery_list_id == grocery_list.id,
@@ -468,6 +575,10 @@ async def remove_share(
 
     return {"deleted": True}
 
+
+# ============================================================================
+# SHARED WITH ME ENDPOINTS
+# ============================================================================
 
 @router.get("/shared-with-me", response_model=List[SharedGroceryListAccess])
 async def list_shared_with_me(
@@ -484,28 +595,78 @@ async def list_shared_with_me(
     return [
         SharedGroceryListAccess(
             id=share.id,
+            grocery_list_id=share.grocery_list.id,
+            grocery_list_name=share.grocery_list.name,
             owner=SharedGroceryListOwner(
                 id=share.grocery_list.user.id,
                 name=share.grocery_list.user.name,
                 profile_image_url=share.grocery_list.user.profile_image_url
             ),
             permission=share.permission,
+            status=share.status,
             created_at=share.created_at
         )
         for share in shares
     ]
 
 
-@router.delete("/shares/leave/{owner_id}")
+@router.post("/shares/{share_id}/accept")
+async def accept_share(
+    share_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Accept a grocery list share invitation."""
+    share = db.query(GroceryListShare).filter(
+        GroceryListShare.id == share_id,
+        GroceryListShare.user_id == current_user.id
+    ).first()
+
+    if not share:
+        raise HTTPException(status_code=404, detail="Share invitation not found")
+
+    if share.status != "pending":
+        raise HTTPException(status_code=400, detail="Invitation already responded to")
+
+    share.status = "accepted"
+    db.commit()
+
+    return {"accepted": True}
+
+
+@router.post("/shares/{share_id}/decline")
+async def decline_share(
+    share_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Decline a grocery list share invitation."""
+    share = db.query(GroceryListShare).filter(
+        GroceryListShare.id == share_id,
+        GroceryListShare.user_id == current_user.id
+    ).first()
+
+    if not share:
+        raise HTTPException(status_code=404, detail="Share invitation not found")
+
+    if share.status != "pending":
+        raise HTTPException(status_code=400, detail="Invitation already responded to")
+
+    share.status = "declined"
+    db.commit()
+
+    return {"declined": True}
+
+
+@router.delete("/shares/{share_id}/leave")
 async def leave_shared_list(
-    owner_id: str,
+    share_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Leave a grocery list that was shared with you."""
-    # Find the share for this owner's grocery list
-    share = db.query(GroceryListShare).join(GroceryList).filter(
-        GroceryList.user_id == owner_id,
+    share = db.query(GroceryListShare).filter(
+        GroceryListShare.id == share_id,
         GroceryListShare.user_id == current_user.id
     ).first()
 
@@ -518,50 +679,18 @@ async def leave_shared_list(
     return {"left": True}
 
 
-@router.get("/shared/{owner_id}", response_model=GroceryListResponse)
-async def get_shared_grocery_list(
-    owner_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get a grocery list that was shared with you."""
-    # Find the owner's grocery list
-    grocery_list = db.query(GroceryList).filter(
-        GroceryList.user_id == owner_id
-    ).first()
-
-    if not grocery_list:
-        raise HTTPException(status_code=404, detail="Grocery list not found")
-
-    # Check if shared with current user
-    share = db.query(GroceryListShare).filter(
-        GroceryListShare.grocery_list_id == grocery_list.id,
-        GroceryListShare.user_id == current_user.id
-    ).first()
-
-    if not share:
-        raise HTTPException(status_code=404, detail="Grocery list not found")
-
-    # Reload with relationships
-    grocery_list = db.query(GroceryList).options(
-        joinedload(GroceryList.items),
-        joinedload(GroceryList.shares).joinedload(GroceryListShare.user)
-    ).filter(GroceryList.id == grocery_list.id).first()
-
-    return build_grocery_list_response(grocery_list, db)
-
-
 # ============================================================================
 # PUBLIC SHARE ENDPOINTS
 # ============================================================================
 
-@router.post("/share-link")
+@router.post("/{list_id}/share-link")
 async def get_or_create_share_link(
+    list_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get or create a public share link for the grocery list."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    """Get or create a public share link for the grocery list. Only owner can do this."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "owner")
 
     # Generate token if not exists
     if not grocery_list.share_token:
@@ -572,13 +701,14 @@ async def get_or_create_share_link(
     return {"share_token": grocery_list.share_token}
 
 
-@router.delete("/share-link")
+@router.delete("/{list_id}/share-link")
 async def disable_share_link(
+    list_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Disable the public share link by removing the token."""
-    grocery_list = get_or_create_grocery_list(db, current_user)
+    """Disable the public share link by removing the token. Only owner can do this."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "owner")
 
     grocery_list.share_token = None
     db.commit()

@@ -835,15 +835,37 @@ class GroceryListShareUser(BaseModel):
         from_attributes = True
 
 
+class GroceryListCreate(BaseModel):
+    """Create a new grocery list."""
+    name: str = Field(default="My Grocery List", min_length=1, max_length=200)
+
+
+class GroceryListUpdate(BaseModel):
+    """Update a grocery list."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+
+
+class GroceryListSummary(BaseModel):
+    """Summary info for grocery list sidebar."""
+    id: str
+    name: str
+    item_count: int
+    share_token: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
 class GroceryListShareCreate(BaseModel):
     """Create a grocery list share."""
     user_id: str
-    permission: str = "viewer"  # viewer, editor
 
 
 class GroceryListShareUpdate(BaseModel):
     """Update a grocery list share."""
-    permission: str  # viewer, editor
+    permission: str  # editor
 
 
 class GroceryListShareResponse(BaseModel):
@@ -851,6 +873,7 @@ class GroceryListShareResponse(BaseModel):
     id: str
     user_id: str
     permission: str
+    status: str  # pending, accepted, declined
     created_at: datetime
     user: GroceryListShareUser
 
@@ -897,9 +920,12 @@ class SharedGroceryListOwner(BaseModel):
 
 class SharedGroceryListAccess(BaseModel):
     """Info about a grocery list shared with the current user."""
-    id: str
+    id: str  # share id
+    grocery_list_id: str
+    grocery_list_name: str
     owner: SharedGroceryListOwner
     permission: str
+    status: str  # pending, accepted, declined
     created_at: datetime
 
     class Config:

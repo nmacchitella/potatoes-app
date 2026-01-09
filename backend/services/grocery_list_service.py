@@ -39,18 +39,19 @@ def normalize_ingredient_name(name: str) -> str:
     return " ".join(name.lower().strip().split())
 
 
-def get_or_create_grocery_list(db: Session, user: User) -> GroceryList:
-    """Get user's grocery list, creating one if it doesn't exist."""
-    grocery_list = db.query(GroceryList).filter(
+def get_user_grocery_lists(db: Session, user: User) -> list:
+    """Get all grocery lists for a user."""
+    return db.query(GroceryList).filter(
         GroceryList.user_id == user.id
-    ).first()
+    ).order_by(GroceryList.created_at.desc()).all()
 
-    if not grocery_list:
-        grocery_list = GroceryList(user_id=user.id)
-        db.add(grocery_list)
-        db.commit()
-        db.refresh(grocery_list)
 
+def create_grocery_list(db: Session, user: User, name: str = "My Grocery List") -> GroceryList:
+    """Create a new grocery list for a user."""
+    grocery_list = GroceryList(user_id=user.id, name=name)
+    db.add(grocery_list)
+    db.commit()
+    db.refresh(grocery_list)
     return grocery_list
 
 
@@ -150,6 +151,7 @@ def aggregate_ingredients(
 
 def generate_from_meal_plan(
     db: Session,
+    grocery_list: GroceryList,
     user: User,
     start_date: date,
     end_date: date,
@@ -160,6 +162,7 @@ def generate_from_meal_plan(
 
     Args:
         db: Database session
+        grocery_list: The grocery list to populate
         user: Current user
         start_date: Start of date range
         end_date: End of date range
@@ -168,8 +171,6 @@ def generate_from_meal_plan(
     Returns:
         Updated GroceryList
     """
-    # Get or create grocery list
-    grocery_list = get_or_create_grocery_list(db, user)
 
     # Clear existing items if not merging
     if not merge:

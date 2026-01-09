@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import type { RecipeSummary } from '@/types';
 
-type SortColumn = 'name' | 'time' | 'collections';
+type SortColumn = 'name' | 'time' | 'servings' | 'collections';
 type SortDirection = 'asc' | 'desc';
 
 interface RecipeGridProps {
@@ -124,6 +124,9 @@ export default function RecipeGrid({
           const timeB = (b.prep_time_minutes || 0) + (b.cook_time_minutes || 0);
           comparison = timeA - timeB;
           break;
+        case 'servings':
+          comparison = (a.yield_quantity || 0) - (b.yield_quantity || 0);
+          break;
         case 'collections':
           // Sort alphabetically by first collection name, recipes with no collections go last
           const collNameA = a.collections?.[0]?.name || '';
@@ -200,6 +203,15 @@ export default function RecipeGrid({
               </th>
               <th className="text-left py-3 px-4">
                 <button
+                  onClick={() => handleSort('servings')}
+                  className="flex items-center gap-1.5 text-sm font-medium text-warm-gray hover:text-charcoal transition-colors"
+                >
+                  Servings
+                  <SortIcon column="servings" />
+                </button>
+              </th>
+              <th className="text-left py-3 px-4">
+                <button
                   onClick={() => handleSort('collections')}
                   className="flex items-center gap-1.5 text-sm font-medium text-warm-gray hover:text-charcoal transition-colors"
                 >
@@ -227,6 +239,9 @@ export default function RecipeGrid({
                   </td>
                   <td className="py-3 px-4 text-sm text-warm-gray">
                     {totalTime > 0 ? `${totalTime} min` : '—'}
+                  </td>
+                  <td className="py-3 px-4 text-sm text-warm-gray">
+                    {recipe.yield_quantity ? `${recipe.yield_quantity} ${recipe.yield_unit || 'servings'}` : '—'}
                   </td>
                   <td className="py-3 px-4">
                     {collections.length === 0 ? (
