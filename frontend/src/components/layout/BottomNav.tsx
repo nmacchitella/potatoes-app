@@ -16,6 +16,7 @@ export default function BottomNav() {
   if (shouldHide) return null;
 
   const isHome = pathname === '/' || pathname.startsWith('/?');
+  const isGrocery = pathname === '/grocery';
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-border z-40 md:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
@@ -36,16 +37,29 @@ export default function BottomNav() {
           <span className="text-[10px] mt-0.5">Home</span>
         </Link>
 
-        {/* Center - Oversized Add Button */}
-        <Link
-          href="/recipes/new"
-          className="relative -mt-5 flex items-center justify-center w-14 h-14 bg-gold hover:bg-gold-dark rounded-full shadow-lg transition-all active:scale-95"
-          aria-label="Add new recipe"
-        >
-          <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-          </svg>
-        </Link>
+        {/* Center - Context-aware button */}
+        {isGrocery ? (
+          <Link
+            href="/"
+            className="relative -mt-5 flex flex-col items-center justify-center w-16 h-14 bg-gold hover:bg-gold-dark rounded-full shadow-lg transition-all active:scale-95 px-2"
+            aria-label="Browse recipes"
+          >
+            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+            </svg>
+            <span className="text-[8px] text-white font-medium mt-0.5">Recipes</span>
+          </Link>
+        ) : (
+          <Link
+            href="/recipes/new"
+            className="relative -mt-5 flex items-center justify-center w-14 h-14 bg-gold hover:bg-gold-dark rounded-full shadow-lg transition-all active:scale-95"
+            aria-label="Add new recipe"
+          >
+            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+          </Link>
+        )}
 
         {/* Right - Profile */}
         <Link

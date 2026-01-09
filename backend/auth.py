@@ -56,6 +56,15 @@ def create_user(db: Session, user: schemas.UserCreate):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+
+    # Create default grocery list for the new user
+    default_grocery_list = models.GroceryList(
+        user_id=db_user.id,
+        name="My Grocery List"
+    )
+    db.add(default_grocery_list)
+    db.commit()
+
     return db_user
 
 

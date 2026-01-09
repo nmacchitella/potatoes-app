@@ -14,9 +14,34 @@ type CalendarMode = 'day' | 'week' | 'month';
 interface MobileSidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  groceryLists?: import('@/types').GroceryListSummary[];
+  sharedGroceryLists?: import('@/types').SharedGroceryListAccess[];
+  selectedListId?: string | null;
+  onSelectList?: (id: string) => void;
+  onCreateList?: (name?: string) => Promise<import('@/types').GroceryListSummary>;
+  onRenameList?: (listId: string, name: string) => Promise<void>;
+  onDeleteList?: (listId: string) => Promise<void>;
+  onAcceptShare?: (shareId: string) => Promise<void>;
+  onDeclineShare?: (shareId: string) => Promise<void>;
+  onLeaveSharedList?: (shareId: string) => Promise<void>;
+  loadingLists?: boolean;
 }
 
-export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
+export default function MobileSidebar({
+  isOpen,
+  onClose,
+  groceryLists,
+  sharedGroceryLists,
+  selectedListId,
+  onSelectList,
+  onCreateList,
+  onRenameList,
+  onDeleteList,
+  onAcceptShare,
+  onDeclineShare,
+  onLeaveSharedList,
+  loadingLists,
+}: MobileSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -35,8 +60,16 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const [editingCollectionName, setEditingCollectionName] = useState('');
   const [savingCollection, setSavingCollection] = useState(false);
 
+  // Grocery list management state
+  const [isCreatingGroceryList, setIsCreatingGroceryList] = useState(false);
+  const [newGroceryListName, setNewGroceryListName] = useState('');
+  const [editingGroceryListId, setEditingGroceryListId] = useState<string | null>(null);
+  const [editingGroceryListName, setEditingGroceryListName] = useState('');
+
   const newCollectionInputRef = useRef<HTMLInputElement>(null);
   const editCollectionInputRef = useRef<HTMLInputElement>(null);
+  const newGroceryListInputRef = useRef<HTMLInputElement>(null);
+  const editGroceryListInputRef = useRef<HTMLInputElement>(null);
 
   const selectedCollection = searchParams.get('collection');
   const viewParam = searchParams.get('view');
@@ -162,6 +195,50 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     setEditingCollectionName(collection.name);
   };
 
+  // Grocery list management functions
+  const handleCreateGroceryList = async () => {
+    if (!newGroceryListName.trim() || !onCreateList) return;
+    try {
+      await onCreateList(newGroceryListName.trim());
+      setNewGroceryListName('');
+      setIsCreatingGroceryList(false);
+    } catch (error) {
+      console.error('Failed to create grocery list:', error);
+    }
+  };
+
+  const handleUpdateGroceryList = async (listId: string) => {
+    if (!editingGroceryListName.trim() || !onRenameList) return;
+    try {
+      await onRenameList(listId, editingGroceryListName.trim());
+      setEditingGroceryListId(null);
+      setEditingGroceryListName('');
+    } catch (error) {
+      console.error('Failed to update grocery list:', error);
+    }
+  };
+
+  const handleDeleteGroceryList = async (listId: string) => {
+    if (!confirm('Delete this grocery list?') || !onDeleteList) return;
+    try {
+      await onDeleteList(listId);
+    } catch (error) {
+      console.error('Failed to delete grocery list:', error);
+    }
+  };
+
+  const startEditingGroceryList = (list: import('@/types').GroceryListSummary) => {
+    setEditingGroceryListId(list.id);
+    setEditingGroceryListName(list.name);
+  };
+
+  const handleGroceryListClick = (listId: string) => {
+    if (onSelectList) {
+      onSelectList(listId);
+    }
+    onClose();
+  };
+
   return (
     <>
       {/* Backdrop */}
@@ -264,6 +341,212 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
                 <span>Grocery List</span>
               </button>
             </div>
+
+            {/* Grocery List Management - Only show when on grocery page */}
+            {isOnGroceryPage && groceryLists && (
+              <div className="p-4 border-b border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">
+                    My Lists
+                  </span>
+                  <button
+                    onClick={() => setIsCreatingGroceryList(true)}
+                    className="text-xs text-gold hover:text-gold-dark"
+                  >
+                    + New
+                  </button>
+                </div>
+
+                {loadingLists ? (
+                  <div className="py-4 text-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-gold border-t-transparent mx-auto" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Create new grocery list form */}
+                    {isCreatingGroceryList && (
+                      <div className="mb-3 p-2 bg-cream-dark rounded-lg">
+                        <input
+                          ref={newGroceryListInputRef}
+                          type="text"
+                          value={newGroceryListName}
+                          onChange={(e) => setNewGroceryListName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleCreateGroceryList();
+                            if (e.key === 'Escape') {
+                              setIsCreatingGroceryList(false);
+                              setNewGroceryListName('');
+                            }
+                          }}
+                          placeholder="List name..."
+                          className="w-full px-2 py-1.5 text-sm border border-gold rounded focus:outline-none mb-2"
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleCreateGroceryList}
+                            disabled={!newGroceryListName.trim()}
+                            className="flex-1 px-2 py-1 text-xs bg-gold text-white rounded hover:bg-gold-dark disabled:opacity-50"
+                          >
+                            Create
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsCreatingGroceryList(false);
+                              setNewGroceryListName('');
+                            }}
+                            className="px-2 py-1 text-xs text-warm-gray hover:text-charcoal"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Grocery lists */}
+                    <div className="space-y-1">
+                      {groceryLists.map((list) => (
+                        <div key={list.id}>
+                          {editingGroceryListId === list.id ? (
+                            <div className="flex items-center gap-1 p-2 bg-cream-dark rounded-lg">
+                              <input
+                                ref={editGroceryListInputRef}
+                                type="text"
+                                value={editingGroceryListName}
+                                onChange={(e) => setEditingGroceryListName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleUpdateGroceryList(list.id);
+                                  if (e.key === 'Escape') {
+                                    setEditingGroceryListId(null);
+                                    setEditingGroceryListName('');
+                                  }
+                                }}
+                                className="flex-1 px-2 py-1 text-sm border border-gold rounded focus:outline-none"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleUpdateGroceryList(list.id)}
+                                className="p-1 text-green-600 hover:text-green-700"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingGroceryListId(null);
+                                  setEditingGroceryListName('');
+                                }}
+                                className="p-1 text-warm-gray hover:text-charcoal"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
+                              selectedListId === list.id
+                                ? 'bg-gold/10 text-gold-dark font-medium'
+                                : 'hover:bg-cream-dark'
+                            }`}>
+                              <button
+                                onClick={() => handleGroceryListClick(list.id)}
+                                className="flex-1 text-left text-sm"
+                              >
+                                {list.name}
+                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => startEditingGroceryList(list)}
+                                  className="p-1 text-warm-gray hover:text-gold"
+                                  title="Rename"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteGroceryList(list.id)}
+                                  className="p-1 text-warm-gray hover:text-red-500"
+                                  title="Delete"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Shared with me section */}
+                    {sharedGroceryLists && sharedGroceryLists.length > 0 && (
+                      <div className="mt-4">
+                        <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-2">
+                          Shared with me
+                        </span>
+                        <div className="space-y-1">
+                          {sharedGroceryLists.filter(s => s.status === 'accepted').map((shared) => (
+                            <button
+                              key={shared.id}
+                              onClick={() => handleGroceryListClick(shared.grocery_list.id)}
+                              className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm text-left transition-colors ${
+                                selectedListId === shared.grocery_list.id
+                                  ? 'bg-gold/10 text-gold-dark font-medium'
+                                  : 'hover:bg-cream-dark'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <span className="block truncate">{shared.grocery_list.name}</span>
+                                <span className="text-[10px] text-warm-gray">by {shared.grocery_list.owner.name}</span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pending invitations */}
+                    {sharedGroceryLists && sharedGroceryLists.filter(s => s.status === 'pending').length > 0 && (
+                      <div className="mt-4">
+                        <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-2">
+                          Pending Invites
+                        </span>
+                        <div className="space-y-2">
+                          {sharedGroceryLists.filter(s => s.status === 'pending').map((shared) => (
+                            <div key={shared.id} className="p-2 bg-cream-dark rounded-lg">
+                              <p className="text-sm font-medium text-charcoal truncate">{shared.grocery_list.name}</p>
+                              <p className="text-xs text-warm-gray mb-2">by {shared.grocery_list.owner.name}</p>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    if (onAcceptShare) onAcceptShare(shared.id);
+                                  }}
+                                  className="flex-1 px-2 py-1 text-xs bg-gold text-white rounded hover:bg-gold-dark"
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (onDeclineShare) onDeclineShare(shared.id);
+                                  }}
+                                  className="px-2 py-1 text-xs text-warm-gray hover:text-charcoal"
+                                >
+                                  Decline
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Calendar View Options - Only show when on calendar view and not on grocery page */}
             {!isOnGroceryPage && pageView === 'calendar' && (
