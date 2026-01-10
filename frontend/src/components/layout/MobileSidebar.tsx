@@ -487,16 +487,16 @@ export default function MobileSidebar({
                           {sharedGroceryLists.filter(s => s.status === 'accepted').map((shared) => (
                             <button
                               key={shared.id}
-                              onClick={() => handleGroceryListClick(shared.grocery_list.id)}
+                              onClick={() => handleGroceryListClick(shared.grocery_list_id)}
                               className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm text-left transition-colors ${
-                                selectedListId === shared.grocery_list.id
+                                selectedListId === shared.grocery_list_id
                                   ? 'bg-charcoal/5 text-charcoal font-medium'
                                   : 'hover:bg-cream-dark'
                               }`}
                             >
                               <div className="min-w-0">
-                                <span className="block truncate">{shared.grocery_list.name}</span>
-                                <span className="text-[10px] text-warm-gray">by {shared.grocery_list.owner.name}</span>
+                                <span className="block truncate">{shared.grocery_list_name}</span>
+                                <span className="text-[10px] text-warm-gray">by {shared.owner.name}</span>
                               </div>
                             </button>
                           ))}
@@ -513,8 +513,8 @@ export default function MobileSidebar({
                         <div className="space-y-2">
                           {sharedGroceryLists.filter(s => s.status === 'pending').map((shared) => (
                             <div key={shared.id} className="p-2 bg-cream-dark rounded-lg">
-                              <p className="text-sm font-medium text-charcoal truncate">{shared.grocery_list.name}</p>
-                              <p className="text-xs text-warm-gray mb-2">by {shared.grocery_list.owner.name}</p>
+                              <p className="text-sm font-medium text-charcoal truncate">{shared.grocery_list_name}</p>
+                              <p className="text-xs text-warm-gray mb-2">by {shared.owner.name}</p>
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => {
