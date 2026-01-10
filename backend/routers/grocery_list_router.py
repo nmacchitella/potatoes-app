@@ -6,13 +6,15 @@ Users can have multiple grocery lists.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from starlette.background import BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional, Tuple
 import secrets
+import os
 
 from database import get_db
-from auth import get_current_user
+from auth import get_current_user, get_current_user_optional
 from models import User, GroceryList, GroceryListItem, GroceryListShare, Recipe, Notification
 from schemas import (
     GroceryListResponse, GroceryListItemCreate, GroceryListItemUpdate,
@@ -20,11 +22,14 @@ from schemas import (
     GroceryListShareCreate, GroceryListShareUpdate, GroceryListShareResponse,
     GroceryListShareUser, SharedGroceryListAccess, SharedGroceryListOwner,
     SourceRecipeInfo, GroceryListCreate, GroceryListUpdate, GroceryListSummary,
+    GroceryListEmailShareRequest, GroceryListEmailShareResponse,
+    GroceryListAcceptPublicShareResponse,
 )
 from services.grocery_list_service import (
     clear_grocery_list, generate_from_meal_plan, group_items_by_category,
     DEFAULT_CATEGORY
 )
+from services.email_service import EmailService
 
 router = APIRouter(prefix="/grocery-list", tags=["grocery-list"])
 
@@ -192,16 +197,31 @@ async def list_grocery_lists(
         GroceryList.user_id == current_user.id
     ).order_by(GroceryList.created_at.desc()).all()
 
-    # Get item counts
+    # Create a default list if user has none
+    if not grocery_lists:
+        default_list = GroceryList(
+            user_id=current_user.id,
+            name="Grocery List"
+        )
+        db.add(default_list)
+        db.commit()
+        db.refresh(default_list)
+        grocery_lists = [default_list]
+
+    # Get item counts and share counts
     result = []
     for gl in grocery_lists:
         item_count = db.query(func.count(GroceryListItem.id)).filter(
             GroceryListItem.grocery_list_id == gl.id
         ).scalar()
+        share_count = db.query(func.count(GroceryListShare.id)).filter(
+            GroceryListShare.grocery_list_id == gl.id
+        ).scalar()
         result.append(GroceryListSummary(
             id=gl.id,
             name=gl.name,
             item_count=item_count,
+            share_count=share_count,
             share_token=gl.share_token,
             created_at=gl.created_at,
             updated_at=gl.updated_at
@@ -233,6 +253,36 @@ async def create_grocery_list(
         created_at=grocery_list.created_at,
         updated_at=grocery_list.updated_at
     )
+
+
+@router.get("/shared-with-me", response_model=List[SharedGroceryListAccess])
+async def list_shared_with_me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List grocery lists shared with the current user."""
+    shares = db.query(GroceryListShare).options(
+        joinedload(GroceryListShare.grocery_list).joinedload(GroceryList.user)
+    ).filter(
+        GroceryListShare.user_id == current_user.id
+    ).all()
+
+    return [
+        SharedGroceryListAccess(
+            id=share.id,
+            grocery_list_id=share.grocery_list.id,
+            grocery_list_name=share.grocery_list.name,
+            owner=SharedGroceryListOwner(
+                id=share.grocery_list.user.id,
+                name=share.grocery_list.user.name,
+                profile_image_url=share.grocery_list.user.profile_image_url
+            ),
+            permission=share.permission,
+            status=share.status,
+            created_at=share.created_at
+        )
+        for share in shares
+    ]
 
 
 @router.get("/{list_id}", response_model=GroceryListResponse)
@@ -577,38 +627,8 @@ async def remove_share(
 
 
 # ============================================================================
-# SHARED WITH ME ENDPOINTS
+# SHARE INVITATION ENDPOINTS
 # ============================================================================
-
-@router.get("/shared-with-me", response_model=List[SharedGroceryListAccess])
-async def list_shared_with_me(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """List grocery lists shared with the current user."""
-    shares = db.query(GroceryListShare).options(
-        joinedload(GroceryListShare.grocery_list).joinedload(GroceryList.user)
-    ).filter(
-        GroceryListShare.user_id == current_user.id
-    ).all()
-
-    return [
-        SharedGroceryListAccess(
-            id=share.id,
-            grocery_list_id=share.grocery_list.id,
-            grocery_list_name=share.grocery_list.name,
-            owner=SharedGroceryListOwner(
-                id=share.grocery_list.user.id,
-                name=share.grocery_list.user.name,
-                profile_image_url=share.grocery_list.user.profile_image_url
-            ),
-            permission=share.permission,
-            status=share.status,
-            created_at=share.created_at
-        )
-        for share in shares
-    ]
-
 
 @router.post("/shares/{share_id}/accept")
 async def accept_share(
@@ -778,4 +798,133 @@ async def get_public_grocery_list(
         shares=[],  # Don't expose shares to public
         created_at=grocery_list.created_at,
         updated_at=grocery_list.updated_at
+    )
+
+
+@router.post("/public/{token}/accept", response_model=GroceryListAcceptPublicShareResponse)
+async def accept_public_share(
+    token: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Accept a public share link and add the list to the user's shared lists."""
+    # Find the grocery list by token
+    grocery_list = db.query(GroceryList).filter(
+        GroceryList.share_token == token
+    ).first()
+
+    if not grocery_list:
+        raise HTTPException(status_code=404, detail="Grocery list not found or link is invalid")
+
+    # Can't add your own list
+    if grocery_list.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="This is your own grocery list")
+
+    # Check if already shared with user
+    existing_share = db.query(GroceryListShare).filter(
+        GroceryListShare.grocery_list_id == grocery_list.id,
+        GroceryListShare.user_id == current_user.id
+    ).first()
+
+    if existing_share:
+        # Update status to accepted if it was pending
+        if existing_share.status == "pending":
+            existing_share.status = "accepted"
+            db.commit()
+        return GroceryListAcceptPublicShareResponse(
+            grocery_list_id=grocery_list.id,
+            grocery_list_name=grocery_list.name,
+            already_had_access=True
+        )
+
+    # Create new share with accepted status (no invitation needed since they have the link)
+    share = GroceryListShare(
+        grocery_list_id=grocery_list.id,
+        user_id=current_user.id,
+        permission="editor",
+        status="accepted"
+    )
+    db.add(share)
+    db.commit()
+
+    return GroceryListAcceptPublicShareResponse(
+        grocery_list_id=grocery_list.id,
+        grocery_list_name=grocery_list.name,
+        already_had_access=False
+    )
+
+
+@router.post("/{list_id}/share-email", response_model=GroceryListEmailShareResponse)
+async def share_via_email(
+    list_id: str,
+    data: GroceryListEmailShareRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Share grocery list via email. If the email belongs to an existing user, also creates a share invitation."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "owner")
+
+    # Can't share with yourself
+    if data.email.lower() == current_user.email.lower():
+        raise HTTPException(status_code=400, detail="Cannot share with yourself")
+
+    # Generate share link
+    if not grocery_list.share_token:
+        grocery_list.share_token = secrets.token_urlsafe(16)
+        db.commit()
+        db.refresh(grocery_list)
+
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    share_link = f"{frontend_url}/grocery/share/{grocery_list.share_token}"
+
+    # Check if email belongs to existing user
+    target_user = db.query(User).filter(
+        func.lower(User.email) == data.email.lower()
+    ).first()
+
+    is_existing_user = target_user is not None
+
+    if is_existing_user:
+        # Check if already shared
+        existing_share = db.query(GroceryListShare).filter(
+            GroceryListShare.grocery_list_id == grocery_list.id,
+            GroceryListShare.user_id == target_user.id
+        ).first()
+
+        if not existing_share:
+            # Create share with pending status
+            share = GroceryListShare(
+                grocery_list_id=grocery_list.id,
+                user_id=target_user.id,
+                permission="editor",
+                status="pending"
+            )
+            db.add(share)
+
+            # Create notification
+            create_share_notification(db, share, grocery_list, current_user)
+            db.commit()
+
+            message = f"Invitation sent to {data.email}. They'll see it in their Potatoes account."
+        else:
+            message = f"{data.email} already has access to this list."
+    else:
+        message = f"Email sent to {data.email} with a link to view the list."
+
+    # Send email
+    email_service = EmailService()
+    await email_service.send_share_invitation_email(
+        email=data.email,
+        share_link=share_link,
+        list_name=grocery_list.name,
+        owner_name=current_user.name,
+        is_existing_user=is_existing_user,
+        background_tasks=background_tasks
+    )
+
+    return GroceryListEmailShareResponse(
+        success=True,
+        is_existing_user=is_existing_user,
+        message=message
     )

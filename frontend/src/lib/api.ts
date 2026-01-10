@@ -15,6 +15,7 @@ import type {
   GroceryList, GroceryListSummary, GroceryListItem, GroceryListCreateInput, GroceryListUpdateInput,
   GroceryListItemCreateInput, GroceryListItemUpdateInput, GroceryListGenerateInput,
   GroceryListShare, GroceryListShareCreateInput, GroceryListShareUpdateInput, SharedGroceryListAccess,
+  GroceryListEmailShareResponse, GroceryListAcceptPublicShareResponse,
 } from '@/types';
 import {
   getAccessToken,
@@ -332,6 +333,11 @@ export const authApi = {
 
   googleLogin: async (): Promise<{ authorization_url: string }> => {
     const response = await api.get<{ authorization_url: string }>('/auth/google/login');
+    return response.data;
+  },
+
+  exchangeOAuthCode: async (code: string): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>('/auth/google/exchange', { code });
     return response.data;
   },
 
@@ -904,6 +910,18 @@ export const groceryListApi = {
 
   getPublicGroceryList: async (token: string): Promise<GroceryList> => {
     const response = await api.get<GroceryList>(`/grocery-list/public/${token}`);
+    return response.data;
+  },
+
+  // Email share method
+  shareViaEmail: async (listId: string, email: string): Promise<GroceryListEmailShareResponse> => {
+    const response = await api.post<GroceryListEmailShareResponse>(`/grocery-list/${listId}/share-email`, { email });
+    return response.data;
+  },
+
+  // Accept public share link (for logged-in users)
+  acceptPublicShare: async (token: string): Promise<GroceryListAcceptPublicShareResponse> => {
+    const response = await api.post<GroceryListAcceptPublicShareResponse>(`/grocery-list/public/${token}/accept`);
     return response.data;
   },
 };

@@ -1,9 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { groceryListApi } from '@/lib/api';
+import { useStore } from '@/store/useStore';
 import type { GroceryList } from '@/types';
+import { getErrorMessage } from '@/lib/api';
 
 const CATEGORY_ORDER = [
   'produce',
@@ -35,11 +38,27 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export default function PublicGroceryListPage() {
   const params = useParams();
+  const router = useRouter();
   const token = params.token as string;
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { user } = useStore();
+  const isLoggedIn = !!user;
 
   const [groceryList, setGroceryList] = useState<GroceryList | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [addResult, setAddResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Cleanup redirect timer on unmount
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const fetchGroceryList = async () => {
@@ -57,6 +76,30 @@ export default function PublicGroceryListPage() {
       fetchGroceryList();
     }
   }, [token]);
+
+  const handleAddToMyLists = async () => {
+    if (!token || isAdding) return;
+
+    setIsAdding(true);
+    setAddResult(null);
+    try {
+      const result = await groceryListApi.acceptPublicShare(token);
+      if (result.already_had_access) {
+        setAddResult({ success: true, message: 'You already have access to this list!' });
+      } else {
+        setAddResult({ success: true, message: 'List added to your account! Redirecting...' });
+        // Redirect to the grocery page after a brief delay
+        redirectTimerRef.current = setTimeout(() => {
+          router.push('/grocery');
+        }, 1500);
+      }
+    } catch (err) {
+      const message = getErrorMessage(err, 'Failed to add list to your account');
+      setAddResult({ success: false, message });
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -95,13 +138,67 @@ export default function PublicGroceryListPage() {
             </svg>
             <span>Shared grocery list</span>
           </div>
-          <h1 className="text-2xl font-semibold text-charcoal">Grocery List</h1>
+          <h1 className="text-2xl font-semibold text-charcoal">{groceryList.name}</h1>
           {hasItems && (
             <p className="text-sm text-warm-gray mt-1">
               {checkedCount} of {totalCount} items checked
             </p>
           )}
         </div>
+
+        {/* CTA Banner for logged-in users */}
+        {isLoggedIn && !addResult?.success && (
+          <div className="mb-6 bg-gold/10 border border-gold/30 rounded-xl p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="font-medium text-charcoal">Want to edit this list?</h3>
+                <p className="text-sm text-warm-gray">Add it to your account to collaborate and make changes</p>
+              </div>
+              <button
+                onClick={handleAddToMyLists}
+                disabled={isAdding}
+                className="px-4 py-2 bg-gold text-white rounded-lg hover:bg-gold/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+              >
+                {isAdding ? 'Adding...' : 'Add to my lists'}
+              </button>
+            </div>
+            {addResult && (
+              <p className={`text-sm mt-2 ${addResult.success ? 'text-green-600' : 'text-red-500'}`}>
+                {addResult.message}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Success message for logged-in users */}
+        {isLoggedIn && addResult?.success && (
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-green-700">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="font-medium">{addResult.message}</span>
+            </div>
+          </div>
+        )}
+
+        {/* CTA Banner for logged-out users */}
+        {!isLoggedIn && (
+          <div className="mb-6 bg-cream-dark border border-border rounded-xl p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h3 className="font-medium text-charcoal">Sign up to collaborate</h3>
+                <p className="text-sm text-warm-gray">Create a free account to edit this list and create your own</p>
+              </div>
+              <Link
+                href={`/auth/login?redirect=/grocery/share/${token}`}
+                className="px-4 py-2 bg-gold text-white rounded-lg hover:bg-gold/90 transition-colors whitespace-nowrap text-center"
+              >
+                Sign up or log in
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Empty state */}
         {!hasItems && (

@@ -120,19 +120,24 @@ export function useGroceryList(): UseGroceryListReturn {
       setSharedWithMe(shared);
 
       // Auto-select first list if none selected and lists exist
-      if (!selectedListId && lists.length > 0) {
-        setSelectedListId(lists[0].id);
-      }
+      // Use functional update to avoid stale closure
+      setSelectedListId(current => {
+        if (!current && lists.length > 0) {
+          return lists[0].id;
+        }
+        return current;
+      });
     } catch (err) {
       console.error('Failed to load grocery lists:', err);
+      setError('Failed to load grocery lists');
     } finally {
       setLoadingLists(false);
     }
-  }, [selectedListId]);
+  }, []); // No dependencies - uses functional state updates
 
   useEffect(() => {
     loadLists();
-  }, []);
+  }, [loadLists]);
 
   // Load selected list
   const loadGroceryList = useCallback(async () => {
@@ -187,31 +192,54 @@ export function useGroceryList(): UseGroceryListReturn {
 
   // Create new list
   const createList = useCallback(async (name?: string): Promise<GroceryListSummary> => {
-    const newList = await groceryListApi.create(name ? { name } : undefined);
-    setMyLists(prev => [newList, ...prev]);
-    setSelectedListId(newList.id);
-    return newList;
+    try {
+      const newList = await groceryListApi.create(name ? { name } : undefined);
+      setMyLists(prev => [newList, ...prev]);
+      setSelectedListId(newList.id);
+      setError(null);
+      return newList;
+    } catch (err) {
+      console.error('Failed to create grocery list:', err);
+      setError('Failed to create grocery list');
+      throw err; // Re-throw so caller can handle it
+    }
   }, []);
 
   // Rename list
   const renameList = useCallback(async (listId: string, name: string) => {
-    const updated = await groceryListApi.update(listId, { name });
-    setMyLists(prev => prev.map(l => l.id === listId ? updated : l));
-    if (groceryList && groceryList.id === listId) {
-      setGroceryList(prev => prev ? { ...prev, name } : null);
+    try {
+      const updated = await groceryListApi.update(listId, { name });
+      setMyLists(prev => prev.map(l => l.id === listId ? updated : l));
+      if (groceryList && groceryList.id === listId) {
+        setGroceryList(prev => prev ? { ...prev, name } : null);
+      }
+      setError(null);
+    } catch (err) {
+      console.error('Failed to rename grocery list:', err);
+      setError('Failed to rename grocery list');
+      throw err;
     }
   }, [groceryList]);
 
   // Delete list
   const deleteList = useCallback(async (listId: string) => {
-    await groceryListApi.delete(listId);
-    setMyLists(prev => prev.filter(l => l.id !== listId));
-    if (selectedListId === listId) {
-      // Select another list or null
-      const remaining = myLists.filter(l => l.id !== listId);
-      setSelectedListId(remaining.length > 0 ? remaining[0].id : null);
+    try {
+      await groceryListApi.delete(listId);
+      setMyLists(prev => {
+        const remaining = prev.filter(l => l.id !== listId);
+        // Select another list or null if we deleted the selected one
+        if (selectedListId === listId) {
+          setSelectedListId(remaining.length > 0 ? remaining[0].id : null);
+        }
+        return remaining;
+      });
+      setError(null);
+    } catch (err) {
+      console.error('Failed to delete grocery list:', err);
+      setError('Failed to delete grocery list');
+      throw err;
     }
-  }, [selectedListId, myLists]);
+  }, [selectedListId]);
 
   // Toggle item checked
   const toggleItemChecked = useCallback(async (itemId: string) => {

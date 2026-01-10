@@ -10,7 +10,6 @@ interface GroceryCategorySectionProps {
   items: GroceryListItem[];
   defaultCollapsed?: boolean;
   onToggleItemChecked: (itemId: string) => void;
-  onToggleItemStaple: (itemId: string, isStaple: boolean) => void;
   onDeleteItem: (itemId: string) => void;
 }
 
@@ -19,7 +18,6 @@ export function GroceryCategorySection({
   items,
   defaultCollapsed = false,
   onToggleItemChecked,
-  onToggleItemStaple,
   onDeleteItem,
 }: GroceryCategorySectionProps) {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
@@ -61,7 +59,6 @@ export function GroceryCategorySection({
               key={item.id}
               item={item}
               onToggleChecked={onToggleItemChecked}
-              onToggleStaple={onToggleItemStaple}
               onDelete={onDeleteItem}
             />
           ))}

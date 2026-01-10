@@ -7,11 +7,10 @@ import type { GroceryListItem } from '@/types';
 interface GroceryItemProps {
   item: GroceryListItem;
   onToggleChecked: (itemId: string) => void;
-  onToggleStaple: (itemId: string, isStaple: boolean) => void;
   onDelete: (itemId: string) => void;
 }
 
-export function GroceryItem({ item, onToggleChecked, onToggleStaple, onDelete }: GroceryItemProps) {
+export function GroceryItem({ item, onToggleChecked, onDelete }: GroceryItemProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -93,21 +92,6 @@ export function GroceryItem({ item, onToggleChecked, onToggleStaple, onDelete }:
 
         {/* Actions - always visible on mobile, hover on desktop */}
         <div className="flex items-center gap-1 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-          {/* Pantry toggle */}
-          <button
-            onClick={() => onToggleStaple(item.id, !item.is_staple)}
-            className={`p-1.5 sm:p-1 rounded transition-colors ${
-              item.is_staple
-                ? 'text-gold hover:text-gold/70'
-                : 'text-warm-gray/50 hover:text-warm-gray'
-            }`}
-            title={item.is_staple ? 'Remove from pantry staples' : 'Mark as pantry staple'}
-          >
-            <svg className="w-4 h-4 sm:w-3.5 sm:h-3.5" fill={item.is_staple ? 'currentColor' : 'none'} viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-          </button>
-
           {/* Delete button */}
           <button
             onClick={handleDelete}

@@ -38,8 +38,18 @@ def get_user_by_email(db: Session, email: str):
 
 
 def authenticate_user(db: Session, email: str, password: str):
+    """Authenticate user with email and password.
+
+    Returns False if:
+    - User doesn't exist
+    - User is an OAuth-only account (no password set)
+    - Password is incorrect
+    """
     user = get_user_by_email(db, email)
     if not user:
+        return False
+    # OAuth users have no password - they must use OAuth to login
+    if not user.hashed_password:
         return False
     if not verify_password(password, user.hashed_password):
         return False

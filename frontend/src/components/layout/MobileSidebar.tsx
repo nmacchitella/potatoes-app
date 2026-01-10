@@ -50,7 +50,6 @@ export default function MobileSidebar({
   const [collections, setCollections] = useState<Collection[]>([]);
   const [sharedCollections, setSharedCollections] = useState<SharedCollection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [collectionsExpanded, setCollectionsExpanded] = useState(true);
 
   // Inline collection management state
   const [isManageMode, setIsManageMode] = useState(false);
@@ -295,41 +294,37 @@ export default function MobileSidebar({
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto">
-            {/* View Toggle: Recipes / Calendar */}
-            <div className="p-4 border-b border-border">
-              <div className="flex rounded-lg bg-cream-dark p-1">
-                <button
-                  onClick={() => handleViewChange('recipes')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    !isOnGroceryPage && pageView === 'recipes'
-                      ? 'bg-white text-charcoal shadow-sm'
-                      : 'text-warm-gray hover:text-charcoal'
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                  Recipes
-                </button>
-                <button
-                  onClick={() => handleViewChange('calendar')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    !isOnGroceryPage && pageView === 'calendar'
-                      ? 'bg-white text-charcoal shadow-sm'
-                      : 'text-warm-gray hover:text-charcoal'
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Calendar
-                </button>
-              </div>
-
-              {/* Grocery List - always visible below toggle */}
+            {/* Main Navigation */}
+            <div className="p-4 space-y-1 border-b border-border">
+              <button
+                onClick={() => handleViewChange('recipes')}
+                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  !isOnGroceryPage && pageView === 'recipes'
+                    ? 'bg-gold/10 text-gold-dark font-medium'
+                    : 'text-charcoal hover:bg-cream-dark'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <span>Recipes</span>
+              </button>
+              <button
+                onClick={() => handleViewChange('calendar')}
+                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  !isOnGroceryPage && pageView === 'calendar'
+                    ? 'bg-gold/10 text-gold-dark font-medium'
+                    : 'text-charcoal hover:bg-cream-dark'
+                }`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span>Meal Plan</span>
+              </button>
               <button
                 onClick={() => handleNavClick('/grocery')}
-                className={`flex items-center justify-center gap-2 w-full px-3 py-2.5 mt-3 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
                   isOnGroceryPage
                     ? 'bg-gold/10 text-gold-dark font-medium'
                     : 'text-charcoal hover:bg-cream-dark'
@@ -404,7 +399,7 @@ export default function MobileSidebar({
                     )}
 
                     {/* Grocery lists */}
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       {groceryLists.map((list) => (
                         <div key={list.id}>
                           {editingGroceryListId === list.id ? (
@@ -447,7 +442,7 @@ export default function MobileSidebar({
                           ) : (
                             <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
                               selectedListId === list.id
-                                ? 'bg-gold/10 text-gold-dark font-medium'
+                                ? 'bg-charcoal/5 text-charcoal font-medium'
                                 : 'hover:bg-cream-dark'
                             }`}>
                               <button
@@ -488,14 +483,14 @@ export default function MobileSidebar({
                         <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-2">
                           Shared with me
                         </span>
-                        <div className="space-y-1">
+                        <div className="space-y-0.5">
                           {sharedGroceryLists.filter(s => s.status === 'accepted').map((shared) => (
                             <button
                               key={shared.id}
                               onClick={() => handleGroceryListClick(shared.grocery_list.id)}
                               className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm text-left transition-colors ${
                                 selectedListId === shared.grocery_list.id
-                                  ? 'bg-gold/10 text-gold-dark font-medium'
+                                  ? 'bg-charcoal/5 text-charcoal font-medium'
                                   : 'hover:bg-cream-dark'
                               }`}
                             >
@@ -552,9 +547,9 @@ export default function MobileSidebar({
             {!isOnGroceryPage && pageView === 'calendar' && (
               <div className="p-4 border-b border-border">
                 <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-3">
-                  Calendar View
+                  View
                 </span>
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {([
                     { mode: 'day' as CalendarMode, label: 'Day', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
                     { mode: 'week' as CalendarMode, label: '3 Days', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
@@ -563,9 +558,9 @@ export default function MobileSidebar({
                     <button
                       key={mode}
                       onClick={() => handleCalendarModeChange(mode)}
-                      className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
+                      className={`flex items-center gap-3 w-full px-3 py-2 rounded-lg text-left transition-colors ${
                         calendarMode === mode
-                          ? 'bg-gold/10 text-gold-dark font-medium'
+                          ? 'bg-charcoal/5 text-charcoal font-medium'
                           : 'text-charcoal hover:bg-cream-dark'
                       }`}
                     >
@@ -579,45 +574,13 @@ export default function MobileSidebar({
               </div>
             )}
 
-            {/* Quick Links - Only show when on recipes view and not on grocery page */}
-            {!isOnGroceryPage && pageView === 'recipes' && (
-              <div className="p-4 border-b border-border">
-                <button
-                  onClick={() => handleCollectionClick(null)}
-                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
-                    pathname === '/' && !selectedCollection && pageView === 'recipes'
-                      ? 'bg-gold/10 text-gold-dark font-medium'
-                      : 'text-charcoal hover:bg-cream-dark'
-                  }`}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                  </svg>
-                  <span>All Recipes</span>
-                </button>
-              </div>
-            )}
-
             {/* Collections - Only show when on recipes view and not on grocery page */}
             {!isOnGroceryPage && pageView === 'recipes' && (
             <div className="p-4">
-              <div className="flex items-center justify-between mb-2">
-                <button
-                  onClick={() => setCollectionsExpanded(!collectionsExpanded)}
-                  className="flex items-center gap-1"
-                >
-                  <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">
-                    Collections
-                  </span>
-                  <svg
-                    className={`w-4 h-4 text-warm-gray transition-transform ${collectionsExpanded ? 'rotate-180' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">
+                  Collections
+                </span>
                 {collections.length > 0 && (
                   <button
                     onClick={() => setIsManageMode(!isManageMode)}
@@ -628,23 +591,32 @@ export default function MobileSidebar({
                 )}
               </div>
 
-              {collectionsExpanded && (
-                <nav className="space-y-1">
-                  {loading ? (
-                    <div className="py-4 text-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-2 border-gold border-t-transparent mx-auto" />
-                    </div>
-                  ) : (
-                    <>
-                      {collections.length === 0 && !isCreatingCollection ? (
-                        <p className="text-sm text-warm-gray py-2 px-3">No collections yet</p>
-                      ) : (
-                        collections.map(collection => (
+              <nav className="space-y-0.5">
+                {loading ? (
+                  <div className="py-4 text-center">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-gold border-t-transparent mx-auto" />
+                  </div>
+                ) : (
+                  <>
+                    {/* All Recipes option */}
+                    <button
+                      onClick={() => handleCollectionClick(null)}
+                      className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm text-left transition-colors ${
+                        pathname === '/' && !selectedCollection && pageView === 'recipes'
+                          ? 'bg-charcoal/5 text-charcoal font-medium'
+                          : 'text-charcoal hover:bg-cream-dark'
+                      }`}
+                    >
+                      <span>All</span>
+                    </button>
+
+                    {/* User collections */}
+                    {collections.map(collection => (
                           <div
                             key={collection.id}
                             className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm transition-colors ${
                               selectedCollection === collection.id
-                                ? 'bg-gold/10 text-gold-dark font-medium'
+                                ? 'bg-charcoal/5 text-charcoal font-medium'
                                 : 'text-charcoal hover:bg-cream-dark'
                             }`}
                           >
@@ -722,8 +694,7 @@ export default function MobileSidebar({
                               </>
                             )}
                           </div>
-                        ))
-                      )}
+                        ))}
 
                       {/* Create new collection inline */}
                       {isCreatingCollection ? (
@@ -779,7 +750,6 @@ export default function MobileSidebar({
                     </>
                   )}
                 </nav>
-              )}
 
               {/* Shared with me */}
               {sharedCollections.length > 0 && (
@@ -787,14 +757,14 @@ export default function MobileSidebar({
                   <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-2">
                     Shared with me
                   </span>
-                  <nav className="space-y-1">
+                  <nav className="space-y-0.5">
                     {sharedCollections.map(collection => (
                       <button
                         key={collection.id}
                         onClick={() => handleCollectionClick(collection.id)}
                         className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm text-left transition-colors ${
                           selectedCollection === collection.id
-                            ? 'bg-gold/10 text-gold-dark font-medium'
+                            ? 'bg-charcoal/5 text-charcoal font-medium'
                             : 'text-charcoal hover:bg-cream-dark'
                         }`}
                       >
@@ -814,19 +784,6 @@ export default function MobileSidebar({
 
           {/* Footer */}
           <div className="border-t border-border p-4 space-y-1">
-            <button
-              onClick={() => handleNavClick('/grocery')}
-              className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${
-                pathname === '/grocery'
-                  ? 'bg-gold/10 text-gold-dark font-medium'
-                  : 'text-charcoal hover:bg-cream-dark'
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-              </svg>
-              <span>Grocery List</span>
-            </button>
             <button
               onClick={() => handleNavClick('/settings')}
               className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg transition-colors text-left ${

@@ -118,6 +118,19 @@ def change_password(
     """Change current user password"""
     db_user = db.query(auth.models.User).filter(auth.models.User.id == current_user.id).first()
 
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # OAuth users don't have a password - they can't change it
+    if not db_user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot change password for OAuth accounts. Please use your OAuth provider."
+        )
+
     if not auth.verify_password(password_change.current_password, db_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -137,6 +150,11 @@ def delete_current_user(
 ):
     """Delete current user account"""
     db_user = db.query(auth.models.User).filter(auth.models.User.id == current_user.id).first()
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
     db.delete(db_user)
     db.commit()
     return {"message": "Account deleted successfully"}

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { GroceryListSummary, SharedGroceryListAccess } from '@/types';
+import { getErrorMessage } from '@/lib/api';
 
 interface GroceryListSidebarProps {
   myLists: GroceryListSummary[];
@@ -35,6 +36,15 @@ export function GroceryListSidebar({
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Auto-dismiss error after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const acceptedShares = sharedWithMe.filter(s => s.status === 'accepted');
   const pendingShares = sharedWithMe.filter(s => s.status === 'pending');
@@ -42,32 +52,39 @@ export function GroceryListSidebar({
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListName.trim()) return;
+    setError(null);
     try {
       await onCreateList(newListName.trim());
       setNewListName('');
       setIsCreating(false);
     } catch (err) {
-      console.error('Failed to create list:', err);
+      const message = getErrorMessage(err, 'Failed to create list');
+      setError(message);
     }
   };
 
   const handleRenameList = async (listId: string) => {
     if (!editingName.trim()) return;
+    setError(null);
     try {
       await onRenameList(listId, editingName.trim());
       setEditingListId(null);
       setEditingName('');
     } catch (err) {
-      console.error('Failed to rename list:', err);
+      const message = getErrorMessage(err, 'Failed to rename list');
+      setError(message);
     }
   };
 
   const handleDeleteList = async (listId: string) => {
+    setError(null);
     try {
       await onDeleteList(listId);
       setShowDeleteConfirm(null);
     } catch (err) {
-      console.error('Failed to delete list:', err);
+      const message = getErrorMessage(err, 'Failed to delete list');
+      setError(message);
+      setShowDeleteConfirm(null);
     }
   };
 
@@ -99,6 +116,18 @@ export function GroceryListSidebar({
             </svg>
           </button>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <svg className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
 
         {/* Create new list form */}
         {isCreating && (
@@ -200,7 +229,19 @@ export function GroceryListSidebar({
                       }`}
                     >
                       <div className="flex-1 min-w-0">
-                        <span className="block truncate text-sm font-medium">{list.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="block truncate text-sm font-medium">{list.name}</span>
+                          {list.share_count > 0 && (
+                            <span
+                              className="flex-shrink-0 text-warm-gray"
+                              title={`Shared with ${list.share_count} ${list.share_count === 1 ? 'person' : 'people'}`}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                              </svg>
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs text-warm-gray">{list.item_count} items</span>
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

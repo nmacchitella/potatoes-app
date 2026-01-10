@@ -94,6 +94,20 @@ export interface UserProfilePublic {
 }
 
 // ============================================================================
+// SHARED USER TYPE (used across Collection, MealPlan, GroceryList sharing)
+// ============================================================================
+
+/**
+ * Common user info for all sharing contexts.
+ * Used in Collection shares, MealPlan shares, and GroceryList shares.
+ */
+export interface ShareableUser {
+  id: string;
+  name: string;
+  profile_image_url?: string;
+}
+
+// ============================================================================
 // RECIPE TYPES
 // ============================================================================
 
@@ -307,11 +321,8 @@ export interface CollectionUpdateInput extends Partial<CollectionCreateInput> {
 }
 
 // --- Collection Sharing Types ---
-export interface CollectionShareUser {
-  id: string;
-  name: string;
-  profile_image_url?: string;
-}
+// Alias for backwards compatibility - use ShareableUser for new code
+export type CollectionShareUser = ShareableUser;
 
 export interface CollectionShare {
   id: string;
@@ -551,11 +562,8 @@ export interface MealPlanListResponse {
 }
 
 // Meal Plan Sharing
-export interface MealPlanShareUser {
-  id: string;
-  name: string;
-  profile_image_url?: string;
-}
+// Alias for backwards compatibility - use ShareableUser for new code
+export type MealPlanShareUser = ShareableUser;
 
 export interface MealPlanShare {
   id: string;
@@ -604,11 +612,8 @@ export interface GroceryListItem {
   created_at: string;
 }
 
-export interface GroceryListShareUser {
-  id: string;
-  name: string;
-  profile_image_url?: string;
-}
+// Alias for backwards compatibility - use ShareableUser for new code
+export type GroceryListShareUser = ShareableUser;
 
 export interface GroceryListShare {
   id: string;
@@ -633,9 +638,22 @@ export interface GroceryListSummary {
   id: string;
   name: string;
   item_count: number;
+  share_count: number;
   share_token?: string;
   created_at: string;
   updated_at?: string;
+}
+
+export interface GroceryListEmailShareResponse {
+  success: boolean;
+  is_existing_user: boolean;
+  message: string;
+}
+
+export interface GroceryListAcceptPublicShareResponse {
+  grocery_list_id: string;
+  grocery_list_name: string;
+  already_had_access: boolean;
 }
 
 export interface GroceryListCreateInput {

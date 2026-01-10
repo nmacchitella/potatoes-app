@@ -110,6 +110,23 @@ class PublicUserProfile(BaseModel):
         from_attributes = True
 
 
+# ============================================================================
+# SHARED USER TYPE (used across Collection, MealPlan, GroceryList sharing)
+# ============================================================================
+
+class ShareableUser(BaseModel):
+    """
+    Common user info for all sharing contexts.
+    Used in Collection shares, MealPlan shares, and GroceryList shares.
+    """
+    id: str
+    name: str
+    profile_image_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # User Follow Schemas
 class UserSearchResult(BaseModel):
     """Minimal user info for search results"""
@@ -325,14 +342,8 @@ class CollectionShareUpdate(BaseModel):
     permission: str  # viewer, editor
 
 
-class CollectionShareUser(BaseModel):
-    """User info for collection share responses"""
-    id: str
-    name: str
-    profile_image_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+# Alias for backwards compatibility - use ShareableUser for new code
+CollectionShareUser = ShareableUser
 
 
 class CollectionShare(BaseModel):
@@ -724,14 +735,8 @@ class MealPlanListResponse(BaseModel):
 # MEAL PLAN SHARING SCHEMAS
 # ============================================================================
 
-class MealPlanShareUser(BaseModel):
-    """User info for meal plan sharing."""
-    id: str
-    name: str
-    profile_image_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+# Alias for backwards compatibility - use ShareableUser for new code
+MealPlanShareUser = ShareableUser
 
 
 class MealPlanShareCreate(BaseModel):
@@ -756,14 +761,8 @@ class MealPlanShareResponse(BaseModel):
         from_attributes = True
 
 
-class SharedMealPlanOwner(BaseModel):
-    """Owner info for shared meal plans."""
-    id: str
-    name: str
-    profile_image_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+# Alias for backwards compatibility - use ShareableUser for new code
+SharedMealPlanOwner = ShareableUser
 
 
 class SharedMealPlanAccess(BaseModel):
@@ -825,19 +824,13 @@ class GroceryListItemResponse(BaseModel):
         from_attributes = True
 
 
-class GroceryListShareUser(BaseModel):
-    """User info for grocery list sharing."""
-    id: str
-    name: str
-    profile_image_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+# Alias for backwards compatibility - use ShareableUser for new code
+GroceryListShareUser = ShareableUser
 
 
 class GroceryListCreate(BaseModel):
     """Create a new grocery list."""
-    name: str = Field(default="My Grocery List", min_length=1, max_length=200)
+    name: str = Field(default="Grocery List", min_length=1, max_length=200)
 
 
 class GroceryListUpdate(BaseModel):
@@ -850,6 +843,7 @@ class GroceryListSummary(BaseModel):
     id: str
     name: str
     item_count: int
+    share_count: int = 0  # Number of users the list is shared with
     share_token: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -908,14 +902,8 @@ class GroceryListBulkCheckRequest(BaseModel):
     is_checked: bool
 
 
-class SharedGroceryListOwner(BaseModel):
-    """Owner info for shared grocery lists."""
-    id: str
-    name: str
-    profile_image_url: Optional[str] = None
-
-    class Config:
-        from_attributes = True
+# Alias for backwards compatibility - use ShareableUser for new code
+SharedGroceryListOwner = ShareableUser
 
 
 class SharedGroceryListAccess(BaseModel):
@@ -930,6 +918,25 @@ class SharedGroceryListAccess(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class GroceryListEmailShareRequest(BaseModel):
+    """Request to share grocery list via email."""
+    email: EmailStr
+
+
+class GroceryListEmailShareResponse(BaseModel):
+    """Response after sharing via email."""
+    success: bool
+    is_existing_user: bool  # True if email belongs to registered user
+    message: str
+
+
+class GroceryListAcceptPublicShareResponse(BaseModel):
+    """Response after accepting a public share link."""
+    grocery_list_id: str
+    grocery_list_name: str
+    already_had_access: bool = False
 
 
 # Update forward references

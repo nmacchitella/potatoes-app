@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import { UserAvatar } from '@/components/ui';
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user } = useStore();
 
   // Don't show on certain pages
@@ -17,6 +18,7 @@ export default function BottomNav() {
 
   const isHome = pathname === '/' || pathname.startsWith('/?');
   const isGrocery = pathname === '/grocery';
+  const isCalendarView = isHome && searchParams.get('view') === 'calendar';
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-border z-40 md:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
@@ -49,6 +51,9 @@ export default function BottomNav() {
             </svg>
             <span className="text-[8px] text-white font-medium mt-0.5">Recipes</span>
           </Link>
+        ) : isCalendarView ? (
+          // Empty spacer to maintain nav layout when on calendar view
+          <div className="w-14 h-14" />
         ) : (
           <Link
             href="/recipes/new"

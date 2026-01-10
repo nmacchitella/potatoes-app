@@ -1,9 +1,12 @@
 import os
+import logging
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import EmailStr
 from starlette.background import BackgroundTasks
 from dotenv import load_dotenv
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # Email configuration
 conf = ConnectionConfig(
@@ -204,7 +207,7 @@ class EmailService:
         try:
             background_tasks.add_task(self.fastmail.send_message, message)
         except Exception as e:
-            print(f"Failed to send email: {e}")
+            logger.error(f"Failed to send verification email to {email}: {e}")
 
     async def send_password_reset_email(self, email: EmailStr, token: str, background_tasks: BackgroundTasks):
         """Send password reset email"""
@@ -224,4 +227,106 @@ class EmailService:
         try:
             background_tasks.add_task(self.fastmail.send_message, message)
         except Exception as e:
-            print(f"Failed to send email: {e}")
+            logger.error(f"Failed to send password reset email to {email}: {e}")
+
+    def _get_share_invitation_content(
+        self,
+        share_link: str,
+        list_name: str,
+        owner_name: str,
+        is_existing_user: bool
+    ) -> str:
+        """Grocery list share invitation email content"""
+        if is_existing_user:
+            # For existing users - they can accept the invitation
+            cta_text = "View Grocery List"
+            extra_info = '''
+    <tr>
+        <td style="padding-top: 16px;">
+            <p style="margin: 0; color: #6b7280; font-size: 13px; text-align: center;">
+                This list has been shared with your Potatoes account. You can accept it from your grocery page.
+            </p>
+        </td>
+    </tr>
+'''
+        else:
+            # For new users - encourage them to sign up
+            cta_text = "View Grocery List"
+            extra_info = '''
+    <tr>
+        <td style="padding-top: 16px;">
+            <p style="margin: 0; color: #6b7280; font-size: 13px; text-align: center;">
+                Sign up for a free Potatoes account to collaborate on this list and create your own!
+            </p>
+        </td>
+    </tr>
+'''
+
+        return f'''
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+    <tr>
+        <td align="center">
+            <h2 style="margin: 0 0 16px 0; color: #111827; font-size: 22px; font-weight: 600;">Grocery list shared with you</h2>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <p style="margin: 0 0 8px 0; color: #4b5563; font-size: 15px; line-height: 1.6; text-align: center;">
+                <strong>{owner_name}</strong> has shared a grocery list with you:
+            </p>
+            <p style="margin: 0 0 24px 0; color: #111827; font-size: 18px; font-weight: 600; text-align: center;">
+                "{list_name}"
+            </p>
+        </td>
+    </tr>
+    <tr>
+        <td align="center" style="padding: 8px 0 24px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                    <td style="background-color: #F59E0B; border-radius: 8px;">
+                        <a href="{share_link}" target="_blank" style="display: inline-block; padding: 14px 32px; color: #ffffff; font-size: 15px; font-weight: 600; text-decoration: none; text-align: center;">
+                            {cta_text}
+                        </a>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <p style="margin: 0 0 12px 0; color: #6b7280; font-size: 13px; text-align: center;">
+                Or copy and paste this link into your browser:
+            </p>
+            <p style="margin: 0; padding: 12px 16px; background-color: #f3f4f6; border-radius: 8px; word-break: break-all;">
+                <a href="{share_link}" style="color: #F59E0B; font-size: 12px; text-decoration: none;">{share_link}</a>
+            </p>
+        </td>
+    </tr>
+    {extra_info}
+</table>
+'''
+
+    async def send_share_invitation_email(
+        self,
+        email: EmailStr,
+        share_link: str,
+        list_name: str,
+        owner_name: str,
+        is_existing_user: bool,
+        background_tasks: BackgroundTasks
+    ):
+        """Send grocery list share invitation email"""
+        content = self._get_share_invitation_content(share_link, list_name, owner_name, is_existing_user)
+        html_body = self._get_base_template(content)
+
+        message = MessageSchema(
+            subject=f"{owner_name} shared a grocery list with you",
+            recipients=[email],
+            body=html_body,
+            subtype=MessageType.html
+        )
+
+        try:
+            background_tasks.add_task(self.fastmail.send_message, message)
+        except Exception as e:
+            logger.error(f"Failed to send share invitation email to {email}: {e}")

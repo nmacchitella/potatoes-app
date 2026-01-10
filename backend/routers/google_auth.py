@@ -8,11 +8,24 @@ from config import settings
 import auth
 import models
 import httpx
-from datetime import timedelta
+import secrets
+import logging
+from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleMobileTokenRequest(BaseModel):
     access_token: str
+
+
+class OAuthCodeExchangeRequest(BaseModel):
+    code: str
+
+
+# In-memory store for OAuth codes (in production, use Redis or database)
+# Format: {code: {"tokens": {...}, "expires_at": datetime}}
+_oauth_code_store: dict = {}
 
 router = APIRouter(prefix="/auth/google", tags=["google-auth"])
 
@@ -49,6 +62,25 @@ async def google_login():
     return {"authorization_url": authorization_url}
 
 
+def _cleanup_expired_codes():
+    """Remove expired OAuth codes from memory"""
+    now = datetime.utcnow()
+    expired = [code for code, data in _oauth_code_store.items() if data["expires_at"] < now]
+    for code in expired:
+        del _oauth_code_store[code]
+
+
+def _create_oauth_code(tokens: dict) -> str:
+    """Create a short-lived code that can be exchanged for tokens"""
+    _cleanup_expired_codes()
+    code = secrets.token_urlsafe(32)
+    _oauth_code_store[code] = {
+        "tokens": tokens,
+        "expires_at": datetime.utcnow() + timedelta(minutes=5)
+    }
+    return code
+
+
 @router.get("/callback")
 async def google_callback(code: str, db: Session = Depends(get_db)):
     """Handle Google OAuth callback"""
@@ -75,6 +107,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
             )
 
             if token_response.status_code != 200:
+                logger.warning(f"Failed to exchange Google OAuth code: {token_response.status_code}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Failed to exchange code for token"
@@ -89,6 +122,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
             )
 
             if userinfo_response.status_code != 200:
+                logger.warning(f"Failed to get Google user info: {userinfo_response.status_code}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Failed to get user info from Google"
@@ -97,6 +131,14 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
             user_info = userinfo_response.json()
 
             email = user_info.get("email")
+            # Validate email exists before using it
+            if not email:
+                logger.error("Google OAuth: No email provided in user info")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email not provided by Google. Please ensure your Google account has an email."
+                )
+
             name = user_info.get("name", email.split("@")[0])
             google_id = user_info.get("id")
 
@@ -123,16 +165,55 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
                 db.commit()
                 db.refresh(db_user)
 
-            tokens = auth.create_token_pair(db_user, db)
+                # Create default grocery list for the new user
+                default_grocery_list = models.GroceryList(
+                    user_id=db_user.id,
+                    name="My Grocery List"
+                )
+                db.add(default_grocery_list)
+                db.commit()
 
-            frontend_redirect = f"{settings.frontend_url}/auth/callback?token={tokens['access_token']}&refresh_token={tokens['refresh_token']}"
+            jwt_tokens = auth.create_token_pair(db_user, db)
+
+            # Create a short-lived code instead of putting tokens in URL
+            oauth_code = _create_oauth_code(jwt_tokens)
+
+            frontend_redirect = f"{settings.frontend_url}/auth/callback?code={oauth_code}"
             return RedirectResponse(url=frontend_redirect)
 
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("OAuth callback failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OAuth callback failed: {str(e)}"
+            detail="Authentication failed. Please try again."
         )
+
+
+@router.post("/exchange")
+async def exchange_oauth_code(request: OAuthCodeExchangeRequest):
+    """Exchange a short-lived OAuth code for JWT tokens.
+
+    This endpoint is called by the frontend after OAuth redirect to securely
+    retrieve the tokens without exposing them in the URL.
+    """
+    _cleanup_expired_codes()
+
+    code_data = _oauth_code_store.pop(request.code, None)
+    if not code_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired code"
+        )
+
+    if code_data["expires_at"] < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Code has expired"
+        )
+
+    return code_data["tokens"]
 
 
 @router.post("/mobile")

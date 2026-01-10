@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useGroceryList } from '@/hooks/useGroceryList';
 import { GroceryListView, GroceryListSidebar } from '@/components/grocery';
 import Navbar from '@/components/layout/Navbar';
@@ -23,7 +22,6 @@ export default function GroceryListPage() {
     error,
     // Item operations
     toggleItemChecked,
-    toggleItemStaple,
     addItem,
     deleteItem,
     clearCheckedItems,
@@ -35,17 +33,14 @@ export default function GroceryListPage() {
     setIsGenerateModalOpen,
     // Sharing
     shares,
-    userSearchQuery,
-    setUserSearchQuery,
-    userSearchResults,
-    searchingUsers,
-    sharingUser,
-    handleShareWithUser,
     handleRemoveShare,
     acceptShare,
     declineShare,
     leaveSharedList,
   } = useGroceryList();
+
+  // Check if the selected list is owned by the current user
+  const isOwner = selectedListId ? myLists.some(list => list.id === selectedListId) : false;
 
   return (
     <div className="min-h-screen bg-cream has-bottom-nav">
@@ -89,8 +84,8 @@ export default function GroceryListPage() {
             loading={loading}
             error={error}
             selectedListId={selectedListId}
+            isOwner={isOwner}
             toggleItemChecked={toggleItemChecked}
-            toggleItemStaple={toggleItemStaple}
             addItem={addItem}
             deleteItem={deleteItem}
             clearCheckedItems={clearCheckedItems}
@@ -100,12 +95,6 @@ export default function GroceryListPage() {
             isGenerateModalOpen={isGenerateModalOpen}
             setIsGenerateModalOpen={setIsGenerateModalOpen}
             shares={shares}
-            userSearchQuery={userSearchQuery}
-            setUserSearchQuery={setUserSearchQuery}
-            userSearchResults={userSearchResults}
-            searchingUsers={searchingUsers}
-            sharingUser={sharingUser}
-            handleShareWithUser={handleShareWithUser}
             handleRemoveShare={handleRemoveShare}
           />
         </main>

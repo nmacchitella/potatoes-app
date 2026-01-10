@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { authApi } from '@/lib/api';
+import { authApi, getErrorMessage } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import { hasAccessTokenCookie } from '@/lib/auth-storage';
 
@@ -43,8 +43,8 @@ function LoginContent() {
     try {
       const response = await authApi.googleLogin();
       window.location.href = response.authorization_url;
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to initiate Google login');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to initiate Google login'));
       setGoogleLoading(false);
     }
   };
