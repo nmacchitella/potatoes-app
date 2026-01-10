@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useGroceryList } from '@/hooks/useGroceryList';
 import { GroceryListView, GroceryListSidebar } from '@/components/grocery';
 import Navbar from '@/components/layout/Navbar';
@@ -24,6 +25,7 @@ export default function GroceryListPage() {
     toggleItemChecked,
     addItem,
     deleteItem,
+    changeItemCategory,
     clearCheckedItems,
     clearAllItems,
     // Generate
@@ -59,26 +61,60 @@ export default function GroceryListPage() {
         loadingLists={loadingLists}
       />
 
-      <div className="flex">
-        {/* Desktop Sidebar */}
-        <div className="hidden md:block h-[calc(100vh-64px)] sticky top-16">
-          <GroceryListSidebar
-            myLists={myLists}
-            sharedWithMe={sharedWithMe}
-            selectedListId={selectedListId}
-            onSelectList={setSelectedListId}
-            onCreateList={createList}
-            onRenameList={renameList}
-            onDeleteList={deleteList}
-            onAcceptShare={acceptShare}
-            onDeclineShare={declineShare}
-            onLeaveSharedList={leaveSharedList}
-            loading={loadingLists}
-          />
-        </div>
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
+        <div className="flex gap-8">
+          {/* Desktop Sidebar */}
+          <aside className="hidden lg:block w-56 flex-shrink-0">
+            <div className="sticky top-24">
+              {/* Main Navigation */}
+              <div className="space-y-1 mb-4 pb-4 border-b border-border">
+                <Link
+                  href="/"
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors text-charcoal hover:bg-cream-dark"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                  </svg>
+                  <span>Recipes</span>
+                </Link>
+                <Link
+                  href="/?view=calendar"
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors text-charcoal hover:bg-cream-dark"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span>Meal Plan</span>
+                </Link>
+                <div
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left bg-gold/10 text-gold-dark font-medium"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  <span>Grocery List</span>
+                </div>
+              </div>
 
-        {/* Main Content */}
-        <main className="flex-1 px-4 md:px-8 py-8">
+              {/* Grocery List Sidebar Content */}
+              <GroceryListSidebar
+                myLists={myLists}
+                sharedWithMe={sharedWithMe}
+                selectedListId={selectedListId}
+                onSelectList={setSelectedListId}
+                onCreateList={createList}
+                onRenameList={renameList}
+                onDeleteList={deleteList}
+                onAcceptShare={acceptShare}
+                onDeclineShare={declineShare}
+                onLeaveSharedList={leaveSharedList}
+                loading={loadingLists}
+              />
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1 min-w-0 py-2">
           <GroceryListView
             groceryList={groceryList}
             loading={loading}
@@ -88,6 +124,7 @@ export default function GroceryListPage() {
             toggleItemChecked={toggleItemChecked}
             addItem={addItem}
             deleteItem={deleteItem}
+            changeItemCategory={changeItemCategory}
             clearCheckedItems={clearCheckedItems}
             clearAllItems={clearAllItems}
             isGenerating={isGenerating}
@@ -97,7 +134,8 @@ export default function GroceryListPage() {
             shares={shares}
             handleRemoveShare={handleRemoveShare}
           />
-        </main>
+          </main>
+        </div>
       </div>
     </div>
   );

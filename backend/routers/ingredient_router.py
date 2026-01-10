@@ -14,6 +14,7 @@ from auth import get_current_user
 from models import User, Ingredient, MeasurementUnit
 from schemas import (
     IngredientCreate,
+    IngredientUpdate,
     Ingredient as IngredientSchema,
     MeasurementUnit as MeasurementUnitSchema,
 )
@@ -200,3 +201,65 @@ async def get_ingredient(
         raise HTTPException(status_code=404, detail="Ingredient not found")
 
     return ingredient
+
+
+@router.patch("/{ingredient_id}", response_model=IngredientSchema)
+async def update_ingredient(
+    ingredient_id: str,
+    update_data: IngredientUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update an ingredient's category.
+
+    For system ingredients: creates a user-specific copy with the new category.
+    For user ingredients: updates the category directly.
+    """
+    # Find the ingredient
+    ingredient = db.query(Ingredient).filter(
+        Ingredient.id == ingredient_id,
+        or_(
+            Ingredient.is_system == True,
+            Ingredient.user_id == current_user.id
+        )
+    ).first()
+
+    if not ingredient:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+
+    # If it's a system ingredient, create a user-specific copy
+    if ingredient.is_system:
+        # Check if user already has a custom version
+        existing_user_ingredient = db.query(Ingredient).filter(
+            Ingredient.user_id == current_user.id,
+            Ingredient.normalized_name == ingredient.normalized_name
+        ).first()
+
+        if existing_user_ingredient:
+            # Update the existing user ingredient
+            if update_data.category is not None:
+                existing_user_ingredient.category = update_data.category
+            db.commit()
+            db.refresh(existing_user_ingredient)
+            return existing_user_ingredient
+        else:
+            # Create a new user-specific ingredient with the updated category
+            new_ingredient = Ingredient(
+                name=ingredient.name,
+                normalized_name=ingredient.normalized_name,
+                category=update_data.category if update_data.category is not None else ingredient.category,
+                is_system=False,
+                user_id=current_user.id,
+            )
+            db.add(new_ingredient)
+            db.commit()
+            db.refresh(new_ingredient)
+            return new_ingredient
+    else:
+        # It's a user ingredient, update directly
+        if update_data.category is not None:
+            ingredient.category = update_data.category
+        db.commit()
+        db.refresh(ingredient)
+        return ingredient

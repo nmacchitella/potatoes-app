@@ -3,10 +3,26 @@
 import { useState, useEffect } from 'react';
 import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ingredientApi, searchApi } from '@/lib/api';
+import { ingredientApi, searchApi, getErrorMessage } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { Ingredient, RecipeSummary } from '@/types';
+
+const CATEGORY_OPTIONS = [
+  { value: 'produce', label: 'Produce' },
+  { value: 'dairy', label: 'Dairy' },
+  { value: 'meat', label: 'Meat & Seafood' },
+  { value: 'bakery', label: 'Bakery' },
+  { value: 'frozen', label: 'Frozen' },
+  { value: 'pantry', label: 'Pantry' },
+  { value: 'beverages', label: 'Beverages' },
+  { value: 'spices', label: 'Spices & Seasonings' },
+  { value: 'condiments', label: 'Condiments' },
+  { value: 'grains', label: 'Grains & Pasta' },
+  { value: 'canned', label: 'Canned Goods' },
+  { value: 'snacks', label: 'Snacks' },
+  { value: 'other', label: 'Other' },
+];
 
 export default function IngredientPage() {
   const params = useParams();
@@ -20,6 +36,12 @@ export default function IngredientPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecipes, setTotalRecipes] = useState(0);
+
+  // Category editing state
+  const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     loadIngredient();
@@ -60,6 +82,38 @@ export default function IngredientPage() {
     } finally {
       setRecipesLoading(false);
     }
+  };
+
+  const handleEditCategory = () => {
+    setSelectedCategory(ingredient?.category || 'other');
+    setIsEditingCategory(true);
+    setSaveError(null);
+  };
+
+  const handleSaveCategory = async () => {
+    if (!ingredient) return;
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await ingredientApi.update(ingredient.id, { category: selectedCategory });
+      setIngredient(updated);
+      setIsEditingCategory(false);
+    } catch (err) {
+      setSaveError(getErrorMessage(err, 'Failed to update category'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingCategory(false);
+    setSaveError(null);
+  };
+
+  const getCategoryLabel = (value: string) => {
+    const option = CATEGORY_OPTIONS.find(o => o.value === value);
+    return option?.label || value;
   };
 
   if (loading) {
@@ -109,10 +163,57 @@ export default function IngredientPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
             </div>
-            <div>
+            <div className="flex-1">
               <h1 className="font-serif text-3xl text-charcoal capitalize">{ingredient.name}</h1>
-              {ingredient.category && (
-                <p className="text-warm-gray capitalize">{ingredient.category}</p>
+
+              {/* Category display/edit */}
+              {isEditingCategory ? (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="px-3 py-1.5 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold"
+                    disabled={isSaving}
+                  >
+                    {CATEGORY_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleSaveCategory}
+                    disabled={isSaving}
+                    className="px-3 py-1.5 text-sm bg-gold text-white rounded-lg hover:bg-gold/90 disabled:opacity-50"
+                  >
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    disabled={isSaving}
+                    className="px-3 py-1.5 text-sm text-warm-gray hover:text-charcoal"
+                  >
+                    Cancel
+                  </button>
+                  {saveError && (
+                    <p className="w-full text-sm text-red-500 mt-1">{saveError}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-warm-gray capitalize">
+                    {ingredient.category ? getCategoryLabel(ingredient.category) : 'Uncategorized'}
+                  </span>
+                  <button
+                    onClick={handleEditCategory}
+                    className="p-1 text-warm-gray hover:text-gold transition-colors"
+                    title="Edit category"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  </button>
+                </div>
               )}
             </div>
           </div>

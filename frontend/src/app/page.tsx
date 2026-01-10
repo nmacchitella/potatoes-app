@@ -608,46 +608,44 @@ function RecipesPageContent() {
           {/* Left Sidebar */}
           <aside className="hidden lg:block w-56 flex-shrink-0">
             <div className="sticky top-24">
-              {/* View Toggle */}
-              <div className="flex rounded-lg bg-cream-dark p-1 mb-4">
+              {/* Main Navigation */}
+              <div className="space-y-1 mb-4 pb-4 border-b border-border">
                 <button
                   onClick={() => setPageView('recipes')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
                     pageView === 'recipes'
-                      ? 'bg-white text-charcoal shadow-sm'
-                      : 'text-warm-gray hover:text-charcoal'
+                      ? 'bg-gold/10 text-gold-dark font-medium'
+                      : 'text-charcoal hover:bg-cream-dark'
                   }`}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
-                  Recipes
+                  <span>Recipes</span>
                 </button>
                 <button
                   onClick={() => setPageView('calendar')}
-                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
                     pageView === 'calendar'
-                      ? 'bg-white text-charcoal shadow-sm'
-                      : 'text-warm-gray hover:text-charcoal'
+                      ? 'bg-gold/10 text-gold-dark font-medium'
+                      : 'text-charcoal hover:bg-cream-dark'
                   }`}
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  Meal Plan
+                  <span>Meal Plan</span>
                 </button>
+                <Link
+                  href="/grocery"
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors text-charcoal hover:bg-cream-dark"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  <span>Grocery List</span>
+                </Link>
               </div>
-
-              {/* Grocery List Link */}
-              <Link
-                href="/grocery"
-                className="flex items-center gap-2 px-3 py-2 mb-4 text-sm font-medium text-warm-gray hover:text-charcoal hover:bg-cream-dark rounded-lg transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-                Grocery List
-              </Link>
 
               {/* Recipe sidebar content - only show when in recipes view */}
               {pageView === 'recipes' && (

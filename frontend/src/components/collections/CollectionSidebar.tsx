@@ -76,42 +76,45 @@ export default function CollectionSidebar({
 
   return (
     <nav className="flex flex-col max-h-[calc(100vh-10rem)]">
-      {/* Fixed header section */}
-      <div className="flex-shrink-0">
-        {!isManageMode && (
-          <button
-            onClick={() => onCollectionClick(null)}
-            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-              !selectedCollection
-                ? 'bg-gold/10 text-gold-dark font-medium'
-                : 'text-charcoal hover:bg-cream-dark'
-            }`}
-          >
-            All Recipes
-          </button>
-        )}
-
-        <div className="mt-4 mb-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-warm-gray uppercase tracking-wide px-3">Collections</span>
+      {/* Header section */}
+      <div className="flex-shrink-0 mb-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">Collections</span>
+          {collections.length > 0 && (
             <button
               onClick={onToggleManageMode}
-              className={`text-xs transition-colors pr-3 ${isManageMode ? 'text-gold font-medium' : 'text-warm-gray hover:text-gold'}`}
+              className={`text-xs transition-colors ${isManageMode ? 'text-gold font-medium' : 'text-warm-gray hover:text-gold'}`}
             >
               {isManageMode ? 'Done' : 'Manage'}
             </button>
-          </div>
+          )}
         </div>
       </div>
 
       {/* Scrollable collections list */}
-      <div className="flex-1 overflow-y-auto min-h-0 space-y-1">
+      <div className="flex-1 overflow-y-auto min-h-0 space-y-0.5">
         {loadingCollections ? (
           <div className="px-3 py-2">
             <div className="animate-pulse h-4 bg-cream-dark rounded w-3/4" />
           </div>
         ) : (
-          collections.map(collection => (
+          <>
+            {/* All Recipes option */}
+            {!isManageMode && (
+              <button
+                onClick={() => onCollectionClick(null)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                  !selectedCollection
+                    ? 'bg-charcoal/5 text-charcoal font-medium'
+                    : 'text-charcoal hover:bg-cream-dark'
+                }`}
+              >
+                All
+              </button>
+            )}
+
+            {/* User collections */}
+            {collections.map(collection => (
           <div key={collection.id} className="group relative">
             {editingCollectionId === collection.id ? (
               <div className="flex items-center gap-1 px-2">
@@ -204,7 +207,7 @@ export default function CollectionSidebar({
                 onClick={() => onCollectionClick(collection.id)}
                 className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                   selectedCollection === collection.id
-                    ? 'bg-gold/10 text-gold-dark font-medium'
+                    ? 'bg-charcoal/5 text-charcoal font-medium'
                     : 'text-charcoal hover:bg-cream-dark'
                 }`}
               >
@@ -212,7 +215,8 @@ export default function CollectionSidebar({
               </button>
             )}
           </div>
-        ))
+        ))}
+          </>
         )}
 
         {/* New Collection Input */}
@@ -260,25 +264,27 @@ export default function CollectionSidebar({
 
         {/* Shared with me section */}
         {sharedCollections.length > 0 && (
-          <>
-            <div className="mt-6 mb-2 px-3">
-              <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">Shared with me</span>
+          <div className="mt-6">
+            <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-2">
+              Shared with me
+            </span>
+            <div className="space-y-0.5">
+              {sharedCollections.map(collection => (
+                <button
+                  key={collection.id}
+                  onClick={() => onCollectionClick(collection.id)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                    selectedCollection === collection.id
+                      ? 'bg-charcoal/5 text-charcoal font-medium'
+                      : 'text-charcoal hover:bg-cream-dark'
+                  }`}
+                >
+                  <span className="truncate block">{collection.name}</span>
+                  <span className="text-[10px] text-warm-gray">by {collection.owner.name}</span>
+                </button>
+              ))}
             </div>
-            {sharedCollections.map(collection => (
-              <button
-                key={collection.id}
-                onClick={() => onCollectionClick(collection.id)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                  selectedCollection === collection.id
-                    ? 'bg-gold/10 text-gold-dark font-medium'
-                    : 'text-charcoal hover:bg-cream-dark'
-                }`}
-              >
-                <span className="truncate block">{collection.name}</span>
-                <span className="text-[10px] text-warm-gray">by {collection.owner.name}</span>
-              </button>
-            ))}
-          </>
+          </div>
         )}
       </div>
     </nav>

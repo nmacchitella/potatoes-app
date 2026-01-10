@@ -543,6 +543,11 @@ class IngredientCreate(IngredientBase):
     pass
 
 
+class IngredientUpdate(BaseModel):
+    """Update an ingredient - only category can be changed."""
+    category: Optional[str] = Field(None, max_length=50)
+
+
 class Ingredient(IngredientBase):
     id: str
     normalized_name: str

@@ -675,6 +675,11 @@ export const ingredientApi = {
     });
     return response.data;
   },
+
+  update: async (id: string, data: { category?: string }): Promise<Ingredient> => {
+    const response = await api.patch<Ingredient>(`/ingredients/${id}`, data);
+    return response.data;
+  },
 };
 
 // ============================================================================

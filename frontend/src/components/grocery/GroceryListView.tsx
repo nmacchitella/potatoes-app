@@ -22,6 +22,7 @@ interface GroceryListViewProps {
   toggleItemChecked: (itemId: string) => Promise<void>;
   addItem: (data: GroceryListItemCreateInput) => Promise<void>;
   deleteItem: (itemId: string) => Promise<void>;
+  changeItemCategory: (itemId: string, newCategory: string) => Promise<void>;
   clearCheckedItems: () => Promise<void>;
   clearAllItems: () => Promise<void>;
   // Generate
@@ -43,6 +44,7 @@ export function GroceryListView({
   toggleItemChecked,
   addItem,
   deleteItem,
+  changeItemCategory,
   clearCheckedItems,
   clearAllItems,
   isGenerating,
@@ -93,37 +95,38 @@ export function GroceryListView({
   return (
     <div className="max-w-2xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-charcoal">{groceryList?.name || 'Grocery List'}</h1>
+      <div className="flex items-center justify-between mb-4 md:mb-6">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl md:text-2xl font-semibold text-charcoal truncate">{groceryList?.name || 'Grocery List'}</h1>
           {hasItems && (
-            <p className="text-sm text-warm-gray mt-1">
-              {checkedCount} of {totalCount} items checked
+            <p className="text-xs md:text-sm text-warm-gray mt-0.5">
+              {checkedCount} of {totalCount} checked
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2 ml-3">
           <button
             onClick={() => setIsGenerateModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-gold text-white rounded-lg hover:bg-gold/90 transition-colors"
+            className="flex items-center justify-center gap-1.5 p-2 md:px-3 md:py-2 bg-gold text-white rounded-lg hover:bg-gold/90 transition-colors"
+            title="Generate from meal plan"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Generate
+            <span className="hidden md:inline text-sm">Generate</span>
           </button>
 
           {/* Share button - only show for owners */}
           {isOwner && (
             <button
               onClick={() => setIsShareModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 border border-border rounded-lg hover:bg-cream transition-colors text-charcoal"
+              className="flex items-center justify-center gap-1.5 p-2 md:px-3 md:py-2 border border-border rounded-lg hover:bg-cream transition-colors text-charcoal"
               title="Share grocery list"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
-              Share
+              <span className="hidden md:inline text-sm">Share</span>
             </button>
           )}
         </div>
@@ -168,6 +171,7 @@ export function GroceryListView({
                 defaultCollapsed={category === 'staples'}
                 onToggleItemChecked={toggleItemChecked}
                 onDeleteItem={deleteItem}
+                onChangeItemCategory={changeItemCategory}
               />
             );
           })}
@@ -184,6 +188,7 @@ export function GroceryListView({
                   defaultCollapsed={false}
                   onToggleItemChecked={toggleItemChecked}
                   onDeleteItem={deleteItem}
+                  onChangeItemCategory={changeItemCategory}
                 />
               );
             })}

@@ -4,15 +4,35 @@ import { useState } from 'react';
 import Link from 'next/link';
 import type { GroceryListItem } from '@/types';
 
+const CATEGORY_OPTIONS = [
+  { value: 'produce', label: 'Produce' },
+  { value: 'dairy', label: 'Dairy' },
+  { value: 'meat', label: 'Meat & Seafood' },
+  { value: 'bakery', label: 'Bakery' },
+  { value: 'frozen', label: 'Frozen' },
+  { value: 'pantry', label: 'Pantry' },
+  { value: 'beverages', label: 'Beverages' },
+  { value: 'spices', label: 'Spices & Seasonings' },
+  { value: 'condiments', label: 'Condiments' },
+  { value: 'grains', label: 'Grains & Pasta' },
+  { value: 'canned', label: 'Canned Goods' },
+  { value: 'snacks', label: 'Snacks' },
+  { value: 'staples', label: 'Check Pantry' },
+  { value: 'other', label: 'Other' },
+];
+
 interface GroceryItemProps {
   item: GroceryListItem;
   onToggleChecked: (itemId: string) => void;
   onDelete: (itemId: string) => void;
+  onChangeCategory?: (itemId: string, category: string) => Promise<void>;
 }
 
-export function GroceryItem({ item, onToggleChecked, onDelete }: GroceryItemProps) {
+export function GroceryItem({ item, onToggleChecked, onDelete, onChangeCategory }: GroceryItemProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isEditingCategory, setIsEditingCategory] = useState(false);
+  const [isSavingCategory, setIsSavingCategory] = useState(false);
 
   const hasRecipes = item.source_recipes && item.source_recipes.length > 0;
 
@@ -22,6 +42,23 @@ export function GroceryItem({ item, onToggleChecked, onDelete }: GroceryItemProp
       await onDelete(item.id);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleCategoryChange = async (newCategory: string) => {
+    if (!onChangeCategory || newCategory === item.category) {
+      setIsEditingCategory(false);
+      return;
+    }
+
+    setIsSavingCategory(true);
+    try {
+      await onChangeCategory(item.id, newCategory);
+      setIsEditingCategory(false);
+    } catch (err) {
+      console.error('Failed to change category:', err);
+    } finally {
+      setIsSavingCategory(false);
     }
   };
 
@@ -92,6 +129,18 @@ export function GroceryItem({ item, onToggleChecked, onDelete }: GroceryItemProp
 
         {/* Actions - always visible on mobile, hover on desktop */}
         <div className="flex items-center gap-1 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          {/* Category edit button */}
+          {onChangeCategory && (
+            <button
+              onClick={() => setIsEditingCategory(true)}
+              className="p-1.5 sm:p-1 text-warm-gray/50 hover:text-gold transition-colors"
+              title="Change category"
+            >
+              <svg className="w-4 h-4 sm:w-3.5 sm:h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+            </button>
+          )}
           {/* Delete button */}
           <button
             onClick={handleDelete}
@@ -105,6 +154,37 @@ export function GroceryItem({ item, onToggleChecked, onDelete }: GroceryItemProp
           </button>
         </div>
       </div>
+
+      {/* Category editing dropdown */}
+      {isEditingCategory && (
+        <div className="px-2 pb-2 pl-9">
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={item.category || 'other'}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              disabled={isSavingCategory}
+              className="px-2 py-1 text-xs border border-border rounded focus:outline-none focus:ring-1 focus:ring-gold/50 focus:border-gold disabled:opacity-50"
+              autoFocus
+            >
+              {CATEGORY_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => setIsEditingCategory(false)}
+              disabled={isSavingCategory}
+              className="text-xs text-warm-gray hover:text-charcoal"
+            >
+              Cancel
+            </button>
+            {isSavingCategory && (
+              <span className="text-xs text-warm-gray">Saving...</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Expanded recipes list */}
       {isExpanded && hasRecipes && (

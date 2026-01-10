@@ -56,6 +56,7 @@ interface UseGroceryListReturn {
   toggleItemStaple: (itemId: string, isStaple: boolean) => Promise<void>;
   addItem: (data: GroceryListItemCreateInput) => Promise<void>;
   deleteItem: (itemId: string) => Promise<void>;
+  changeItemCategory: (itemId: string, newCategory: string) => Promise<void>;
   clearCheckedItems: () => Promise<void>;
   clearAllItems: () => Promise<void>;
 
@@ -372,6 +373,47 @@ export function useGroceryList(): UseGroceryListReturn {
     }
   }, [groceryList, selectedListId, loadGroceryList]);
 
+  // Change item category
+  const changeItemCategory = useCallback(async (itemId: string, newCategory: string) => {
+    if (!groceryList || !selectedListId) return;
+
+    const item = groceryList.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    const oldCategory = item.category || 'pantry';
+
+    // Optimistic update - move item to new category
+    setGroceryList(prev => {
+      if (!prev) return prev;
+
+      const updatedItem = { ...item, category: newCategory };
+
+      // Remove from old category
+      const oldCategoryItems = (prev.items_by_category[oldCategory] || []).filter(i => i.id !== itemId);
+
+      // Add to new category
+      const newCategoryItems = [...(prev.items_by_category[newCategory] || []), updatedItem];
+
+      return {
+        ...prev,
+        items: prev.items.map(i => i.id === itemId ? updatedItem : i),
+        items_by_category: {
+          ...prev.items_by_category,
+          [oldCategory]: oldCategoryItems,
+          [newCategory]: newCategoryItems,
+        },
+      };
+    });
+
+    try {
+      await groceryListApi.updateItem(selectedListId, itemId, { category: newCategory });
+    } catch (err) {
+      console.error('Failed to change item category:', err);
+      loadGroceryList(); // Reload to restore original state
+      throw err;
+    }
+  }, [groceryList, selectedListId, loadGroceryList]);
+
   // Clear checked items
   const clearCheckedItems = useCallback(async () => {
     if (!selectedListId) return;
@@ -487,6 +529,7 @@ export function useGroceryList(): UseGroceryListReturn {
     toggleItemStaple,
     addItem,
     deleteItem,
+    changeItemCategory,
     clearCheckedItems,
     clearAllItems,
 
