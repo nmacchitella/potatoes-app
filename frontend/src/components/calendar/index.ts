@@ -5,3 +5,5 @@ export { default as WeekView } from './WeekView';
 export { default as MobileWeekView } from './MobileWeekView';
 export { default as DayView } from './DayView';
 export { default as MonthView } from './MonthView';
+export { AddToMealPlanModal } from './AddToMealPlanModal';
+export { AddMealModal } from './AddMealModal';

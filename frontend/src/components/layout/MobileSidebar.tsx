@@ -8,7 +8,6 @@ import { collectionApi } from '@/lib/api';
 import { UserAvatar } from '@/components/ui';
 import type { Collection, SharedCollection } from '@/types';
 
-type PageView = 'recipes' | 'calendar';
 type CalendarMode = 'day' | 'week' | 'month';
 
 interface MobileSidebarProps {
@@ -71,10 +70,10 @@ export default function MobileSidebar({
   const editGroceryListInputRef = useRef<HTMLInputElement>(null);
 
   const selectedCollection = searchParams.get('collection');
-  const viewParam = searchParams.get('view');
   const modeParam = searchParams.get('mode');
   const isOnGroceryPage = pathname === '/grocery';
-  const pageView: PageView = viewParam === 'calendar' ? 'calendar' : 'recipes';
+  const isOnCalendarPage = pathname === '/calendar';
+  const isOnRecipesPage = pathname === '/' || pathname.startsWith('/?');
   const calendarMode: CalendarMode = (modeParam === 'day' || modeParam === 'month') ? modeParam : 'week';
 
   // Load collections on mount
@@ -121,17 +120,8 @@ export default function MobileSidebar({
     onClose();
   };
 
-  const handleViewChange = (view: PageView) => {
-    if (view === 'calendar') {
-      router.push('/?view=calendar');
-    } else {
-      router.push('/');
-    }
-    onClose();
-  };
-
   const handleCalendarModeChange = (mode: CalendarMode) => {
-    router.push(`/?view=calendar&mode=${mode}`);
+    router.push(`/calendar?mode=${mode}`);
   };
 
   const handleLogout = async () => {
@@ -297,9 +287,9 @@ export default function MobileSidebar({
             {/* Main Navigation */}
             <div className="p-4 space-y-1 border-b border-border">
               <button
-                onClick={() => handleViewChange('recipes')}
+                onClick={() => handleNavClick('/')}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  !isOnGroceryPage && pageView === 'recipes'
+                  isOnRecipesPage
                     ? 'bg-gold/10 text-gold-dark font-medium'
                     : 'text-charcoal hover:bg-cream-dark'
                 }`}
@@ -310,9 +300,9 @@ export default function MobileSidebar({
                 <span>Recipes</span>
               </button>
               <button
-                onClick={() => handleViewChange('calendar')}
+                onClick={() => handleNavClick('/calendar')}
                 className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
-                  !isOnGroceryPage && pageView === 'calendar'
+                  isOnCalendarPage
                     ? 'bg-gold/10 text-gold-dark font-medium'
                     : 'text-charcoal hover:bg-cream-dark'
                 }`}
@@ -543,8 +533,8 @@ export default function MobileSidebar({
               </div>
             )}
 
-            {/* Calendar View Options - Only show when on calendar view and not on grocery page */}
-            {!isOnGroceryPage && pageView === 'calendar' && (
+            {/* Calendar View Options - Only show when on calendar page */}
+            {isOnCalendarPage && (
               <div className="p-4 border-b border-border">
                 <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-3">
                   View
@@ -574,8 +564,8 @@ export default function MobileSidebar({
               </div>
             )}
 
-            {/* Collections - Only show when on recipes view and not on grocery page */}
-            {!isOnGroceryPage && pageView === 'recipes' && (
+            {/* Collections - Only show when on recipes page */}
+            {isOnRecipesPage && (
             <div className="p-4">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">
@@ -602,7 +592,7 @@ export default function MobileSidebar({
                     <button
                       onClick={() => handleCollectionClick(null)}
                       className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm text-left transition-colors ${
-                        pathname === '/' && !selectedCollection && pageView === 'recipes'
+                        pathname === '/' && !selectedCollection
                           ? 'bg-charcoal/5 text-charcoal font-medium'
                           : 'text-charcoal hover:bg-cream-dark'
                       }`}

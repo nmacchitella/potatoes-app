@@ -1,13 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import { UserAvatar } from '@/components/ui';
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { user } = useStore();
 
   // Don't show on certain pages
@@ -16,9 +15,9 @@ export default function BottomNav() {
 
   if (shouldHide) return null;
 
-  const isHome = pathname === '/' || pathname.startsWith('/?');
+  const isHome = pathname === '/';
+  const isCalendar = pathname === '/calendar';
   const isGrocery = pathname === '/grocery';
-  const isCalendarView = isHome && searchParams.get('view') === 'calendar';
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-border z-40 md:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.05)]" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
@@ -42,16 +41,16 @@ export default function BottomNav() {
         {/* Center - Context-aware button */}
         {isGrocery ? (
           <Link
-            href="/"
+            href="/ingredients"
             className="relative -mt-5 flex flex-col items-center justify-center w-16 h-14 bg-gold hover:bg-gold-dark rounded-full shadow-lg transition-all active:scale-95 px-2"
-            aria-label="Browse recipes"
+            aria-label="Manage ingredients"
           >
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
             </svg>
-            <span className="text-[8px] text-white font-medium mt-0.5">Recipes</span>
+            <span className="text-[8px] text-white font-medium mt-0.5">Ingredients</span>
           </Link>
-        ) : isCalendarView ? (
+        ) : isCalendar ? (
           // Empty spacer to maintain nav layout when on calendar view
           <div className="w-14 h-14" />
         ) : (

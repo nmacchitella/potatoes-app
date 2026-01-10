@@ -313,16 +313,20 @@ class UserSettings(Base):
 # ============================================================================
 
 class MealPlan(Base):
-    """Represents a recipe scheduled for a specific date and meal slot."""
+    """Represents a recipe or custom item scheduled for a specific date and meal slot."""
     __tablename__ = "meal_plans"
 
     id = Column(String, primary_key=True, default=generate_uuid)
     user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
-    recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=False)
+    recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=True)  # Nullable for custom items
     planned_date = Column(Date, nullable=False)
     meal_type = Column(String(20), nullable=False)  # breakfast, lunch, dinner, snack
     servings = Column(Float, default=4)
     notes = Column(Text, nullable=True)
+
+    # Custom item fields (for non-recipe items like "Pizza Night", "Takeout", etc.)
+    custom_title = Column(String(255), nullable=True)
+    custom_description = Column(Text, nullable=True)
 
     # For recurring meals - groups instances created from same recurrence rule
     recurrence_id = Column(String, nullable=True, index=True)

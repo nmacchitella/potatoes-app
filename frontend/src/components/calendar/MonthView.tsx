@@ -79,19 +79,24 @@ export default function MonthView({
                   {date.getDate()}
                 </div>
                 <div className="space-y-0.5">
-                  {meals.slice(0, 3).map(meal => (
-                    <div
-                      key={meal.id}
-                      className={`text-[10px] px-1 py-0.5 rounded truncate ${
-                        meal.meal_type === 'breakfast' ? 'bg-orange-100 text-orange-800' :
-                        meal.meal_type === 'lunch' ? 'bg-green-100 text-green-800' :
-                        'bg-blue-100 text-blue-800'
-                      }`}
-                      title={meal.recipe.title}
-                    >
-                      {meal.recipe.title}
-                    </div>
-                  ))}
+                  {meals.slice(0, 3).map(meal => {
+                    const isCustom = !meal.recipe;
+                    const title = isCustom ? meal.custom_title : meal.recipe?.title;
+                    return (
+                      <div
+                        key={meal.id}
+                        className={`text-[10px] px-1 py-0.5 rounded truncate ${
+                          isCustom ? 'bg-sage/20 text-sage' :
+                          meal.meal_type === 'breakfast' ? 'bg-orange-100 text-orange-800' :
+                          meal.meal_type === 'lunch' ? 'bg-green-100 text-green-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}
+                        title={title}
+                      >
+                        {title}
+                      </div>
+                    );
+                  })}
                   {meals.length > 3 && (
                     <div className="text-[10px] text-warm-gray">+{meals.length - 3} more</div>
                   )}
@@ -202,73 +207,90 @@ export default function MonthView({
                       <div className="animate-pulse bg-cream-dark rounded-lg h-12" />
                     ) : meals.length > 0 ? (
                       <div className="space-y-2">
-                        {meals.map(meal => (
-                          <div
-                            key={meal.id}
-                            className="relative flex items-center gap-3 p-2 rounded-lg bg-cream"
-                            onClick={(e) => onToggleMealActions(meal.id, e)}
-                          >
-                            {meal.recipe.cover_image_url && (
-                              <img
-                                src={meal.recipe.cover_image_url}
-                                alt=""
-                                className="w-12 h-12 rounded object-cover"
-                              />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-charcoal truncate">{meal.recipe.title}</p>
-                              <p className="text-xs text-warm-gray">{meal.servings} servings</p>
-                            </div>
-
-                            {/* Mobile Action Menu */}
-                            {selectedMealForActions === meal.id && (
-                              <div className="absolute inset-0 bg-white/95 rounded-lg flex items-center justify-center gap-4 z-10">
-                                <Link
-                                  href={`/recipes/${meal.recipe.id}`}
-                                  className="p-2 text-charcoal hover:text-gold"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        {meals.map(meal => {
+                          const isCustom = !meal.recipe;
+                          const title = isCustom ? meal.custom_title : meal.recipe?.title;
+                          return (
+                            <div
+                              key={meal.id}
+                              className={`relative flex items-center gap-3 p-2 rounded-lg ${isCustom ? 'bg-sage/10 border border-sage/20' : 'bg-cream'}`}
+                              onClick={(e) => onToggleMealActions(meal.id, e)}
+                            >
+                              {isCustom ? (
+                                <div className="w-12 h-12 rounded bg-sage/20 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-6 h-6 text-sage" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.701 2.701 0 00-1.5-.454M9 6v2m3-2v2m3-2v2M9 3h.01M12 3h.01M15 3h.01M21 21v-7a2 2 0 00-2-2H5a2 2 0 00-2 2v7h18zm-3-9v-2a2 2 0 00-2-2H8a2 2 0 00-2 2v2h12z" />
                                   </svg>
-                                </Link>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onMove(meal); }}
-                                  className="p-2 text-charcoal hover:text-gold"
-                                >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onRepeat(meal, e); }}
-                                  className="p-2 text-charcoal hover:text-gold"
-                                >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={(e) => onDelete(meal.id, e)}
-                                  className="p-2 text-red-500"
-                                >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onClearMealActions(); }}
-                                  className="p-2 text-warm-gray"
-                                >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
+                                </div>
+                              ) : meal.recipe?.cover_image_url ? (
+                                <img
+                                  src={meal.recipe.cover_image_url}
+                                  alt=""
+                                  className="w-12 h-12 rounded object-cover flex-shrink-0"
+                                />
+                              ) : null}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-charcoal truncate">{title}</p>
+                                <div className="flex items-center gap-2 text-xs text-warm-gray">
+                                  <span>{meal.servings} servings</span>
+                                  {isCustom && <span className="px-1.5 py-0.5 rounded bg-sage/20 text-sage font-medium text-[10px]">Custom</span>}
+                                </div>
                               </div>
-                            )}
-                          </div>
-                        ))}
+
+                              {/* Mobile Action Menu */}
+                              {selectedMealForActions === meal.id && (
+                                <div className="absolute inset-0 bg-white/95 rounded-lg flex items-center justify-center gap-4 z-10">
+                                  {!isCustom && meal.recipe && (
+                                    <Link
+                                      href={`/recipes/${meal.recipe.id}`}
+                                      className="p-2 text-charcoal hover:text-gold"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                      </svg>
+                                    </Link>
+                                  )}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); onMove(meal); }}
+                                    className="p-2 text-charcoal hover:text-gold"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                    </svg>
+                                  </button>
+                                  {!isCustom && (
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); onRepeat(meal, e); }}
+                                      className="p-2 text-charcoal hover:text-gold"
+                                    >
+                                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={(e) => onDelete(meal.id, e)}
+                                    className="p-2 text-red-500"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); onClearMealActions(); }}
+                                    className="p-2 text-warm-gray"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
                       <button

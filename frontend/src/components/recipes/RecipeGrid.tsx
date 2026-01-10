@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { AddToMealPlanModal } from '@/components/calendar';
 import type { RecipeSummary } from '@/types';
 
 type SortColumn = 'name' | 'time' | 'servings' | 'collections';
@@ -22,6 +23,7 @@ interface RecipeGridProps {
     onRemoveRecipe: (recipeId: string, recipeName: string) => void;
   };
   viewMode?: 'grid' | 'table';
+  showMealPlanAction?: boolean;
 }
 
 export default function RecipeGrid({
@@ -30,7 +32,69 @@ export default function RecipeGrid({
   emptyState,
   manageMode,
   viewMode = 'grid',
+  showMealPlanAction = true,
 }: RecipeGridProps) {
+  // All hooks must be at the top, before any early returns
+  const [mealPlanRecipe, setMealPlanRecipe] = useState<{ id: string; title: string } | null>(null);
+  const [sortColumn, setSortColumn] = useState<SortColumn>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const sortedRecipes = useMemo(() => {
+    if (viewMode !== 'table') return recipes;
+
+    return [...recipes].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortColumn) {
+        case 'name':
+          comparison = a.title.localeCompare(b.title);
+          break;
+        case 'time':
+          const timeA = (a.prep_time_minutes || 0) + (a.cook_time_minutes || 0);
+          const timeB = (b.prep_time_minutes || 0) + (b.cook_time_minutes || 0);
+          comparison = timeA - timeB;
+          break;
+        case 'servings':
+          comparison = (a.yield_quantity || 0) - (b.yield_quantity || 0);
+          break;
+        case 'collections':
+          const collNameA = a.collections?.[0]?.name || '';
+          const collNameB = b.collections?.[0]?.name || '';
+          if (!collNameA && !collNameB) comparison = 0;
+          else if (!collNameA) comparison = 1;
+          else if (!collNameB) comparison = -1;
+          else comparison = collNameA.localeCompare(collNameB);
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [recipes, sortColumn, sortDirection, viewMode]);
+
+  const toggleExpandCollections = (recipeId: string) => {
+    setExpandedCollections(prev => {
+      const next = new Set(prev);
+      if (next.has(recipeId)) {
+        next.delete(recipeId);
+      } else {
+        next.add(recipeId);
+      }
+      return next;
+    });
+  };
+
+  const isManaging = manageMode?.enabled && manageMode?.selectedCollection;
+
   if (loading) {
     if (viewMode === 'table') {
       return (
@@ -94,69 +158,6 @@ export default function RecipeGrid({
     );
   }
 
-  const isManaging = manageMode?.enabled && manageMode?.selectedCollection;
-
-  // Sorting state for table view
-  const [sortColumn, setSortColumn] = useState<SortColumn>('name');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-
-  const handleSort = (column: SortColumn) => {
-    if (sortColumn === column) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortColumn(column);
-      setSortDirection('asc');
-    }
-  };
-
-  const sortedRecipes = useMemo(() => {
-    if (viewMode !== 'table') return recipes;
-
-    return [...recipes].sort((a, b) => {
-      let comparison = 0;
-
-      switch (sortColumn) {
-        case 'name':
-          comparison = a.title.localeCompare(b.title);
-          break;
-        case 'time':
-          const timeA = (a.prep_time_minutes || 0) + (a.cook_time_minutes || 0);
-          const timeB = (b.prep_time_minutes || 0) + (b.cook_time_minutes || 0);
-          comparison = timeA - timeB;
-          break;
-        case 'servings':
-          comparison = (a.yield_quantity || 0) - (b.yield_quantity || 0);
-          break;
-        case 'collections':
-          // Sort alphabetically by first collection name, recipes with no collections go last
-          const collNameA = a.collections?.[0]?.name || '';
-          const collNameB = b.collections?.[0]?.name || '';
-          if (!collNameA && !collNameB) comparison = 0;
-          else if (!collNameA) comparison = 1;
-          else if (!collNameB) comparison = -1;
-          else comparison = collNameA.localeCompare(collNameB);
-          break;
-      }
-
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
-  }, [recipes, sortColumn, sortDirection, viewMode]);
-
-  // Track which recipes have expanded collections
-  const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
-
-  const toggleExpandCollections = (recipeId: string) => {
-    setExpandedCollections(prev => {
-      const next = new Set(prev);
-      if (next.has(recipeId)) {
-        next.delete(recipeId);
-      } else {
-        next.add(recipeId);
-      }
-      return next;
-    });
-  };
-
   const SortIcon = ({ column }: { column: SortColumn }) => {
     if (sortColumn !== column) {
       return (
@@ -219,6 +220,11 @@ export default function RecipeGrid({
                   <SortIcon column="collections" />
                 </button>
               </th>
+              {showMealPlanAction && (
+                <th className="text-right py-3 px-4 w-20">
+                  <span className="text-sm font-medium text-warm-gray">Actions</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -278,17 +284,41 @@ export default function RecipeGrid({
                       </div>
                     )}
                   </td>
+                  {showMealPlanAction && (
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => setMealPlanRecipe({ id: recipe.id, title: recipe.title })}
+                        className="p-1.5 text-warm-gray hover:text-gold hover:bg-cream rounded transition-colors"
+                        title="Add to meal plan"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </td>
+                  )}
                 </tr>
               );
             })}
           </tbody>
         </table>
+
+        {/* Meal Plan Modal */}
+        {mealPlanRecipe && (
+          <AddToMealPlanModal
+            isOpen={!!mealPlanRecipe}
+            onClose={() => setMealPlanRecipe(null)}
+            recipeId={mealPlanRecipe.id}
+            recipeTitle={mealPlanRecipe.title}
+          />
+        )}
       </div>
     );
   }
 
   // Grid View
   return (
+    <>
     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
       {recipes.map(recipe => (
         <Link
@@ -357,6 +387,22 @@ export default function RecipeGrid({
                 )}
               </span>
             )}
+            {/* Meal Plan Button - shown on hover */}
+            {showMealPlanAction && !isManaging && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMealPlanRecipe({ id: recipe.id, title: recipe.title });
+                }}
+                className="absolute bottom-1 right-1 sm:bottom-2 sm:right-2 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/90 hover:bg-gold text-charcoal hover:text-white flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-all"
+                title="Add to meal plan"
+              >
+                <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+            )}
           </div>
           <h3 className="font-serif text-sm sm:text-lg text-charcoal group-hover:text-gold transition-colors line-clamp-2">
             {recipe.title}
@@ -377,5 +423,16 @@ export default function RecipeGrid({
         </Link>
       ))}
     </div>
+
+    {/* Meal Plan Modal */}
+    {mealPlanRecipe && (
+      <AddToMealPlanModal
+        isOpen={!!mealPlanRecipe}
+        onClose={() => setMealPlanRecipe(null)}
+        recipeId={mealPlanRecipe.id}
+        recipeTitle={mealPlanRecipe.title}
+      />
+    )}
+    </>
   );
 }

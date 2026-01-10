@@ -23,11 +23,23 @@ CATEGORY_ORDER = [
     'produce',
     'dairy',
     'meat',
+    'deli',
     'bakery',
     'frozen',
     'pantry',
+    'grains',
+    'canned',
+    'oils',
+    'spices',
+    'condiments',
+    'baking',
     'beverages',
+    'snacks',
+    'nuts',
+    'international',
+    'health',
     'staples',  # "Check pantry" section - shown last
+    'other',
 ]
 
 # Default category for items without one
@@ -97,15 +109,17 @@ def aggregate_ingredients(
 
     Returns:
         List of aggregated ingredient dicts
+
+    Now combines same ingredients with different units into a single item,
+    showing combined quantities like "2 oz + 1 tbsp" when units don't match.
     """
-    # Group by normalized name + unit
+    # Group by normalized name only (not unit) to combine same ingredients
     aggregated: Dict[str, Dict] = {}
 
     for ingredient, scale_factor, recipe_id in ingredients:
-        # Create key for grouping (normalized name + unit)
+        # Create key for grouping - only by normalized name
         normalized_name = normalize_ingredient_name(ingredient.name)
-        unit = (ingredient.unit or '').lower().strip()
-        key = f"{normalized_name}|{unit}"
+        key = normalized_name
 
         if key not in aggregated:
             # Get category from linked master ingredient if available
@@ -116,17 +130,19 @@ def aggregate_ingredients(
             aggregated[key] = {
                 'name': ingredient.name,  # Keep original casing
                 'normalized_name': normalized_name,
-                'quantity': 0.0,
-                'unit': ingredient.unit,
+                'quantities': {},  # Dict of unit -> quantity
                 'category': category,
                 'is_staple': ingredient.is_staple,
                 'source_recipe_ids': set(),
             }
 
-        # Aggregate quantity
+        # Aggregate quantity by unit
         if ingredient.quantity:
+            unit = (ingredient.unit or '').lower().strip()
             scaled_qty = ingredient.quantity * scale_factor
-            aggregated[key]['quantity'] += scaled_qty
+            if unit not in aggregated[key]['quantities']:
+                aggregated[key]['quantities'][unit] = 0.0
+            aggregated[key]['quantities'][unit] += scaled_qty
 
         # Track source recipes
         aggregated[key]['source_recipe_ids'].add(recipe_id)
@@ -135,15 +151,38 @@ def aggregate_ingredients(
         if ingredient.is_staple:
             aggregated[key]['is_staple'] = True
 
-    # Convert sets to lists for JSON serialization
+    # Convert to final format
     result = []
     for item in aggregated.values():
         item['source_recipe_ids'] = list(item['source_recipe_ids'])
-        # Round quantity to reasonable precision
-        if item['quantity']:
-            item['quantity'] = round(item['quantity'], 2)
-        else:
+
+        # Process quantities - combine if multiple units
+        quantities = item.pop('quantities')
+        if not quantities:
             item['quantity'] = None
+            item['unit'] = None
+        elif len(quantities) == 1:
+            # Single unit - simple case
+            unit, qty = list(quantities.items())[0]
+            item['quantity'] = round(qty, 2) if qty else None
+            item['unit'] = unit if unit else None
+        else:
+            # Multiple units - combine into display string
+            # Sort by quantity descending to show largest first
+            sorted_qtys = sorted(quantities.items(), key=lambda x: x[1], reverse=True)
+            parts = []
+            total_qty = 0.0
+            for unit, qty in sorted_qtys:
+                rounded_qty = round(qty, 2)
+                total_qty += rounded_qty
+                if unit:
+                    parts.append(f"{rounded_qty} {unit}")
+                else:
+                    parts.append(str(rounded_qty))
+            # Store total as quantity, combined string as unit
+            item['quantity'] = round(total_qty, 2)
+            item['unit'] = ' + '.join(parts)
+
         result.append(item)
 
     return result
@@ -211,21 +250,39 @@ def generate_from_meal_plan(
     # If merging, we need to combine with existing items
     if merge:
         existing_items = {
-            f"{normalize_ingredient_name(item.name)}|{(item.unit or '').lower().strip()}": item
+            normalize_ingredient_name(item.name): item
             for item in grocery_list.items
             if not item.is_checked  # Only merge with unchecked items
         }
 
         for agg_item in aggregated:
-            key = f"{agg_item['normalized_name']}|{(agg_item['unit'] or '').lower().strip()}"
+            key = agg_item['normalized_name']
 
             if key in existing_items:
                 # Update existing item
                 existing = existing_items[key]
+
+                # Handle quantity merging
                 if agg_item['quantity'] and existing.quantity:
-                    existing.quantity += agg_item['quantity']
+                    # If units are different, combine them in unit string
+                    existing_unit = (existing.unit or '').strip()
+                    new_unit = (agg_item['unit'] or '').strip()
+                    if existing_unit == new_unit or not new_unit:
+                        existing.quantity += agg_item['quantity']
+                    else:
+                        # Combine different units
+                        existing.quantity += agg_item['quantity']
+                        if existing_unit and new_unit:
+                            # Both have units - combine them
+                            if ' + ' in existing_unit:
+                                existing.unit = f"{existing_unit} + {agg_item['quantity']} {new_unit}"
+                            else:
+                                existing.unit = f"{existing.quantity - agg_item['quantity']} {existing_unit} + {agg_item['quantity']} {new_unit}"
+                        elif new_unit:
+                            existing.unit = new_unit
                 elif agg_item['quantity']:
                     existing.quantity = agg_item['quantity']
+                    existing.unit = agg_item['unit']
 
                 # Merge source recipe IDs
                 existing_sources = existing.source_recipe_ids or []

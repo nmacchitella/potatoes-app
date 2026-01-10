@@ -123,21 +123,33 @@ export default function MobileWeekView({
                       return (
                         <div key={mealType}>
                           <div className="text-[10px] text-warm-gray uppercase mb-1">{label}</div>
-                          {meals.map(meal => (
+                          {meals.map(meal => {
+                            const isCustom = !meal.recipe;
+                            const title = isCustom ? meal.custom_title : meal.recipe?.title;
+                            return (
                             <div
                               key={meal.id}
-                              className="relative rounded-lg bg-cream p-2 mb-1"
+                              className={`relative rounded-lg p-2 mb-1 ${isCustom ? 'bg-sage/10 border border-sage/20' : 'bg-cream'}`}
                               onClick={(e) => onToggleMealActions(meal.id, e)}
                             >
-                              {meal.recipe.cover_image_url && (
+                              {isCustom ? (
+                                <div className="w-full aspect-video rounded bg-sage/20 flex items-center justify-center mb-1">
+                                  <svg className="w-6 h-6 text-sage" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.701 2.701 0 00-1.5-.454M9 6v2m3-2v2m3-2v2M9 3h.01M12 3h.01M15 3h.01M21 21v-7a2 2 0 00-2-2H5a2 2 0 00-2 2v7h18zm-3-9v-2a2 2 0 00-2-2H8a2 2 0 00-2 2v2h12z" />
+                                  </svg>
+                                </div>
+                              ) : meal.recipe?.cover_image_url ? (
                                 <img
                                   src={meal.recipe.cover_image_url}
                                   alt=""
                                   className="w-full aspect-video rounded object-cover mb-1"
                                 />
-                              )}
-                              <p className="text-xs font-medium text-charcoal line-clamp-2">{meal.recipe.title}</p>
-                              <p className="text-[10px] text-warm-gray">{meal.servings} servings</p>
+                              ) : null}
+                              <p className="text-xs font-medium text-charcoal line-clamp-2">{title}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-[10px] text-warm-gray">{meal.servings} servings</p>
+                                {isCustom && <span className="text-[9px] px-1 py-0.5 rounded bg-sage/20 text-sage font-medium">Custom</span>}
+                              </div>
 
                               {/* Mobile Action Menu */}
                               {selectedMealForActions === meal.id && (
@@ -145,16 +157,18 @@ export default function MobileWeekView({
                                   className="absolute inset-0 bg-charcoal/90 backdrop-blur-sm rounded-lg flex flex-col items-stretch justify-center p-2 z-10"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <Link
-                                    href={`/recipes/${meal.recipe.id}`}
-                                    className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"
-                                  >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                    </svg>
-                                    View
-                                  </Link>
+                                  {!isCustom && meal.recipe && (
+                                    <Link
+                                      href={`/recipes/${meal.recipe.id}`}
+                                      className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                      </svg>
+                                      View
+                                    </Link>
+                                  )}
                                   <button
                                     onClick={() => onMove(meal)}
                                     className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"
@@ -164,15 +178,17 @@ export default function MobileWeekView({
                                     </svg>
                                     Move
                                   </button>
-                                  <button
-                                    onClick={(e) => onRepeat(meal, e)}
-                                    className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"
-                                  >
-                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                    Repeat
-                                  </button>
+                                  {!isCustom && (
+                                    <button
+                                      onClick={(e) => onRepeat(meal, e)}
+                                      className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"
+                                    >
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                      </svg>
+                                      Repeat
+                                    </button>
+                                  )}
                                   <div className="border-t border-white/20 my-1" />
                                   <button
                                     onClick={(e) => onDelete(meal.id, e)}
@@ -192,7 +208,8 @@ export default function MobileWeekView({
                                 </div>
                               )}
                             </div>
-                          ))}
+                          );
+                          })}
                         </div>
                       );
                     })}

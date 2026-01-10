@@ -69,11 +69,12 @@ interface UseCalendarReturn {
   isSameMonth: (date: Date) => boolean;
   isCurrentPeriod: boolean;
 
-  // Slot selection (for adding meals)
+  // Slot selection (for adding meals - unified modal)
   selectedSlot: CalendarSlot | null;
   isAddModalOpen: boolean;
   handleSlotClick: (date: Date, mealType: MealType) => void;
   handleSelectRecipe: (recipe: SearchRecipeResult) => Promise<void>;
+  handleCustomMealSuccess: (meal: MealPlan) => void;
   closeAddModal: () => void;
 
   // Clipboard operations
@@ -164,7 +165,7 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
   const [draggedMeal, setDraggedMeal] = useState<MealPlan | null>(null);
   const [dragOverSlot, setDragOverSlot] = useState<DragOverSlot | null>(null);
 
-  // Add meal modal
+  // Add meal modal (unified - handles both recipes and custom items)
   const [selectedSlot, setSelectedSlot] = useState<CalendarSlot | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -315,7 +316,7 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
   const isToday = useCallback((date: Date) => isSameDay(date, today), [today]);
   const isSameMonthFn = useCallback((date: Date) => isCurrentMonth(date, currentDate), [currentDate]);
 
-  // Slot click handler
+  // Slot click handler - opens unified add meal modal
   const handleSlotClick = useCallback((date: Date, mealType: MealType) => {
     if (clipboard) {
       // Paste if clipboard has content
@@ -330,6 +331,12 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     setIsAddModalOpen(false);
     setSelectedSlot(null);
   }, []);
+
+  // Custom meal success handler (used by unified modal)
+  const handleCustomMealSuccess = useCallback((meal: MealPlan) => {
+    setMealPlans(prev => [...prev, meal]);
+    closeAddModal();
+  }, [closeAddModal]);
 
   // Select recipe handler
   const handleSelectRecipe = useCallback(async (recipe: SearchRecipeResult) => {
@@ -382,8 +389,12 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     if (!clipboard) return;
     try {
       if (clipboard.action === 'copy') {
+        // Handle both recipe-based and custom items
+        const isCustom = !clipboard.meal.recipe;
         const newMeal = await mealPlanApi.create({
-          recipe_id: clipboard.meal.recipe.id,
+          recipe_id: isCustom ? undefined : clipboard.meal.recipe?.id,
+          custom_title: isCustom ? clipboard.meal.custom_title : undefined,
+          custom_description: isCustom ? clipboard.meal.custom_description : undefined,
           planned_date: formatDateForApi(date),
           meal_type: mealType,
           servings: clipboard.meal.servings,
@@ -531,7 +542,8 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
   }, []);
 
   const handleCreateRecurring = useCallback(async () => {
-    if (!repeatMeal) return;
+    // Only recipe-based meals can be repeated
+    if (!repeatMeal || !repeatMeal.recipe) return;
     setCreatingRecurring(true);
     try {
       const mealDate = repeatMeal.planned_date;
@@ -587,6 +599,7 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     isAddModalOpen,
     handleSlotClick,
     handleSelectRecipe,
+    handleCustomMealSuccess,
     closeAddModal,
     clipboard,
     handleCopy,

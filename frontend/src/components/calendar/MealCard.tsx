@@ -21,6 +21,15 @@ interface MealCardProps {
   onMove?: (meal: MealPlan) => void;
 }
 
+// Custom item icon (takeout/external)
+function CustomItemIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.701 2.701 0 00-1.5-.454M9 6v2m3-2v2m3-2v2M9 3h.01M12 3h.01M15 3h.01M21 21v-7a2 2 0 00-2-2H5a2 2 0 00-2 2v7h18zm-3-9v-2a2 2 0 00-2-2H8a2 2 0 00-2 2v2h12z" />
+    </svg>
+  );
+}
+
 export default function MealCard({
   meal,
   variant = 'desktop',
@@ -37,40 +46,68 @@ export default function MealCard({
   isActionsOpen = false,
   onMove,
 }: MealCardProps) {
+  // Check if this is a custom item (no recipe)
+  const isCustom = !meal.recipe;
+  const title = isCustom ? meal.custom_title : meal.recipe?.title;
+
   if (variant === 'mobile') {
     return (
       <div className="relative">
         <div
-          className={`bg-cream rounded-lg p-2 ${isClipboard ? 'ring-2 ring-gold ring-offset-1' : ''}`}
+          className={`rounded-lg p-2 ${isCustom ? 'bg-sage/10 border border-sage/20' : 'bg-cream'} ${isClipboard ? 'ring-2 ring-gold ring-offset-1' : ''}`}
           onClick={(e) => onToggleActions?.(meal.id, e)}
         >
-          {meal.recipe.cover_image_url && (
+          {/* Image or custom icon */}
+          {isCustom ? (
+            <div className="aspect-video rounded overflow-hidden mb-1 bg-sage/20 flex items-center justify-center">
+              <CustomItemIcon className="w-8 h-8 text-sage" />
+            </div>
+          ) : meal.recipe?.cover_image_url ? (
             <div className="aspect-video rounded overflow-hidden mb-1">
               <img src={meal.recipe.cover_image_url} alt="" className="w-full h-full object-cover" />
             </div>
+          ) : null}
+
+          {/* Title */}
+          {isCustom ? (
+            <div className="font-medium text-charcoal text-[11px] line-clamp-2">
+              {title}
+            </div>
+          ) : (
+            <Link
+              href={`/recipes/${meal.recipe?.id}`}
+              className="font-medium text-charcoal hover:text-gold block text-[11px] line-clamp-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {title}
+            </Link>
           )}
-          <Link
-            href={`/recipes/${meal.recipe.id}`}
-            className="font-medium text-charcoal hover:text-gold block text-[11px] line-clamp-2"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {meal.recipe.title}
-          </Link>
+
+          {/* Custom badge */}
+          {isCustom && (
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-sage/20 text-sage font-medium">
+                Custom
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Mobile Action Menu */}
         {isActionsOpen && showActions && (
           <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-border z-10 py-1">
-            <Link
-              href={`/recipes/${meal.recipe.id}`}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              View Recipe
-            </Link>
+            {!isCustom && meal.recipe && (
+              <Link
+                href={`/recipes/${meal.recipe.id}`}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                View Recipe
+              </Link>
+            )}
             {onMove && (
               <button
                 onClick={() => onMove(meal)}
@@ -93,7 +130,7 @@ export default function MealCard({
                 Copy
               </button>
             )}
-            {onRepeat && (
+            {onRepeat && !isCustom && (
               <button
                 onClick={(e) => onRepeat(meal, e)}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream w-full text-left"
@@ -127,23 +164,54 @@ export default function MealCard({
       draggable={!!onDragStart}
       onDragStart={(e) => onDragStart?.(meal, e)}
       onDragEnd={onDragEnd}
-      className={`group relative rounded-lg p-2 transition-all bg-cream hover:bg-cream-dark ${
+      className={`group relative rounded-lg p-2 transition-all ${
+        isCustom ? 'bg-sage/10 border border-sage/20' : 'bg-cream hover:bg-cream-dark'
+      } ${
         onDragStart ? 'cursor-grab active:cursor-grabbing' : ''
       } ${isDragging ? 'opacity-50 scale-95' : ''} ${isClipboard ? 'ring-2 ring-gold ring-offset-1' : ''}`}
     >
-      {meal.recipe.cover_image_url && (
+      {/* Image or custom icon */}
+      {isCustom ? (
+        <div className="aspect-video rounded overflow-hidden mb-1.5 bg-sage/20 flex items-center justify-center">
+          <CustomItemIcon className="w-6 h-6 text-sage" />
+        </div>
+      ) : meal.recipe?.cover_image_url ? (
         <div className="aspect-video rounded overflow-hidden mb-1.5">
-          <img src={meal.recipe.cover_image_url} alt={meal.recipe.title} className="w-full h-full object-cover" />
+          <img src={meal.recipe.cover_image_url} alt={title} className="w-full h-full object-cover" />
+        </div>
+      ) : null}
+
+      {/* Title */}
+      {isCustom ? (
+        <div className="font-medium text-charcoal text-xs line-clamp-2">
+          {title}
+        </div>
+      ) : (
+        <Link
+          href={`/recipes/${meal.recipe?.id}`}
+          className="font-medium text-charcoal hover:text-gold block text-xs line-clamp-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {title}
+        </Link>
+      )}
+
+      {/* Servings and custom badge */}
+      <div className="flex items-center gap-1.5 mt-0.5">
+        <span className="text-[10px] text-warm-gray">{meal.servings} servings</span>
+        {isCustom && (
+          <span className="text-[9px] px-1 py-0.5 rounded bg-sage/20 text-sage font-medium">
+            Custom
+          </span>
+        )}
+      </div>
+
+      {/* Description tooltip for custom items */}
+      {isCustom && meal.custom_description && (
+        <div className="text-[10px] text-warm-gray mt-1 line-clamp-1" title={meal.custom_description}>
+          {meal.custom_description}
         </div>
       )}
-      <Link
-        href={`/recipes/${meal.recipe.id}`}
-        className="font-medium text-charcoal hover:text-gold block text-xs line-clamp-2"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {meal.recipe.title}
-      </Link>
-      <div className="text-[10px] text-warm-gray mt-0.5">{meal.servings} servings</div>
 
       {/* Action buttons */}
       {showActions && (
@@ -170,7 +238,7 @@ export default function MealCard({
               </svg>
             </button>
           )}
-          {onRepeat && (
+          {onRepeat && !isCustom && (
             <button
               onClick={(e) => onRepeat(meal, e)}
               className="p-1 rounded bg-white/80 text-warm-gray hover:text-blue-500"

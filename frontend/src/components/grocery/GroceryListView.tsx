@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { CATEGORY_ORDER } from '@/hooks/useGroceryList';
 import { GroceryCategorySection } from './GroceryCategorySection';
 import { AddItemForm } from './AddItemForm';
@@ -56,6 +56,50 @@ export function GroceryListView({
 }: GroceryListViewProps) {
   // Share modal state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  // Copy to clipboard state
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Format grocery list as text and copy to clipboard
+  const handleCopyList = useCallback(async () => {
+    if (!groceryList) return;
+
+    // Build text representation of the list
+    const lines: string[] = [];
+    lines.push(groceryList.name);
+    lines.push(''); // Empty line after title
+
+    // Get all categories that have items
+    const categoriesWithItems = [...CATEGORY_ORDER, ...Object.keys(groceryList.items_by_category)]
+      .filter((cat, idx, arr) => arr.indexOf(cat) === idx) // unique
+      .filter(cat => groceryList.items_by_category[cat]?.length > 0);
+
+    for (const category of categoriesWithItems) {
+      const items = groceryList.items_by_category[category] || [];
+      if (items.length === 0) continue;
+
+      // Only include unchecked items
+      const uncheckedItems = items.filter(item => !item.is_checked);
+      if (uncheckedItems.length === 0) continue;
+
+      lines.push(`${category.charAt(0).toUpperCase() + category.slice(1)}:`);
+      for (const item of uncheckedItems) {
+        const qty = item.quantity ? `${item.quantity}${item.unit ? ` ${item.unit}` : ''} ` : '';
+        lines.push(`  - ${qty}${item.name}`);
+      }
+      lines.push(''); // Empty line between categories
+    }
+
+    const text = lines.join('\n').trim();
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }, [groceryList]);
 
   if (!selectedListId) {
     return (
@@ -115,6 +159,33 @@ export function GroceryListView({
             </svg>
             <span className="hidden md:inline text-sm">Generate</span>
           </button>
+
+          {/* Copy button */}
+          {hasItems && (
+            <button
+              onClick={handleCopyList}
+              className={`flex items-center justify-center gap-1.5 p-2 md:px-3 md:py-2 border border-border rounded-lg hover:bg-cream transition-colors ${
+                copySuccess ? 'text-green-600 border-green-300 bg-green-50' : 'text-charcoal'
+              }`}
+              title="Copy list as text"
+            >
+              {copySuccess ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="hidden md:inline text-sm">Copied!</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  <span className="hidden md:inline text-sm">Copy</span>
+                </>
+              )}
+            </button>
+          )}
 
           {/* Share button - only show for owners */}
           {isOwner && (

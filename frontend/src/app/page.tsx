@@ -3,25 +3,18 @@
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { recipeApi, collectionApi, socialApi, mealPlanApi } from '@/lib/api';
+import { recipeApi, collectionApi, socialApi } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import RecipeSearchModal from '@/components/search/RecipeSearchModal';
-import { CalendarView } from '@/components/calendar';
 import { ShareModal } from '@/components/sharing';
 import { CollectionSidebar } from '@/components/collections';
 import { RecipeFilterSection, RecipeGrid } from '@/components/recipes';
-import type { RecipeSummary, Collection, Tag, SharedCollection, CollectionShare, UserSearchResult, SearchRecipeResult, MealPlanShare } from '@/types';
-
-type PageView = 'recipes' | 'calendar';
+import type { RecipeSummary, Collection, Tag, SharedCollection, CollectionShare, UserSearchResult, SearchRecipeResult } from '@/types';
 
 function RecipesPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-
-  // Page view toggle - read from URL param
-  const viewParam = searchParams.get('view');
-  const [pageView, setPageView] = useState<PageView>(viewParam === 'calendar' ? 'calendar' : 'recipes');
 
   // Recipe state
   const [allRecipes, setAllRecipes] = useState<RecipeSummary[]>([]);
@@ -69,29 +62,11 @@ function RecipesPageContent() {
   // Add recipes modal state
   const [isAddRecipesModalOpen, setIsAddRecipesModalOpen] = useState(false);
 
-  // Calendar sharing state
-  const [isCalendarShareModalOpen, setIsCalendarShareModalOpen] = useState(false);
-  const [calendarShares, setCalendarShares] = useState<MealPlanShare[]>([]);
-  const [loadingCalendarShares, setLoadingCalendarShares] = useState(false);
-  const [calendarUserSearchQuery, setCalendarUserSearchQuery] = useState('');
-  const [calendarUserSearchResults, setCalendarUserSearchResults] = useState<UserSearchResult[]>([]);
-  const [searchingCalendarUsers, setSearchingCalendarUsers] = useState(false);
-  const [sharingCalendarUser, setSharingCalendarUser] = useState<string | null>(null);
-
-
   // Track previous URL param to detect actual URL changes vs re-renders
   const prevUrlCollectionRef = useRef<string | null | undefined>(undefined);
 
   // AbortController for cancelling stale recipe fetches
   const fetchAbortControllerRef = useRef<AbortController | null>(null);
-
-  // Sync page view with URL param
-  useEffect(() => {
-    const newView = viewParam === 'calendar' ? 'calendar' : 'recipes';
-    if (newView !== pageView) {
-      setPageView(newView);
-    }
-  }, [viewParam]);
 
   // Load collections on mount
   useEffect(() => {
@@ -268,78 +243,6 @@ function RecipesPageContent() {
 
     return result;
   }, [allRecipes, searchQuery, selectedTags, tagFilterMode]);
-
-  // Calendar sharing handlers
-  const loadCalendarShares = async () => {
-    setLoadingCalendarShares(true);
-    try {
-      const data = await mealPlanApi.listShares();
-      setCalendarShares(data);
-    } catch (error) {
-      console.error('Failed to load calendar shares:', error);
-    } finally {
-      setLoadingCalendarShares(false);
-    }
-  };
-
-  const openCalendarShareModal = () => {
-    setIsCalendarShareModalOpen(true);
-    loadCalendarShares();
-  };
-
-  // Calendar user search
-  useEffect(() => {
-    if (!calendarUserSearchQuery.trim()) {
-      setCalendarUserSearchResults([]);
-      return;
-    }
-    const timeout = setTimeout(async () => {
-      setSearchingCalendarUsers(true);
-      try {
-        const results = await socialApi.searchUsers(calendarUserSearchQuery, 10);
-        const shareUserIds = new Set(calendarShares.map(s => s.shared_with.id));
-        setCalendarUserSearchResults(results.filter(u => !shareUserIds.has(u.id)));
-      } catch (error) {
-        console.error('Failed to search users:', error);
-      } finally {
-        setSearchingCalendarUsers(false);
-      }
-    }, 300);
-    return () => clearTimeout(timeout);
-  }, [calendarUserSearchQuery, calendarShares]);
-
-  const handleShareCalendar = async (userId: string, permission: 'viewer' | 'editor' = 'viewer') => {
-    setSharingCalendarUser(userId);
-    try {
-      const newShare = await mealPlanApi.share({ user_id: userId, permission });
-      setCalendarShares(prev => [...prev, newShare]);
-      setCalendarUserSearchQuery('');
-      setCalendarUserSearchResults([]);
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to share calendar');
-    } finally {
-      setSharingCalendarUser(null);
-    }
-  };
-
-  const handleUpdateCalendarSharePermission = async (userId: string, permission: 'viewer' | 'editor') => {
-    try {
-      const updated = await mealPlanApi.updateShare(userId, { permission });
-      setCalendarShares(prev => prev.map(s => s.shared_with.id === userId ? updated : s));
-    } catch (error) {
-      console.error('Failed to update permission:', error);
-    }
-  };
-
-  const handleRemoveCalendarShare = async (userId: string) => {
-    if (!confirm('Remove this user from your meal plan?')) return;
-    try {
-      await mealPlanApi.removeShare(userId);
-      setCalendarShares(prev => prev.filter(s => s.shared_with.id !== userId));
-    } catch (error) {
-      console.error('Failed to remove share:', error);
-    }
-  };
 
   const toggleTag = (tagId: string) => {
     setSelectedTags(prev =>
@@ -610,32 +513,23 @@ function RecipesPageContent() {
             <div className="sticky top-24">
               {/* Main Navigation */}
               <div className="space-y-1 mb-4 pb-4 border-b border-border">
-                <button
-                  onClick={() => setPageView('recipes')}
-                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
-                    pageView === 'recipes'
-                      ? 'bg-gold/10 text-gold-dark font-medium'
-                      : 'text-charcoal hover:bg-cream-dark'
-                  }`}
+                <div
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left bg-gold/10 text-gold-dark font-medium"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                   </svg>
                   <span>Recipes</span>
-                </button>
-                <button
-                  onClick={() => setPageView('calendar')}
-                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors ${
-                    pageView === 'calendar'
-                      ? 'bg-gold/10 text-gold-dark font-medium'
-                      : 'text-charcoal hover:bg-cream-dark'
-                  }`}
+                </div>
+                <Link
+                  href="/calendar"
+                  className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors text-charcoal hover:bg-cream-dark"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                   <span>Meal Plan</span>
-                </button>
+                </Link>
                 <Link
                   href="/grocery"
                   className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors text-charcoal hover:bg-cream-dark"
@@ -647,47 +541,43 @@ function RecipesPageContent() {
                 </Link>
               </div>
 
-              {/* Recipe sidebar content - only show when in recipes view */}
-              {pageView === 'recipes' && (
-                <CollectionSidebar
-                  collections={collections}
-                  sharedCollections={sharedCollections}
-                  selectedCollection={selectedCollection}
-                  loadingCollections={loadingCollections}
-                  isManageMode={isManageMode}
-                  onToggleManageMode={() => setIsManageMode(!isManageMode)}
-                  onCollectionClick={handleCollectionClick}
-                  isCreatingCollection={isCreatingCollection}
-                  newCollectionName={newCollectionName}
-                  savingCollection={savingCollection}
-                  onStartCreate={() => setIsCreatingCollection(true)}
-                  onCancelCreate={() => {
-                    setIsCreatingCollection(false);
-                    setNewCollectionName('');
-                  }}
-                  onNewCollectionNameChange={setNewCollectionName}
-                  onCreateCollection={handleCreateCollection}
-                  editingCollectionId={editingCollectionId}
-                  editingCollectionName={editingCollectionName}
-                  onStartEdit={startEditingCollection}
-                  onCancelEdit={() => {
-                    setEditingCollectionId(null);
-                    setEditingCollectionName('');
-                  }}
-                  onEditNameChange={setEditingCollectionName}
-                  onUpdateCollection={handleUpdateCollection}
-                  onDeleteCollection={handleDeleteCollection}
-                  onTogglePrivacy={toggleCollectionPrivacy}
-                  onManageRecipes={setManagingCollectionId}
-                />
-              )}
+              {/* Collection Sidebar */}
+              <CollectionSidebar
+                collections={collections}
+                sharedCollections={sharedCollections}
+                selectedCollection={selectedCollection}
+                loadingCollections={loadingCollections}
+                isManageMode={isManageMode}
+                onToggleManageMode={() => setIsManageMode(!isManageMode)}
+                onCollectionClick={handleCollectionClick}
+                isCreatingCollection={isCreatingCollection}
+                newCollectionName={newCollectionName}
+                savingCollection={savingCollection}
+                onStartCreate={() => setIsCreatingCollection(true)}
+                onCancelCreate={() => {
+                  setIsCreatingCollection(false);
+                  setNewCollectionName('');
+                }}
+                onNewCollectionNameChange={setNewCollectionName}
+                onCreateCollection={handleCreateCollection}
+                editingCollectionId={editingCollectionId}
+                editingCollectionName={editingCollectionName}
+                onStartEdit={startEditingCollection}
+                onCancelEdit={() => {
+                  setEditingCollectionId(null);
+                  setEditingCollectionName('');
+                }}
+                onEditNameChange={setEditingCollectionName}
+                onUpdateCollection={handleUpdateCollection}
+                onDeleteCollection={handleDeleteCollection}
+                onTogglePrivacy={toggleCollectionPrivacy}
+                onManageRecipes={setManagingCollectionId}
+              />
             </div>
           </aside>
 
           {/* Main Content */}
           <main className="flex-1 min-w-0">
-            {pageView === 'recipes' ? (
-            <>
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -808,14 +698,10 @@ function RecipesPageContent() {
                 </button>
               </div>
             )}
-            </>
-            ) : (
-              <CalendarView isActive={pageView === 'calendar'} onOpenShareModal={openCalendarShareModal} />
-            )}
           </main>
 
           {/* Right Panel - Recipe Management */}
-          {pageView === 'recipes' && managingCollectionId && (
+          {managingCollectionId && (
             <aside className="hidden lg:block w-80 flex-shrink-0">
               <div className="sticky top-24 bg-white border border-border rounded-lg p-4 max-h-[calc(100vh-8rem)] overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between mb-4">
@@ -877,7 +763,6 @@ function RecipesPageContent() {
       </div>
 
       {/* Floating Action Button - New Recipe (desktop only, mobile uses bottom nav) */}
-      {pageView === 'recipes' && (
       <Link
         href={selectedCollection ? `/recipes/new?collection=${selectedCollection}` : "/recipes/new"}
         className="fixed bottom-6 right-6 z-40 w-14 h-14 bg-gold hover:bg-gold-dark text-white rounded-full shadow-lg hover:shadow-xl hidden md:flex items-center justify-center transition-all duration-200 hover:scale-105"
@@ -887,7 +772,6 @@ function RecipesPageContent() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
       </Link>
-      )}
 
       {/* Share Modal */}
       <ShareModal
@@ -914,33 +798,6 @@ function RecipesPageContent() {
         excludeRecipeIds={collectionRecipeIds}
         title="Add Recipe to Collection"
       />
-
-      {/* Calendar Share Modal */}
-      <ShareModal
-        isOpen={isCalendarShareModalOpen}
-        onClose={() => {
-          setIsCalendarShareModalOpen(false);
-          setCalendarUserSearchQuery('');
-          setCalendarUserSearchResults([]);
-        }}
-        title="Share Meal Plan"
-        shares={calendarShares.map(s => ({
-          id: s.id,
-          user_id: s.shared_with.id,
-          user: s.shared_with,
-          permission: s.permission,
-        }))}
-        loadingShares={loadingCalendarShares}
-        searchQuery={calendarUserSearchQuery}
-        onSearchQueryChange={setCalendarUserSearchQuery}
-        searchResults={calendarUserSearchResults}
-        searching={searchingCalendarUsers}
-        sharingUserId={sharingCalendarUser}
-        onShareWithUser={handleShareCalendar}
-        onUpdatePermission={handleUpdateCalendarSharePermission}
-        onRemoveShare={handleRemoveCalendarShare}
-      />
-
     </div>
   );
 }

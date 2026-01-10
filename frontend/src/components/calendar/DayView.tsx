@@ -56,31 +56,50 @@ export default function DayView({
                 <div className="animate-pulse bg-cream-dark rounded-lg h-16" />
               ) : meals.length > 0 ? (
                 <div className="space-y-2">
-                  {meals.map(meal => (
-                    <div key={meal.id} className="flex items-center gap-3 p-2 rounded-lg bg-cream">
-                      {meal.recipe.cover_image_url && (
-                        <img src={meal.recipe.cover_image_url} alt="" className="w-12 h-12 rounded object-cover" />
-                      )}
-                      <div className="flex-1">
-                        <Link href={`/recipes/${meal.recipe.id}`} className="font-medium text-charcoal hover:text-gold text-sm">
-                          {meal.recipe.title}
-                        </Link>
-                        <div className="text-xs text-warm-gray">{meal.servings} servings</div>
+                  {meals.map(meal => {
+                    const isCustom = !meal.recipe;
+                    const title = isCustom ? meal.custom_title : meal.recipe?.title;
+                    return (
+                      <div key={meal.id} className={`flex items-center gap-3 p-2 rounded-lg ${isCustom ? 'bg-sage/10 border border-sage/20' : 'bg-cream'}`}>
+                        {isCustom ? (
+                          <div className="w-12 h-12 rounded bg-sage/20 flex items-center justify-center flex-shrink-0">
+                            <svg className="w-6 h-6 text-sage" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 15.546c-.523 0-1.046.151-1.5.454a2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.704 2.704 0 00-3 0 2.704 2.704 0 01-3 0 2.701 2.701 0 00-1.5-.454M9 6v2m3-2v2m3-2v2M9 3h.01M12 3h.01M15 3h.01M21 21v-7a2 2 0 00-2-2H5a2 2 0 00-2 2v7h18zm-3-9v-2a2 2 0 00-2-2H8a2 2 0 00-2 2v2h12z" />
+                            </svg>
+                          </div>
+                        ) : meal.recipe?.cover_image_url ? (
+                          <img src={meal.recipe.cover_image_url} alt="" className="w-12 h-12 rounded object-cover flex-shrink-0" />
+                        ) : null}
+                        <div className="flex-1 min-w-0">
+                          {isCustom ? (
+                            <div className="font-medium text-charcoal text-sm truncate">{title}</div>
+                          ) : (
+                            <Link href={`/recipes/${meal.recipe?.id}`} className="font-medium text-charcoal hover:text-gold text-sm block truncate">
+                              {title}
+                            </Link>
+                          )}
+                          <div className="flex items-center gap-2 text-xs text-warm-gray">
+                            <span>{meal.servings} servings</span>
+                            {isCustom && <span className="px-1.5 py-0.5 rounded bg-sage/20 text-sage font-medium text-[10px]">Custom</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {!isCustom && (
+                            <button onClick={(e) => onRepeat(meal, e)} className="text-warm-gray hover:text-blue-500" title="Repeat weekly">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                            </button>
+                          )}
+                          <button onClick={(e) => onDelete(meal.id, e)} className="text-warm-gray hover:text-red-500" title="Remove">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button onClick={(e) => onRepeat(meal, e)} className="text-warm-gray hover:text-blue-500" title="Repeat weekly">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                        </button>
-                        <button onClick={(e) => onDelete(meal.id, e)} className="text-warm-gray hover:text-red-500" title="Remove">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <button

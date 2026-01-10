@@ -516,12 +516,16 @@ export interface MealPlan {
   servings: number;
   notes?: string;
   recurrence_id?: string;
-  recipe: MealPlanRecipe;
+  recipe?: MealPlanRecipe; // Optional for custom items
+  custom_title?: string; // For custom items (e.g., "Pizza Night")
+  custom_description?: string; // Optional description for custom items
   created_at: string;
 }
 
 export interface MealPlanCreateInput {
-  recipe_id: string;
+  recipe_id?: string; // Optional - provide this for recipe-based items
+  custom_title?: string; // Optional - provide this for custom items
+  custom_description?: string; // Optional description for custom items
   planned_date: string; // ISO date string YYYY-MM-DD
   meal_type: MealType;
   servings?: number;
@@ -533,6 +537,8 @@ export interface MealPlanUpdateInput {
   meal_type?: MealType;
   servings?: number;
   notes?: string;
+  custom_title?: string;
+  custom_description?: string;
 }
 
 export interface MealPlanMoveInput {

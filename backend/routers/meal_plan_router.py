@@ -121,13 +121,16 @@ async def create_meal_plan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Add a recipe to the meal plan."""
-    # Verify recipe exists and user can access it
-    verify_recipe_access(db, data.recipe_id, current_user)
+    """Add a recipe or custom item to the meal plan."""
+    # If recipe-based, verify recipe exists and user can access it
+    if data.recipe_id:
+        verify_recipe_access(db, data.recipe_id, current_user)
 
     meal_plan = MealPlanModel(
         user_id=current_user.id,
         recipe_id=data.recipe_id,
+        custom_title=data.custom_title,
+        custom_description=data.custom_description,
         planned_date=data.planned_date,
         meal_type=data.meal_type,
         servings=data.servings,
@@ -138,8 +141,9 @@ async def create_meal_plan(
     db.commit()
     db.refresh(meal_plan)
 
-    # Load recipe relationship for response
-    db.refresh(meal_plan, ['recipe'])
+    # Load recipe relationship for response (if recipe-based)
+    if data.recipe_id:
+        db.refresh(meal_plan, ['recipe'])
 
     return meal_plan
 
@@ -247,6 +251,8 @@ async def copy_meal_plans(
         new_meal = MealPlanModel(
             user_id=current_user.id,
             recipe_id=source.recipe_id,
+            custom_title=source.custom_title,
+            custom_description=source.custom_description,
             planned_date=new_date,
             meal_type=source.meal_type,
             servings=source.servings,

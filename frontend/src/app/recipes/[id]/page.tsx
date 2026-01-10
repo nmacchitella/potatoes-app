@@ -11,6 +11,7 @@ import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit, SubRecipeSelect, YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
 import { ImageUpload } from '@/components/ui';
+import { AddToMealPlanModal } from '@/components/calendar';
 import type { RecipeWithScale, Collection, RecipeIngredient, RecipeIngredientInput, RecipeInstructionInput, SubRecipeInput } from '@/types';
 
 /**
@@ -119,6 +120,9 @@ export default function RecipeDetailPage() {
 
   // Sub-recipes expanded state
   const [expandedSubRecipes, setExpandedSubRecipes] = useState<Set<string>>(new Set());
+
+  // Add to meal plan modal
+  const [isMealPlanModalOpen, setIsMealPlanModalOpen] = useState(false);
 
   const recipeId = params.id as string;
 
@@ -542,7 +546,7 @@ export default function RecipeDetailPage() {
                   {recipeCollections.map(collection => (
                     <Link
                       key={collection.id}
-                      href={`/recipes?collection=${collection.id}`}
+                      href={`/?collection=${collection.id}`}
                       className="bg-cream hover:bg-cream-dark text-charcoal px-2 py-0.5 rounded text-xs transition-colors flex items-center gap-1"
                     >
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -651,6 +655,19 @@ export default function RecipeDetailPage() {
             {/* Action buttons */}
             {!isEditing && (
               <div className="flex items-center gap-3 pt-3 border-t border-border">
+                {/* Add to Meal Plan */}
+                {user && (
+                  <button
+                    onClick={() => setIsMealPlanModalOpen(true)}
+                    className="flex items-center gap-1.5 text-xs text-warm-gray hover:text-gold transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Meal Plan
+                  </button>
+                )}
+
                 {/* Save to My Recipes (for other users' recipes) */}
                 {!isOwner && user && (
                   recipe.cloned_by_me ? (
@@ -946,6 +963,20 @@ export default function RecipeDetailPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Add to Meal Plan Modal */}
+      {recipe && (
+        <AddToMealPlanModal
+          isOpen={isMealPlanModalOpen}
+          onClose={() => setIsMealPlanModalOpen(false)}
+          recipeId={recipeId}
+          recipeTitle={recipe.title}
+          onSuccess={() => {
+            setToastMessage('Added to meal plan!');
+            setTimeout(() => setToastMessage(''), 3000);
+          }}
+        />
       )}
     </div>
   );

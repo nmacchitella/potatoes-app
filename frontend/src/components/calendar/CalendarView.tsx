@@ -2,13 +2,13 @@
 
 import { useCalendar } from '@/hooks';
 import { getCalendarHeaderText, isCurrentMonth } from '@/lib/calendar-utils';
-import RecipeSearchModal from '@/components/search/RecipeSearchModal';
 import { Modal } from '@/components/ui';
 import CalendarHeader from './CalendarHeader';
 import WeekView from './WeekView';
 import MobileWeekView from './MobileWeekView';
 import DayView from './DayView';
 import MonthView from './MonthView';
+import { AddMealModal } from './AddMealModal';
 import type { MealType } from '@/types';
 
 const MEAL_TYPES: { key: MealType; label: string }[] = [
@@ -143,12 +143,14 @@ export default function CalendarView({ isActive = true, onOpenShareModal }: Cale
         </div>
       )}
 
-      {/* Add Recipe Modal */}
-      <RecipeSearchModal
+      {/* Add Meal Modal (unified - recipe or custom) */}
+      <AddMealModal
         isOpen={calendar.isAddModalOpen}
         onClose={calendar.closeAddModal}
         onSelectRecipe={calendar.handleSelectRecipe}
-        title="Add to Meal Plan"
+        onCustomMealSuccess={calendar.handleCustomMealSuccess}
+        selectedDate={calendar.selectedSlot?.date}
+        selectedMealType={calendar.selectedSlot?.mealType}
       />
 
       {/* Copy Weeks Modal */}
@@ -189,7 +191,7 @@ export default function CalendarView({ isActive = true, onOpenShareModal }: Cale
       </Modal>
 
       {/* Repeat Weekly Modal */}
-      {calendar.repeatMeal && (
+      {calendar.repeatMeal && calendar.repeatMeal.recipe && (
         <Modal isOpen={calendar.showRepeatModal} onClose={calendar.closeRepeatModal} size="md">
           <div className="bg-white rounded-xl shadow-2xl p-6">
             <h2 className="font-serif text-xl text-charcoal mb-4">Repeat Weekly</h2>
@@ -234,7 +236,7 @@ export default function CalendarView({ isActive = true, onOpenShareModal }: Cale
         <Modal isOpen={calendar.showMoveModal} onClose={calendar.closeMoveModal} size="md" position="bottom-sheet">
           <div className="bg-white rounded-t-xl md:rounded-xl shadow-2xl p-6 max-h-[80vh] overflow-y-auto">
             <h2 className="font-serif text-xl text-charcoal mb-4">
-              Move {calendar.mealToMove.recipe.title}
+              Move {calendar.mealToMove.recipe?.title || calendar.mealToMove.custom_title}
             </h2>
             <div className="space-y-4">
               <div>

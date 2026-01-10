@@ -663,12 +663,22 @@ class RecipeImportMultiResponse(BaseModel):
 # ============================================================================
 
 class MealPlanCreate(BaseModel):
-    """Create a new meal plan entry."""
-    recipe_id: str
+    """Create a new meal plan entry (recipe-based or custom item)."""
+    recipe_id: Optional[str] = None
+    custom_title: Optional[str] = Field(None, max_length=255)
+    custom_description: Optional[str] = None
     planned_date: date
     meal_type: str = Field(..., pattern="^(breakfast|lunch|dinner|snack)$")
     servings: float = 4
     notes: Optional[str] = None
+
+    @model_validator(mode='after')
+    def validate_recipe_or_custom(self):
+        if not self.recipe_id and not self.custom_title:
+            raise ValueError('Either recipe_id or custom_title is required')
+        if self.recipe_id and self.custom_title:
+            raise ValueError('Cannot specify both recipe_id and custom_title')
+        return self
 
 
 class MealPlanUpdate(BaseModel):
@@ -677,6 +687,8 @@ class MealPlanUpdate(BaseModel):
     meal_type: Optional[str] = Field(None, pattern="^(breakfast|lunch|dinner|snack)$")
     servings: Optional[float] = None
     notes: Optional[str] = None
+    custom_title: Optional[str] = Field(None, max_length=255)
+    custom_description: Optional[str] = None
 
 
 class MealPlanMove(BaseModel):
@@ -722,7 +734,9 @@ class MealPlan(BaseModel):
     servings: float
     notes: Optional[str] = None
     recurrence_id: Optional[str] = None
-    recipe: MealPlanRecipe
+    recipe: Optional[MealPlanRecipe] = None  # Optional for custom items
+    custom_title: Optional[str] = None
+    custom_description: Optional[str] = None
     created_at: datetime
 
     class Config:
