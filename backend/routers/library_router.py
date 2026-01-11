@@ -217,7 +217,7 @@ async def invite_to_share_library(
     create_notification(
         db=db,
         user_id=data.invitee_id,
-        type="library_share_invite",
+        notification_type="library_share_invite",
         title="Library Share Invitation",
         message=f"{current_user.name} wants to share their recipe library with you",
         link="/settings",
@@ -277,7 +277,7 @@ async def accept_library_invite(
     create_notification(
         db=db,
         user_id=share.inviter_id,
-        type="library_share_accepted",
+        notification_type="library_share_accepted",
         title="Library Share Accepted",
         message=f"{current_user.name} accepted your library share invitation",
         link="/settings",
