@@ -79,7 +79,179 @@ def require_meal_plan_edit_access(db: Session, owner_id: str, user: User) -> Non
 
 
 # ============================================================================
-# ENDPOINTS
+# SHARING ENDPOINTS (must be before /{meal_plan_id} routes)
+# ============================================================================
+
+@router.get("/shared-with-me", response_model=List[SharedMealPlanAccess])
+async def list_shared_with_me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List meal plans shared with the current user."""
+    shares = db.query(MealPlanShareModel).options(
+        joinedload(MealPlanShareModel.owner)
+    ).filter(
+        MealPlanShareModel.shared_with_id == current_user.id
+    ).all()
+
+    return shares
+
+
+@router.get("/shared/{user_id}", response_model=MealPlanListResponse)
+async def get_shared_meal_plan(
+    user_id: str,
+    start: date = Query(..., description="Start date (inclusive)"),
+    end: date = Query(..., description="End date (inclusive)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """View another user's meal plan (if shared with you)."""
+    permission = get_meal_plan_access(db, user_id, current_user)
+    if not permission:
+        raise HTTPException(status_code=403, detail="No access to this meal plan")
+
+    if end < start:
+        raise HTTPException(status_code=400, detail="End date must be after start date")
+
+    if (end - start).days > 90:
+        raise HTTPException(status_code=400, detail="Date range cannot exceed 90 days")
+
+    meal_plans = db.query(MealPlanModel).options(
+        joinedload(MealPlanModel.recipe)
+    ).filter(
+        MealPlanModel.user_id == user_id,
+        MealPlanModel.planned_date >= start,
+        MealPlanModel.planned_date <= end
+    ).order_by(
+        MealPlanModel.planned_date,
+        MealPlanModel.meal_type
+    ).all()
+
+    return MealPlanListResponse(
+        items=meal_plans,
+        start_date=start,
+        end_date=end
+    )
+
+
+@router.get("/shares", response_model=List[MealPlanShareResponse])
+async def list_shares(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List users you've shared your meal plan with."""
+    shares = db.query(MealPlanShareModel).options(
+        joinedload(MealPlanShareModel.shared_with)
+    ).filter(
+        MealPlanShareModel.owner_id == current_user.id
+    ).all()
+
+    return shares
+
+
+@router.post("/shares", response_model=MealPlanShareResponse)
+async def share_meal_plan(
+    data: MealPlanShareCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Share your meal plan with another user."""
+    # Can't share with yourself
+    if data.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot share with yourself")
+
+    # Check user exists
+    user = db.query(User).filter(User.id == data.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check not already shared
+    existing = db.query(MealPlanShareModel).filter(
+        MealPlanShareModel.owner_id == current_user.id,
+        MealPlanShareModel.shared_with_id == data.user_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Already shared with this user")
+
+    share = MealPlanShareModel(
+        owner_id=current_user.id,
+        shared_with_id=data.user_id,
+        permission=data.permission
+    )
+    db.add(share)
+    db.commit()
+    db.refresh(share, ['shared_with'])
+
+    return share
+
+
+@router.put("/shares/{user_id}", response_model=MealPlanShareResponse)
+async def update_share(
+    user_id: str,
+    data: MealPlanShareUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update permission for a shared user."""
+    share = db.query(MealPlanShareModel).filter(
+        MealPlanShareModel.owner_id == current_user.id,
+        MealPlanShareModel.shared_with_id == user_id
+    ).first()
+
+    if not share:
+        raise HTTPException(status_code=404, detail="Share not found")
+
+    share.permission = data.permission
+    db.commit()
+    db.refresh(share, ['shared_with'])
+
+    return share
+
+
+@router.delete("/shares/{user_id}")
+async def remove_share(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Stop sharing your meal plan with a user."""
+    share = db.query(MealPlanShareModel).filter(
+        MealPlanShareModel.owner_id == current_user.id,
+        MealPlanShareModel.shared_with_id == user_id
+    ).first()
+
+    if not share:
+        raise HTTPException(status_code=404, detail="Share not found")
+
+    db.delete(share)
+    db.commit()
+
+    return {"status": "removed"}
+
+
+@router.delete("/shares/leave/{owner_id}")
+async def leave_shared_meal_plan(
+    owner_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Leave a meal plan that was shared with you."""
+    share = db.query(MealPlanShareModel).filter(
+        MealPlanShareModel.owner_id == owner_id,
+        MealPlanShareModel.shared_with_id == current_user.id
+    ).first()
+
+    if not share:
+        raise HTTPException(status_code=404, detail="Share not found")
+
+    db.delete(share)
+    db.commit()
+
+    return {"status": "left"}
+
+
+# ============================================================================
+# MEAL PLAN CRUD ENDPOINTS
 # ============================================================================
 
 @router.get("", response_model=MealPlanListResponse)
@@ -371,175 +543,3 @@ async def swap_meals(
     db.commit()
 
     return {"status": "swapped"}
-
-
-# ============================================================================
-# SHARING ENDPOINTS
-# ============================================================================
-
-@router.get("/shared-with-me", response_model=List[SharedMealPlanAccess])
-async def list_shared_with_me(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """List meal plans shared with the current user."""
-    shares = db.query(MealPlanShareModel).options(
-        joinedload(MealPlanShareModel.owner)
-    ).filter(
-        MealPlanShareModel.shared_with_id == current_user.id
-    ).all()
-
-    return shares
-
-
-@router.get("/shared/{user_id}", response_model=MealPlanListResponse)
-async def get_shared_meal_plan(
-    user_id: str,
-    start: date = Query(..., description="Start date (inclusive)"),
-    end: date = Query(..., description="End date (inclusive)"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """View another user's meal plan (if shared with you)."""
-    permission = get_meal_plan_access(db, user_id, current_user)
-    if not permission:
-        raise HTTPException(status_code=403, detail="No access to this meal plan")
-
-    if end < start:
-        raise HTTPException(status_code=400, detail="End date must be after start date")
-
-    if (end - start).days > 90:
-        raise HTTPException(status_code=400, detail="Date range cannot exceed 90 days")
-
-    meal_plans = db.query(MealPlanModel).options(
-        joinedload(MealPlanModel.recipe)
-    ).filter(
-        MealPlanModel.user_id == user_id,
-        MealPlanModel.planned_date >= start,
-        MealPlanModel.planned_date <= end
-    ).order_by(
-        MealPlanModel.planned_date,
-        MealPlanModel.meal_type
-    ).all()
-
-    return MealPlanListResponse(
-        items=meal_plans,
-        start_date=start,
-        end_date=end
-    )
-
-
-@router.get("/shares", response_model=List[MealPlanShareResponse])
-async def list_shares(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """List users you've shared your meal plan with."""
-    shares = db.query(MealPlanShareModel).options(
-        joinedload(MealPlanShareModel.shared_with)
-    ).filter(
-        MealPlanShareModel.owner_id == current_user.id
-    ).all()
-
-    return shares
-
-
-@router.post("/shares", response_model=MealPlanShareResponse)
-async def share_meal_plan(
-    data: MealPlanShareCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Share your meal plan with another user."""
-    # Can't share with yourself
-    if data.user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Cannot share with yourself")
-
-    # Check user exists
-    user = db.query(User).filter(User.id == data.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Check not already shared
-    existing = db.query(MealPlanShareModel).filter(
-        MealPlanShareModel.owner_id == current_user.id,
-        MealPlanShareModel.shared_with_id == data.user_id
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Already shared with this user")
-
-    share = MealPlanShareModel(
-        owner_id=current_user.id,
-        shared_with_id=data.user_id,
-        permission=data.permission
-    )
-    db.add(share)
-    db.commit()
-    db.refresh(share, ['shared_with'])
-
-    return share
-
-
-@router.put("/shares/{user_id}", response_model=MealPlanShareResponse)
-async def update_share(
-    user_id: str,
-    data: MealPlanShareUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Update permission for a shared user."""
-    share = db.query(MealPlanShareModel).filter(
-        MealPlanShareModel.owner_id == current_user.id,
-        MealPlanShareModel.shared_with_id == user_id
-    ).first()
-
-    if not share:
-        raise HTTPException(status_code=404, detail="Share not found")
-
-    share.permission = data.permission
-    db.commit()
-    db.refresh(share, ['shared_with'])
-
-    return share
-
-
-@router.delete("/shares/{user_id}")
-async def remove_share(
-    user_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Stop sharing your meal plan with a user."""
-    share = db.query(MealPlanShareModel).filter(
-        MealPlanShareModel.owner_id == current_user.id,
-        MealPlanShareModel.shared_with_id == user_id
-    ).first()
-
-    if not share:
-        raise HTTPException(status_code=404, detail="Share not found")
-
-    db.delete(share)
-    db.commit()
-
-    return {"status": "removed"}
-
-
-@router.delete("/shares/leave/{owner_id}")
-async def leave_shared_meal_plan(
-    owner_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Leave a meal plan that was shared with you."""
-    share = db.query(MealPlanShareModel).filter(
-        MealPlanShareModel.owner_id == owner_id,
-        MealPlanShareModel.shared_with_id == current_user.id
-    ).first()
-
-    if not share:
-        raise HTTPException(status_code=404, detail="Share not found")
-
-    db.delete(share)
-    db.commit()
-
-    return {"status": "left"}
