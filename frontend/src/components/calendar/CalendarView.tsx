@@ -20,10 +20,13 @@ const MEAL_TYPES: { key: MealType; label: string }[] = [
 interface CalendarViewProps {
   isActive?: boolean;
   onOpenShareModal: () => void;
+  calendarHook?: ReturnType<typeof useCalendar>;
 }
 
-export default function CalendarView({ isActive = true, onOpenShareModal }: CalendarViewProps) {
-  const calendar = useCalendar(isActive);
+export default function CalendarView({ isActive = true, onOpenShareModal, calendarHook }: CalendarViewProps) {
+  // Use provided hook or create our own
+  const internalCalendar = useCalendar(calendarHook ? false : isActive);
+  const calendar = calendarHook || internalCalendar;
 
   const headerText = getCalendarHeaderText(calendar.currentDate, calendar.viewMode);
 
@@ -151,6 +154,7 @@ export default function CalendarView({ isActive = true, onOpenShareModal }: Cale
         onCustomMealSuccess={calendar.handleCustomMealSuccess}
         selectedDate={calendar.selectedSlot?.date}
         selectedMealType={calendar.selectedSlot?.mealType}
+        defaultCalendarId={calendar.getDefaultCalendarId()}
       />
 
       {/* Copy Weeks Modal */}

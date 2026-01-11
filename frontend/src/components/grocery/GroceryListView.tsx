@@ -27,7 +27,7 @@ interface GroceryListViewProps {
   clearAllItems: () => Promise<void>;
   // Generate
   isGenerating: boolean;
-  generateFromMealPlan: (startDate: string, endDate: string, merge: boolean) => Promise<void>;
+  generateFromMealPlan: (startDate: string, endDate: string, merge: boolean, calendarIds?: string[]) => Promise<void>;
   isGenerateModalOpen: boolean;
   setIsGenerateModalOpen: (open: boolean) => void;
   // Sharing

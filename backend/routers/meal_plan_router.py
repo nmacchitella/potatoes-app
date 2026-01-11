@@ -1,24 +1,33 @@
 """
 Meal Plan Router
 
-CRUD operations for meal planning - scheduling recipes on specific dates.
+CRUD operations for meal planning with multiple calendars.
+Users can have multiple calendars and share specific calendars with others.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_
+from sqlalchemy import and_, or_, func
 from typing import List, Optional
 from datetime import date, timedelta
 import uuid
 
 from database import get_db
 from auth import get_current_user
-from models import User, Recipe, MealPlan as MealPlanModel, MealPlanShare as MealPlanShareModel
+from models import (
+    User, Recipe,
+    MealPlanCalendar as MealPlanCalendarModel,
+    MealPlan as MealPlanModel,
+    MealPlanShare as MealPlanShareModel,
+    Notification
+)
 from schemas import (
     MealPlanCreate, MealPlanUpdate, MealPlan as MealPlanSchema,
     MealPlanMove, MealPlanCopy, MealPlanRecurring,
     MealPlanListResponse,
-    MealPlanShareCreate, MealPlanShareUpdate, MealPlanShareResponse, SharedMealPlanAccess,
+    MealPlanCalendarCreate, MealPlanCalendarUpdate, MealPlanCalendarSummary,
+    MealPlanCalendarShareCreate, MealPlanCalendarShareUpdate,
+    MealPlanCalendarShareResponse, SharedMealPlanCalendarAccess,
 )
 
 router = APIRouter(prefix="/meal-plan", tags=["meal-plan"])
@@ -28,17 +37,73 @@ router = APIRouter(prefix="/meal-plan", tags=["meal-plan"])
 # HELPER FUNCTIONS
 # ============================================================================
 
-def get_meal_plan_or_404(db: Session, meal_plan_id: str, user: User) -> MealPlanModel:
-    """Get a meal plan entry owned by the user or raise 404."""
-    meal_plan = db.query(MealPlanModel).filter(
-        MealPlanModel.id == meal_plan_id,
-        MealPlanModel.user_id == user.id
+def get_calendar_or_404(db: Session, calendar_id: str, user: User) -> MealPlanCalendarModel:
+    """Get a calendar owned by the user or raise 404."""
+    calendar = db.query(MealPlanCalendarModel).filter(
+        MealPlanCalendarModel.id == calendar_id,
+        MealPlanCalendarModel.user_id == user.id
     ).first()
 
-    if not meal_plan:
-        raise HTTPException(status_code=404, detail="Meal plan entry not found")
+    if not calendar:
+        raise HTTPException(status_code=404, detail="Calendar not found")
 
-    return meal_plan
+    return calendar
+
+
+def get_calendar_access(db: Session, calendar_id: str, user: User) -> Optional[str]:
+    """
+    Check if user has access to a calendar.
+    Returns permission level ('owner', 'viewer', 'editor') or None.
+    """
+    # Check if user owns the calendar
+    calendar = db.query(MealPlanCalendarModel).filter(
+        MealPlanCalendarModel.id == calendar_id
+    ).first()
+
+    if not calendar:
+        return None
+
+    if calendar.user_id == user.id:
+        return "owner"
+
+    # Check for share
+    share = db.query(MealPlanShareModel).filter(
+        MealPlanShareModel.calendar_id == calendar_id,
+        MealPlanShareModel.user_id == user.id
+    ).first()
+
+    return share.permission if share else None
+
+
+def require_calendar_access(db: Session, calendar_id: str, user: User, edit_required: bool = False) -> str:
+    """
+    Verify user has access to the calendar.
+    Returns permission level or raises 403.
+    """
+    permission = get_calendar_access(db, calendar_id, user)
+
+    if not permission:
+        raise HTTPException(status_code=403, detail="No access to this calendar")
+
+    if edit_required and permission == "viewer":
+        raise HTTPException(status_code=403, detail="Edit access required")
+
+    return permission
+
+
+def get_user_accessible_calendar_ids(db: Session, user: User) -> List[str]:
+    """Get list of calendar IDs the user can access (owned + shared)."""
+    # Own calendars
+    owned = db.query(MealPlanCalendarModel.id).filter(
+        MealPlanCalendarModel.user_id == user.id
+    ).all()
+
+    # Shared calendars
+    shared = db.query(MealPlanShareModel.calendar_id).filter(
+        MealPlanShareModel.user_id == user.id
+    ).all()
+
+    return [c[0] for c in owned] + [c[0] for c in shared]
 
 
 def verify_recipe_access(db: Session, recipe_id: str, user: User) -> Recipe:
@@ -55,107 +120,215 @@ def verify_recipe_access(db: Session, recipe_id: str, user: User) -> Recipe:
     return recipe
 
 
-def get_meal_plan_access(db: Session, owner_id: str, user: User) -> Optional[str]:
-    """
-    Check if user has access to another user's meal plan.
-    Returns permission level ('viewer', 'editor') or None.
-    """
-    if owner_id == user.id:
-        return "owner"
-
-    share = db.query(MealPlanShareModel).filter(
-        MealPlanShareModel.owner_id == owner_id,
-        MealPlanShareModel.shared_with_id == user.id
+def get_or_create_default_calendar(db: Session, user: User) -> MealPlanCalendarModel:
+    """Get user's first calendar or create a default one."""
+    calendar = db.query(MealPlanCalendarModel).filter(
+        MealPlanCalendarModel.user_id == user.id
     ).first()
 
-    return share.permission if share else None
+    if not calendar:
+        calendar = MealPlanCalendarModel(
+            user_id=user.id,
+            name="Meal Plan"
+        )
+        db.add(calendar)
+        db.commit()
+        db.refresh(calendar)
 
-
-def require_meal_plan_edit_access(db: Session, owner_id: str, user: User) -> None:
-    """Verify user has edit access to the meal plan (owner or editor)."""
-    permission = get_meal_plan_access(db, owner_id, user)
-    if permission not in ("owner", "editor"):
-        raise HTTPException(status_code=403, detail="Edit access required")
+    return calendar
 
 
 # ============================================================================
-# SHARING ENDPOINTS (must be before /{meal_plan_id} routes)
+# CALENDAR CRUD ENDPOINTS
 # ============================================================================
 
-@router.get("/shared-with-me", response_model=List[SharedMealPlanAccess])
-async def list_shared_with_me(
+@router.get("/calendars", response_model=List[MealPlanCalendarSummary])
+async def list_calendars(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List meal plans shared with the current user."""
-    shares = db.query(MealPlanShareModel).options(
-        joinedload(MealPlanShareModel.owner)
+    """List all calendars accessible to the user (owned + shared)."""
+    # Get owned calendars with share counts
+    owned_calendars = db.query(
+        MealPlanCalendarModel,
+        func.count(MealPlanShareModel.id).label('share_count')
+    ).outerjoin(
+        MealPlanShareModel,
+        MealPlanShareModel.calendar_id == MealPlanCalendarModel.id
     ).filter(
-        MealPlanShareModel.shared_with_id == current_user.id
+        MealPlanCalendarModel.user_id == current_user.id
+    ).group_by(
+        MealPlanCalendarModel.id
     ).all()
 
-    return shares
+    # Get shared calendars
+    shared_calendars = db.query(
+        MealPlanCalendarModel,
+        MealPlanShareModel.permission,
+        User
+    ).join(
+        MealPlanShareModel,
+        MealPlanShareModel.calendar_id == MealPlanCalendarModel.id
+    ).join(
+        User,
+        User.id == MealPlanCalendarModel.user_id
+    ).filter(
+        MealPlanShareModel.user_id == current_user.id
+    ).all()
+
+    result = []
+
+    # Add owned calendars
+    for calendar, share_count in owned_calendars:
+        result.append(MealPlanCalendarSummary(
+            id=calendar.id,
+            name=calendar.name,
+            is_owner=True,
+            permission=None,
+            owner=None,
+            share_count=share_count,
+            created_at=calendar.created_at,
+            updated_at=calendar.updated_at
+        ))
+
+    # Add shared calendars
+    for calendar, permission, owner in shared_calendars:
+        result.append(MealPlanCalendarSummary(
+            id=calendar.id,
+            name=calendar.name,
+            is_owner=False,
+            permission=permission,
+            owner={
+                "id": owner.id,
+                "name": owner.name,
+                "profile_image_url": owner.profile_image_url
+            },
+            share_count=0,
+            created_at=calendar.created_at,
+            updated_at=calendar.updated_at
+        ))
+
+    return result
 
 
-@router.get("/shared/{user_id}", response_model=MealPlanListResponse)
-async def get_shared_meal_plan(
-    user_id: str,
-    start: date = Query(..., description="Start date (inclusive)"),
-    end: date = Query(..., description="End date (inclusive)"),
+@router.post("/calendars", response_model=MealPlanCalendarSummary)
+async def create_calendar(
+    data: MealPlanCalendarCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """View another user's meal plan (if shared with you)."""
-    permission = get_meal_plan_access(db, user_id, current_user)
-    if not permission:
-        raise HTTPException(status_code=403, detail="No access to this meal plan")
+    """Create a new meal plan calendar."""
+    calendar = MealPlanCalendarModel(
+        user_id=current_user.id,
+        name=data.name
+    )
+    db.add(calendar)
+    db.commit()
+    db.refresh(calendar)
 
-    if end < start:
-        raise HTTPException(status_code=400, detail="End date must be after start date")
-
-    if (end - start).days > 90:
-        raise HTTPException(status_code=400, detail="Date range cannot exceed 90 days")
-
-    meal_plans = db.query(MealPlanModel).options(
-        joinedload(MealPlanModel.recipe)
-    ).filter(
-        MealPlanModel.user_id == user_id,
-        MealPlanModel.planned_date >= start,
-        MealPlanModel.planned_date <= end
-    ).order_by(
-        MealPlanModel.planned_date,
-        MealPlanModel.meal_type
-    ).all()
-
-    return MealPlanListResponse(
-        items=meal_plans,
-        start_date=start,
-        end_date=end
+    return MealPlanCalendarSummary(
+        id=calendar.id,
+        name=calendar.name,
+        is_owner=True,
+        permission=None,
+        owner=None,
+        share_count=0,
+        created_at=calendar.created_at,
+        updated_at=calendar.updated_at
     )
 
 
-@router.get("/shares", response_model=List[MealPlanShareResponse])
-async def list_shares(
+@router.patch("/calendars/{calendar_id}", response_model=MealPlanCalendarSummary)
+async def update_calendar(
+    calendar_id: str,
+    data: MealPlanCalendarUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List users you've shared your meal plan with."""
+    """Update a calendar (name). Only owner can update."""
+    calendar = get_calendar_or_404(db, calendar_id, current_user)
+
+    if data.name is not None:
+        calendar.name = data.name
+
+    db.commit()
+    db.refresh(calendar)
+
+    # Get share count
+    share_count = db.query(func.count(MealPlanShareModel.id)).filter(
+        MealPlanShareModel.calendar_id == calendar_id
+    ).scalar()
+
+    return MealPlanCalendarSummary(
+        id=calendar.id,
+        name=calendar.name,
+        is_owner=True,
+        permission=None,
+        owner=None,
+        share_count=share_count,
+        created_at=calendar.created_at,
+        updated_at=calendar.updated_at
+    )
+
+
+@router.delete("/calendars/{calendar_id}")
+async def delete_calendar(
+    calendar_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a calendar. Only owner can delete. All items and shares are deleted."""
+    calendar = get_calendar_or_404(db, calendar_id, current_user)
+
+    # Check if this is the user's only calendar
+    calendar_count = db.query(func.count(MealPlanCalendarModel.id)).filter(
+        MealPlanCalendarModel.user_id == current_user.id
+    ).scalar()
+
+    if calendar_count <= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete your only calendar. Create another one first."
+        )
+
+    db.delete(calendar)
+    db.commit()
+
+    return {"status": "deleted"}
+
+
+# ============================================================================
+# CALENDAR SHARING ENDPOINTS
+# ============================================================================
+
+@router.get("/calendars/{calendar_id}/shares", response_model=List[MealPlanCalendarShareResponse])
+async def list_calendar_shares(
+    calendar_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List users a calendar is shared with. Only owner can view."""
+    calendar = get_calendar_or_404(db, calendar_id, current_user)
+
     shares = db.query(MealPlanShareModel).options(
-        joinedload(MealPlanShareModel.shared_with)
+        joinedload(MealPlanShareModel.user)
     ).filter(
-        MealPlanShareModel.owner_id == current_user.id
+        MealPlanShareModel.calendar_id == calendar_id
     ).all()
 
     return shares
 
 
-@router.post("/shares", response_model=MealPlanShareResponse)
-async def share_meal_plan(
-    data: MealPlanShareCreate,
+@router.post("/calendars/{calendar_id}/shares", response_model=MealPlanCalendarShareResponse)
+async def share_calendar(
+    calendar_id: str,
+    data: MealPlanCalendarShareCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Share your meal plan with another user."""
+    """Share a calendar with another user. Only owner can share."""
+    calendar = get_calendar_or_404(db, calendar_id, current_user)
+
     # Can't share with yourself
     if data.user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot share with yourself")
@@ -167,35 +340,50 @@ async def share_meal_plan(
 
     # Check not already shared
     existing = db.query(MealPlanShareModel).filter(
-        MealPlanShareModel.owner_id == current_user.id,
-        MealPlanShareModel.shared_with_id == data.user_id
+        MealPlanShareModel.calendar_id == calendar_id,
+        MealPlanShareModel.user_id == data.user_id
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Already shared with this user")
 
     share = MealPlanShareModel(
-        owner_id=current_user.id,
-        shared_with_id=data.user_id,
+        calendar_id=calendar_id,
+        user_id=data.user_id,
         permission=data.permission
     )
     db.add(share)
+
+    # Create notification for the shared user
+    notification = Notification(
+        user_id=data.user_id,
+        notification_type="meal_plan_shared",
+        title="Meal Plan Shared",
+        message=f"{current_user.name} shared their meal plan '{calendar.name}' with you",
+        link="/calendar",
+        data={"calendar_id": calendar_id, "sharer_id": current_user.id}
+    )
+    db.add(notification)
+
     db.commit()
-    db.refresh(share, ['shared_with'])
+    db.refresh(share, ['user'])
 
     return share
 
 
-@router.put("/shares/{user_id}", response_model=MealPlanShareResponse)
-async def update_share(
+@router.patch("/calendars/{calendar_id}/shares/{user_id}", response_model=MealPlanCalendarShareResponse)
+async def update_calendar_share(
+    calendar_id: str,
     user_id: str,
-    data: MealPlanShareUpdate,
+    data: MealPlanCalendarShareUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update permission for a shared user."""
+    """Update permission for a shared user. Only owner can update."""
+    calendar = get_calendar_or_404(db, calendar_id, current_user)
+
     share = db.query(MealPlanShareModel).filter(
-        MealPlanShareModel.owner_id == current_user.id,
-        MealPlanShareModel.shared_with_id == user_id
+        MealPlanShareModel.calendar_id == calendar_id,
+        MealPlanShareModel.user_id == user_id
     ).first()
 
     if not share:
@@ -203,21 +391,24 @@ async def update_share(
 
     share.permission = data.permission
     db.commit()
-    db.refresh(share, ['shared_with'])
+    db.refresh(share, ['user'])
 
     return share
 
 
-@router.delete("/shares/{user_id}")
-async def remove_share(
+@router.delete("/calendars/{calendar_id}/shares/{user_id}")
+async def remove_calendar_share(
+    calendar_id: str,
     user_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Stop sharing your meal plan with a user."""
+    """Stop sharing a calendar with a user. Only owner can remove."""
+    calendar = get_calendar_or_404(db, calendar_id, current_user)
+
     share = db.query(MealPlanShareModel).filter(
-        MealPlanShareModel.owner_id == current_user.id,
-        MealPlanShareModel.shared_with_id == user_id
+        MealPlanShareModel.calendar_id == calendar_id,
+        MealPlanShareModel.user_id == user_id
     ).first()
 
     if not share:
@@ -229,16 +420,16 @@ async def remove_share(
     return {"status": "removed"}
 
 
-@router.delete("/shares/leave/{owner_id}")
-async def leave_shared_meal_plan(
-    owner_id: str,
+@router.delete("/calendars/{calendar_id}/leave")
+async def leave_shared_calendar(
+    calendar_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Leave a meal plan that was shared with you."""
+    """Leave a calendar that was shared with you."""
     share = db.query(MealPlanShareModel).filter(
-        MealPlanShareModel.owner_id == owner_id,
-        MealPlanShareModel.shared_with_id == current_user.id
+        MealPlanShareModel.calendar_id == calendar_id,
+        MealPlanShareModel.user_id == current_user.id
     ).first()
 
     if not share:
@@ -258,10 +449,11 @@ async def leave_shared_meal_plan(
 async def list_meal_plans(
     start: date = Query(..., description="Start date (inclusive)"),
     end: date = Query(..., description="End date (inclusive)"),
+    calendar_ids: Optional[List[str]] = Query(None, description="Filter by calendar IDs"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get all meal plan entries for a date range."""
+    """Get all meal plan entries for a date range across accessible calendars."""
     if end < start:
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
@@ -269,10 +461,27 @@ async def list_meal_plans(
     if (end - start).days > 90:
         raise HTTPException(status_code=400, detail="Date range cannot exceed 90 days")
 
+    # Get accessible calendar IDs
+    accessible_ids = get_user_accessible_calendar_ids(db, current_user)
+
+    if not accessible_ids:
+        # Create default calendar if user has none
+        default_cal = get_or_create_default_calendar(db, current_user)
+        accessible_ids = [default_cal.id]
+
+    # If specific calendars requested, filter to only those the user can access
+    if calendar_ids:
+        filtered_ids = [cid for cid in calendar_ids if cid in accessible_ids]
+        if not filtered_ids:
+            raise HTTPException(status_code=403, detail="No access to requested calendars")
+        query_calendar_ids = filtered_ids
+    else:
+        query_calendar_ids = accessible_ids
+
     meal_plans = db.query(MealPlanModel).options(
         joinedload(MealPlanModel.recipe)
     ).filter(
-        MealPlanModel.user_id == current_user.id,
+        MealPlanModel.calendar_id.in_(query_calendar_ids),
         MealPlanModel.planned_date >= start,
         MealPlanModel.planned_date <= end
     ).order_by(
@@ -283,7 +492,8 @@ async def list_meal_plans(
     return MealPlanListResponse(
         items=meal_plans,
         start_date=start,
-        end_date=end
+        end_date=end,
+        calendar_ids=query_calendar_ids
     )
 
 
@@ -293,13 +503,16 @@ async def create_meal_plan(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Add a recipe or custom item to the meal plan."""
+    """Add a recipe or custom item to a calendar."""
+    # Verify user has edit access to the calendar
+    require_calendar_access(db, data.calendar_id, current_user, edit_required=True)
+
     # If recipe-based, verify recipe exists and user can access it
     if data.recipe_id:
         verify_recipe_access(db, data.recipe_id, current_user)
 
     meal_plan = MealPlanModel(
-        user_id=current_user.id,
+        calendar_id=data.calendar_id,
         recipe_id=data.recipe_id,
         custom_title=data.custom_title,
         custom_description=data.custom_description,
@@ -330,12 +543,14 @@ async def get_meal_plan(
     meal_plan = db.query(MealPlanModel).options(
         joinedload(MealPlanModel.recipe)
     ).filter(
-        MealPlanModel.id == meal_plan_id,
-        MealPlanModel.user_id == current_user.id
+        MealPlanModel.id == meal_plan_id
     ).first()
 
     if not meal_plan:
         raise HTTPException(status_code=404, detail="Meal plan entry not found")
+
+    # Check access to the calendar
+    require_calendar_access(db, meal_plan.calendar_id, current_user)
 
     return meal_plan
 
@@ -348,7 +563,17 @@ async def update_meal_plan(
     current_user: User = Depends(get_current_user)
 ):
     """Update a meal plan entry (date, meal type, servings, notes)."""
-    meal_plan = get_meal_plan_or_404(db, meal_plan_id, current_user)
+    meal_plan = db.query(MealPlanModel).options(
+        joinedload(MealPlanModel.recipe)
+    ).filter(
+        MealPlanModel.id == meal_plan_id
+    ).first()
+
+    if not meal_plan:
+        raise HTTPException(status_code=404, detail="Meal plan entry not found")
+
+    # Check edit access to the calendar
+    require_calendar_access(db, meal_plan.calendar_id, current_user, edit_required=True)
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -367,7 +592,15 @@ async def delete_meal_plan(
     current_user: User = Depends(get_current_user)
 ):
     """Remove a meal from the plan."""
-    meal_plan = get_meal_plan_or_404(db, meal_plan_id, current_user)
+    meal_plan = db.query(MealPlanModel).filter(
+        MealPlanModel.id == meal_plan_id
+    ).first()
+
+    if not meal_plan:
+        raise HTTPException(status_code=404, detail="Meal plan entry not found")
+
+    # Check edit access to the calendar
+    require_calendar_access(db, meal_plan.calendar_id, current_user, edit_required=True)
 
     db.delete(meal_plan)
     db.commit()
@@ -383,7 +616,17 @@ async def move_meal_plan(
     current_user: User = Depends(get_current_user)
 ):
     """Move a meal to a different date/slot."""
-    meal_plan = get_meal_plan_or_404(db, meal_plan_id, current_user)
+    meal_plan = db.query(MealPlanModel).options(
+        joinedload(MealPlanModel.recipe)
+    ).filter(
+        MealPlanModel.id == meal_plan_id
+    ).first()
+
+    if not meal_plan:
+        raise HTTPException(status_code=404, detail="Meal plan entry not found")
+
+    # Check edit access to the calendar
+    require_calendar_access(db, meal_plan.calendar_id, current_user, edit_required=True)
 
     meal_plan.planned_date = data.planned_date
     meal_plan.meal_type = data.meal_type
@@ -397,6 +640,7 @@ async def move_meal_plan(
 @router.post("/copy", response_model=List[MealPlanSchema])
 async def copy_meal_plans(
     data: MealPlanCopy,
+    calendar_id: Optional[str] = Query(None, description="Target calendar ID (defaults to source calendar)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -404,15 +648,27 @@ async def copy_meal_plans(
     if data.source_end < data.source_start:
         raise HTTPException(status_code=400, detail="Source end date must be after start date")
 
-    # Get source meals
+    # Get accessible calendar IDs
+    accessible_ids = get_user_accessible_calendar_ids(db, current_user)
+
+    # Get source meals from accessible calendars
     source_meals = db.query(MealPlanModel).filter(
-        MealPlanModel.user_id == current_user.id,
+        MealPlanModel.calendar_id.in_(accessible_ids),
         MealPlanModel.planned_date >= data.source_start,
         MealPlanModel.planned_date <= data.source_end
     ).all()
 
     if not source_meals:
         raise HTTPException(status_code=400, detail="No meals found in source date range")
+
+    # Determine target calendar
+    if calendar_id:
+        require_calendar_access(db, calendar_id, current_user, edit_required=True)
+        target_calendar_id = calendar_id
+    else:
+        # Use the calendar of the first source meal
+        target_calendar_id = source_meals[0].calendar_id
+        require_calendar_access(db, target_calendar_id, current_user, edit_required=True)
 
     # Create copies with adjusted dates
     new_meals = []
@@ -421,7 +677,7 @@ async def copy_meal_plans(
         new_date = data.target_start + timedelta(days=day_offset)
 
         new_meal = MealPlanModel(
-            user_id=current_user.id,
+            calendar_id=target_calendar_id,
             recipe_id=source.recipe_id,
             custom_title=source.custom_title,
             custom_description=source.custom_description,
@@ -445,10 +701,14 @@ async def copy_meal_plans(
 @router.post("/recurring", response_model=List[MealPlanSchema])
 async def create_recurring_meal(
     data: MealPlanRecurring,
+    calendar_id: str = Query(..., description="Calendar ID to add recurring meals to"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Create a recurring meal for a specific day of the week."""
+    # Verify calendar access
+    require_calendar_access(db, calendar_id, current_user, edit_required=True)
+
     # Verify recipe access
     verify_recipe_access(db, data.recipe_id, current_user)
 
@@ -478,7 +738,7 @@ async def create_recurring_meal(
     # Create meal for each matching day
     while current <= data.end_date:
         new_meal = MealPlanModel(
-            user_id=current_user.id,
+            calendar_id=calendar_id,
             recipe_id=data.recipe_id,
             planned_date=current,
             meal_type=data.meal_type,
@@ -506,20 +766,28 @@ async def delete_recurring_meals(
     current_user: User = Depends(get_current_user)
 ):
     """Delete all instances of a recurring meal."""
+    # Get accessible calendar IDs
+    accessible_ids = get_user_accessible_calendar_ids(db, current_user)
+
     query = db.query(MealPlanModel).filter(
-        MealPlanModel.user_id == current_user.id,
+        MealPlanModel.calendar_id.in_(accessible_ids),
         MealPlanModel.recurrence_id == recurrence_id
     )
 
     if future_only:
         query = query.filter(MealPlanModel.planned_date >= date.today())
 
+    # Check that user has edit access to the calendar of these meals
+    first_meal = query.first()
+    if first_meal:
+        require_calendar_access(db, first_meal.calendar_id, current_user, edit_required=True)
+
     count = query.count()
 
     if count == 0:
         raise HTTPException(status_code=404, detail="No recurring meals found")
 
-    query.delete()
+    query.delete(synchronize_session=False)
     db.commit()
 
     return {"status": "deleted", "count": count}
@@ -533,8 +801,15 @@ async def swap_meals(
     current_user: User = Depends(get_current_user)
 ):
     """Swap two meals (exchange their dates and meal types)."""
-    meal1 = get_meal_plan_or_404(db, meal_plan_id_1, current_user)
-    meal2 = get_meal_plan_or_404(db, meal_plan_id_2, current_user)
+    meal1 = db.query(MealPlanModel).filter(MealPlanModel.id == meal_plan_id_1).first()
+    meal2 = db.query(MealPlanModel).filter(MealPlanModel.id == meal_plan_id_2).first()
+
+    if not meal1 or not meal2:
+        raise HTTPException(status_code=404, detail="Meal plan entry not found")
+
+    # Check edit access to both calendars
+    require_calendar_access(db, meal1.calendar_id, current_user, edit_required=True)
+    require_calendar_access(db, meal2.calendar_id, current_user, edit_required=True)
 
     # Swap date and meal_type
     meal1.planned_date, meal2.planned_date = meal2.planned_date, meal1.planned_date
@@ -543,3 +818,68 @@ async def swap_meals(
     db.commit()
 
     return {"status": "swapped"}
+
+
+# ============================================================================
+# BACKWARDS COMPATIBILITY ENDPOINTS (to be deprecated)
+# ============================================================================
+
+@router.get("/shares", response_model=List[MealPlanCalendarShareResponse])
+async def list_shares_legacy(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """[DEPRECATED] List users you've shared your calendars with."""
+    # Get first calendar's shares for backwards compatibility
+    calendar = db.query(MealPlanCalendarModel).filter(
+        MealPlanCalendarModel.user_id == current_user.id
+    ).first()
+
+    if not calendar:
+        return []
+
+    shares = db.query(MealPlanShareModel).options(
+        joinedload(MealPlanShareModel.user)
+    ).filter(
+        MealPlanShareModel.calendar_id == calendar.id
+    ).all()
+
+    return shares
+
+
+@router.get("/shared-with-me", response_model=List[SharedMealPlanCalendarAccess])
+async def list_shared_with_me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List calendars shared with the current user."""
+    shares = db.query(
+        MealPlanShareModel,
+        MealPlanCalendarModel,
+        User
+    ).join(
+        MealPlanCalendarModel,
+        MealPlanCalendarModel.id == MealPlanShareModel.calendar_id
+    ).join(
+        User,
+        User.id == MealPlanCalendarModel.user_id
+    ).filter(
+        MealPlanShareModel.user_id == current_user.id
+    ).all()
+
+    result = []
+    for share, calendar, owner in shares:
+        result.append(SharedMealPlanCalendarAccess(
+            id=share.id,
+            calendar_id=calendar.id,
+            calendar_name=calendar.name,
+            owner={
+                "id": owner.id,
+                "name": owner.name,
+                "profile_image_url": owner.profile_image_url
+            },
+            permission=share.permission,
+            created_at=share.created_at
+        ))
+
+    return result

@@ -9,9 +9,11 @@ import type {
   Tag, ParsedIngredient, Ingredient, MeasurementUnit,
   UserSearchResult, UserProfilePublic, FollowResponse, Notification,
   SearchResponse, FullSearchResponse,
+  MealPlanCalendar, MealPlanCalendarCreateInput, MealPlanCalendarUpdateInput,
   MealPlan, MealPlanCreateInput, MealPlanUpdateInput, MealPlanMoveInput,
   MealPlanCopyInput, MealPlanRecurringInput, MealPlanListResponse,
-  MealPlanShare, SharedMealPlanAccess, MealPlanShareCreateInput, MealPlanShareUpdateInput,
+  MealPlanCalendarShare, SharedMealPlanCalendarAccess,
+  MealPlanCalendarShareCreateInput, MealPlanCalendarShareUpdateInput,
   GroceryList, GroceryListSummary, GroceryListItem, GroceryListCreateInput, GroceryListUpdateInput,
   GroceryListItemCreateInput, GroceryListItemUpdateInput, GroceryListGenerateInput,
   GroceryListShare, GroceryListShareCreateInput, GroceryListShareUpdateInput, SharedGroceryListAccess,
@@ -715,9 +717,60 @@ export const searchApi = {
 // ============================================================================
 
 export const mealPlanApi = {
-  list: async (start: string, end: string): Promise<MealPlanListResponse> => {
+  // Calendar CRUD
+  listCalendars: async (): Promise<MealPlanCalendar[]> => {
+    const response = await api.get<MealPlanCalendar[]>('/meal-plan/calendars');
+    return response.data;
+  },
+
+  createCalendar: async (data?: MealPlanCalendarCreateInput): Promise<MealPlanCalendar> => {
+    const response = await api.post<MealPlanCalendar>('/meal-plan/calendars', data || {});
+    return response.data;
+  },
+
+  updateCalendar: async (calendarId: string, data: MealPlanCalendarUpdateInput): Promise<MealPlanCalendar> => {
+    const response = await api.patch<MealPlanCalendar>(`/meal-plan/calendars/${calendarId}`, data);
+    return response.data;
+  },
+
+  deleteCalendar: async (calendarId: string): Promise<void> => {
+    await api.delete(`/meal-plan/calendars/${calendarId}`);
+  },
+
+  // Calendar sharing
+  listCalendarShares: async (calendarId: string): Promise<MealPlanCalendarShare[]> => {
+    const response = await api.get<MealPlanCalendarShare[]>(`/meal-plan/calendars/${calendarId}/shares`);
+    return response.data;
+  },
+
+  shareCalendar: async (calendarId: string, data: MealPlanCalendarShareCreateInput): Promise<MealPlanCalendarShare> => {
+    const response = await api.post<MealPlanCalendarShare>(`/meal-plan/calendars/${calendarId}/shares`, data);
+    return response.data;
+  },
+
+  updateCalendarShare: async (calendarId: string, userId: string, data: MealPlanCalendarShareUpdateInput): Promise<MealPlanCalendarShare> => {
+    const response = await api.patch<MealPlanCalendarShare>(`/meal-plan/calendars/${calendarId}/shares/${userId}`, data);
+    return response.data;
+  },
+
+  removeCalendarShare: async (calendarId: string, userId: string): Promise<void> => {
+    await api.delete(`/meal-plan/calendars/${calendarId}/shares/${userId}`);
+  },
+
+  leaveCalendar: async (calendarId: string): Promise<void> => {
+    await api.delete(`/meal-plan/calendars/${calendarId}/leave`);
+  },
+
+  // List shared with me (shows calendars shared with current user)
+  listSharedWithMe: async (): Promise<SharedMealPlanCalendarAccess[]> => {
+    const response = await api.get<SharedMealPlanCalendarAccess[]>('/meal-plan/shared-with-me');
+    return response.data;
+  },
+
+  // Meal plan item methods
+  list: async (start: string, end: string, calendarIds?: string[]): Promise<MealPlanListResponse> => {
     const response = await api.get<MealPlanListResponse>('/meal-plan', {
-      params: { start, end }
+      params: { start, end, calendar_ids: calendarIds }
     });
     return response.data;
   },
@@ -746,13 +799,17 @@ export const mealPlanApi = {
     return response.data;
   },
 
-  copy: async (data: MealPlanCopyInput): Promise<MealPlan[]> => {
-    const response = await api.post<MealPlan[]>('/meal-plan/copy', data);
+  copy: async (data: MealPlanCopyInput, calendarId?: string): Promise<MealPlan[]> => {
+    const response = await api.post<MealPlan[]>('/meal-plan/copy', data, {
+      params: calendarId ? { calendar_id: calendarId } : undefined
+    });
     return response.data;
   },
 
-  createRecurring: async (data: MealPlanRecurringInput): Promise<MealPlan[]> => {
-    const response = await api.post<MealPlan[]>('/meal-plan/recurring', data);
+  createRecurring: async (data: MealPlanRecurringInput, calendarId: string): Promise<MealPlan[]> => {
+    const response = await api.post<MealPlan[]>('/meal-plan/recurring', data, {
+      params: { calendar_id: calendarId }
+    });
     return response.data;
   },
 
@@ -768,42 +825,6 @@ export const mealPlanApi = {
       params: { meal_plan_id_1: mealPlanId1, meal_plan_id_2: mealPlanId2 }
     });
     return response.data;
-  },
-
-  // Sharing methods
-  listSharedWithMe: async (): Promise<SharedMealPlanAccess[]> => {
-    const response = await api.get<SharedMealPlanAccess[]>('/meal-plan/shared-with-me');
-    return response.data;
-  },
-
-  getSharedMealPlan: async (userId: string, start: string, end: string): Promise<MealPlanListResponse> => {
-    const response = await api.get<MealPlanListResponse>(`/meal-plan/shared/${userId}`, {
-      params: { start, end }
-    });
-    return response.data;
-  },
-
-  listShares: async (): Promise<MealPlanShare[]> => {
-    const response = await api.get<MealPlanShare[]>('/meal-plan/shares');
-    return response.data;
-  },
-
-  share: async (data: MealPlanShareCreateInput): Promise<MealPlanShare> => {
-    const response = await api.post<MealPlanShare>('/meal-plan/shares', data);
-    return response.data;
-  },
-
-  updateShare: async (userId: string, data: MealPlanShareUpdateInput): Promise<MealPlanShare> => {
-    const response = await api.put<MealPlanShare>(`/meal-plan/shares/${userId}`, data);
-    return response.data;
-  },
-
-  removeShare: async (userId: string): Promise<void> => {
-    await api.delete(`/meal-plan/shares/${userId}`);
-  },
-
-  leaveSharedMealPlan: async (ownerId: string): Promise<void> => {
-    await api.delete(`/meal-plan/shares/leave/${ownerId}`);
   },
 };
 

@@ -79,7 +79,7 @@ interface UseGroceryListReturn {
 
   // Generate from meal plan
   isGenerating: boolean;
-  generateFromMealPlan: (startDate: string, endDate: string, merge: boolean) => Promise<void>;
+  generateFromMealPlan: (startDate: string, endDate: string, merge: boolean, calendarIds?: string[]) => Promise<void>;
   isGenerateModalOpen: boolean;
   setIsGenerateModalOpen: (open: boolean) => void;
 
@@ -451,7 +451,8 @@ export function useGroceryList(): UseGroceryListReturn {
   const generateFromMealPlan = useCallback(async (
     startDate: string,
     endDate: string,
-    merge: boolean
+    merge: boolean,
+    calendarIds?: string[]
   ) => {
     if (!selectedListId) throw new Error('No list selected');
 
@@ -461,6 +462,7 @@ export function useGroceryList(): UseGroceryListReturn {
         start_date: startDate,
         end_date: endDate,
         merge,
+        calendar_ids: calendarIds,
       });
       setGroceryList(list);
       setIsGenerateModalOpen(false);

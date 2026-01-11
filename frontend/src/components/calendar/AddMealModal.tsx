@@ -18,6 +18,7 @@ interface AddMealModalProps {
   selectedDate?: Date;
   selectedMealType?: MealType;
   excludeRecipeIds?: Set<string>;
+  defaultCalendarId?: string | null;
 }
 
 export function AddMealModal({
@@ -28,6 +29,7 @@ export function AddMealModal({
   selectedDate,
   selectedMealType = 'dinner',
   excludeRecipeIds = new Set(),
+  defaultCalendarId,
 }: AddMealModalProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('recipe');
@@ -114,11 +116,17 @@ export function AddMealModal({
       return;
     }
 
+    if (!defaultCalendarId) {
+      setError('No calendar available');
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
     try {
       const newMeal = await mealPlanApi.create({
+        calendar_id: defaultCalendarId,
         custom_title: customTitle.trim(),
         custom_description: customDescription.trim() || undefined,
         planned_date: formatDateForApi(selectedDate),

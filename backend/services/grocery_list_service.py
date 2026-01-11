@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
 
 from models import (
-    GroceryList, GroceryListItem, MealPlan, Recipe,
-    RecipeIngredient, Ingredient, User
+    GroceryList, GroceryListItem, MealPlan, MealPlanCalendar, MealPlanShare,
+    Recipe, RecipeIngredient, Ingredient, User
 )
 
 
@@ -194,7 +194,8 @@ def generate_from_meal_plan(
     user: User,
     start_date: date,
     end_date: date,
-    merge: bool = False
+    merge: bool = False,
+    calendar_ids: Optional[List[str]] = None
 ) -> GroceryList:
     """
     Generate grocery list from meal plan for date range.
@@ -206,6 +207,7 @@ def generate_from_meal_plan(
         start_date: Start of date range
         end_date: End of date range
         merge: If True, merge with existing items. If False, replace.
+        calendar_ids: Optional list of calendar IDs to include. If None, uses all accessible calendars.
 
     Returns:
         Updated GroceryList
@@ -215,12 +217,39 @@ def generate_from_meal_plan(
     if not merge:
         clear_grocery_list(db, grocery_list, checked_only=False)
 
+    # Get accessible calendar IDs (owned + shared)
+    if calendar_ids is None:
+        # Get owned calendars
+        owned = db.query(MealPlanCalendar.id).filter(
+            MealPlanCalendar.user_id == user.id
+        ).all()
+        # Get shared calendars
+        shared = db.query(MealPlanShare.calendar_id).filter(
+            MealPlanShare.user_id == user.id
+        ).all()
+        accessible_calendar_ids = [c[0] for c in owned] + [c[0] for c in shared]
+    else:
+        # Verify user has access to requested calendars
+        owned = db.query(MealPlanCalendar.id).filter(
+            MealPlanCalendar.user_id == user.id,
+            MealPlanCalendar.id.in_(calendar_ids)
+        ).all()
+        shared = db.query(MealPlanShare.calendar_id).filter(
+            MealPlanShare.user_id == user.id,
+            MealPlanShare.calendar_id.in_(calendar_ids)
+        ).all()
+        accessible_calendar_ids = [c[0] for c in owned] + [c[0] for c in shared]
+
+    if not accessible_calendar_ids:
+        # No accessible calendars, return empty list
+        return grocery_list
+
     # Fetch meal plans with recipes and ingredients
     meal_plans = db.query(MealPlan).options(
         joinedload(MealPlan.recipe).joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient)
     ).filter(
         and_(
-            MealPlan.user_id == user.id,
+            MealPlan.calendar_id.in_(accessible_calendar_ids),
             MealPlan.planned_date >= start_date,
             MealPlan.planned_date <= end_date
         )

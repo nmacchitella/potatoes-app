@@ -497,6 +497,29 @@ export interface FullSearchResponse {
 }
 
 // ============================================================================
+// MEAL PLAN CALENDAR TYPES
+// ============================================================================
+
+export interface MealPlanCalendar {
+  id: string;
+  name: string;
+  is_owner: boolean;
+  permission?: 'viewer' | 'editor'; // Present if not owner (shared calendar)
+  owner?: ShareableUser; // Present if not owner (shared calendar)
+  share_count: number;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface MealPlanCalendarCreateInput {
+  name?: string;
+}
+
+export interface MealPlanCalendarUpdateInput {
+  name?: string;
+}
+
+// ============================================================================
 // MEAL PLAN TYPES
 // ============================================================================
 
@@ -512,6 +535,7 @@ export interface MealPlanRecipe {
 
 export interface MealPlan {
   id: string;
+  calendar_id: string;
   planned_date: string; // ISO date string YYYY-MM-DD
   meal_type: MealType;
   servings: number;
@@ -524,6 +548,7 @@ export interface MealPlan {
 }
 
 export interface MealPlanCreateInput {
+  calendar_id: string; // Required - which calendar to add to
   recipe_id?: string; // Optional - provide this for recipe-based items
   custom_title?: string; // Optional - provide this for custom items
   custom_description?: string; // Optional description for custom items
@@ -566,34 +591,45 @@ export interface MealPlanListResponse {
   items: MealPlan[];
   start_date: string;
   end_date: string;
+  calendar_ids: string[];
 }
 
-// Meal Plan Sharing
+// Meal Plan Calendar Sharing
 // Alias for backwards compatibility - use ShareableUser for new code
 export type MealPlanShareUser = ShareableUser;
 
-export interface MealPlanShare {
+export interface MealPlanCalendarShare {
   id: string;
+  calendar_id: string;
+  user_id: string;
   permission: 'viewer' | 'editor';
   created_at: string;
-  shared_with: MealPlanShareUser;
+  user: MealPlanShareUser;
 }
 
-export interface SharedMealPlanAccess {
+export interface SharedMealPlanCalendarAccess {
   id: string;
+  calendar_id: string;
+  calendar_name: string;
   owner: MealPlanShareUser;
   permission: 'viewer' | 'editor';
   created_at: string;
 }
 
-export interface MealPlanShareCreateInput {
+export interface MealPlanCalendarShareCreateInput {
   user_id: string;
   permission: 'viewer' | 'editor';
 }
 
-export interface MealPlanShareUpdateInput {
+export interface MealPlanCalendarShareUpdateInput {
   permission: 'viewer' | 'editor';
 }
+
+// Deprecated aliases for backwards compatibility
+export type MealPlanShare = MealPlanCalendarShare;
+export type SharedMealPlanAccess = SharedMealPlanCalendarAccess;
+export type MealPlanShareCreateInput = MealPlanCalendarShareCreateInput;
+export type MealPlanShareUpdateInput = MealPlanCalendarShareUpdateInput;
 
 // ============================================================================
 // GROCERY LIST TYPES
@@ -692,6 +728,7 @@ export interface GroceryListGenerateInput {
   start_date: string;
   end_date: string;
   merge: boolean;
+  calendar_ids?: string[];
 }
 
 export interface GroceryListShareCreateInput {

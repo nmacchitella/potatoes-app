@@ -68,6 +68,7 @@ class User(Base):
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")
     settings = relationship("UserSettings", back_populates="user", uselist=False, cascade="all, delete-orphan")
     grocery_lists = relationship("GroceryList", back_populates="user", cascade="all, delete-orphan")
+    meal_plan_calendars = relationship("MealPlanCalendar", back_populates="user", cascade="all, delete-orphan")
 
 
 class RefreshToken(Base):
@@ -312,12 +313,28 @@ class UserSettings(Base):
 # MEAL PLANNING MODELS
 # ============================================================================
 
+class MealPlanCalendar(Base):
+    """User's meal plan calendar - users can have multiple calendars."""
+    __tablename__ = "meal_plan_calendars"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    name = Column(String(200), default="Meal Plan")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", back_populates="meal_plan_calendars")
+    items = relationship("MealPlan", back_populates="calendar", cascade="all, delete-orphan")
+    shares = relationship("MealPlanShare", back_populates="calendar", cascade="all, delete-orphan")
+
+
 class MealPlan(Base):
     """Represents a recipe or custom item scheduled for a specific date and meal slot."""
     __tablename__ = "meal_plans"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    calendar_id = Column(String, ForeignKey("meal_plan_calendars.id", ondelete='CASCADE'), nullable=False)
     recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=True)  # Nullable for custom items
     planned_date = Column(Date, nullable=False)
     meal_type = Column(String(20), nullable=False)  # breakfast, lunch, dinner, snack
@@ -335,31 +352,31 @@ class MealPlan(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
-        Index('ix_meal_plans_user_date', 'user_id', 'planned_date'),
+        Index('ix_meal_plans_calendar_date', 'calendar_id', 'planned_date'),
     )
 
     # Relationships
-    user = relationship("User", backref="meal_plans")
+    calendar = relationship("MealPlanCalendar", back_populates="items")
     recipe = relationship("Recipe", back_populates="meal_plans")
 
 
 class MealPlanShare(Base):
-    """Represents sharing meal plans with another user (e.g., family member)."""
+    """Tracks which users a meal plan calendar is shared with."""
     __tablename__ = "meal_plan_shares"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    owner_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
-    shared_with_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
-    permission = Column(String(20), default="viewer")  # viewer, editor
+    calendar_id = Column(String, ForeignKey("meal_plan_calendars.id", ondelete='CASCADE'), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    permission = Column(String(20), default="editor")  # viewer, editor
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
-        UniqueConstraint('owner_id', 'shared_with_id', name='uq_meal_plan_share'),
+        UniqueConstraint('calendar_id', 'user_id', name='uq_meal_plan_calendar_user'),
     )
 
     # Relationships
-    owner = relationship("User", foreign_keys=[owner_id], backref="meal_plan_shares_given")
-    shared_with = relationship("User", foreign_keys=[shared_with_id], backref="meal_plan_shares_received")
+    calendar = relationship("MealPlanCalendar", back_populates="shares")
+    user = relationship("User", foreign_keys=[user_id], backref="received_meal_plan_shares")
 
 
 class LibraryShare(Base):

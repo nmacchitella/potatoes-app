@@ -660,11 +660,41 @@ class RecipeImportMultiResponse(BaseModel):
 
 
 # ============================================================================
+# MEAL PLAN CALENDAR SCHEMAS
+# ============================================================================
+
+class MealPlanCalendarCreate(BaseModel):
+    """Create a new meal plan calendar."""
+    name: str = Field(default="Meal Plan", min_length=1, max_length=200)
+
+
+class MealPlanCalendarUpdate(BaseModel):
+    """Update a meal plan calendar."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+
+
+class MealPlanCalendarSummary(BaseModel):
+    """Summary info for calendar sidebar."""
+    id: str
+    name: str
+    is_owner: bool = True  # True if user owns this calendar
+    permission: Optional[str] = None  # 'viewer' or 'editor' if shared, None if owner
+    owner: Optional[ShareableUser] = None  # Present if not owner (shared calendar)
+    share_count: int = 0  # Number of users the calendar is shared with
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
 # MEAL PLAN SCHEMAS
 # ============================================================================
 
 class MealPlanCreate(BaseModel):
     """Create a new meal plan entry (recipe-based or custom item)."""
+    calendar_id: str  # Required - which calendar to add to
     recipe_id: Optional[str] = None
     custom_title: Optional[str] = Field(None, max_length=255)
     custom_description: Optional[str] = None
@@ -730,6 +760,7 @@ class MealPlanRecipe(BaseModel):
 class MealPlan(BaseModel):
     """Meal plan entry response."""
     id: str
+    calendar_id: str
     planned_date: date
     meal_type: str
     servings: float
@@ -749,33 +780,36 @@ class MealPlanListResponse(BaseModel):
     items: List[MealPlan]
     start_date: date
     end_date: date
+    calendar_ids: List[str] = []  # Which calendars these items come from
 
 
 # ============================================================================
-# MEAL PLAN SHARING SCHEMAS
+# MEAL PLAN CALENDAR SHARING SCHEMAS
 # ============================================================================
 
 # Alias for backwards compatibility - use ShareableUser for new code
 MealPlanShareUser = ShareableUser
 
 
-class MealPlanShareCreate(BaseModel):
-    """Create a meal plan share."""
+class MealPlanCalendarShareCreate(BaseModel):
+    """Create a calendar share."""
     user_id: str
-    permission: str = "viewer"  # viewer, editor
+    permission: str = "editor"  # viewer, editor
 
 
-class MealPlanShareUpdate(BaseModel):
-    """Update a meal plan share."""
+class MealPlanCalendarShareUpdate(BaseModel):
+    """Update a calendar share."""
     permission: str  # viewer, editor
 
 
-class MealPlanShareResponse(BaseModel):
-    """Meal plan share response."""
+class MealPlanCalendarShareResponse(BaseModel):
+    """Calendar share response."""
     id: str
+    calendar_id: str
+    user_id: str
     permission: str
     created_at: datetime
-    shared_with: MealPlanShareUser
+    user: MealPlanShareUser  # The user the calendar is shared with
 
     class Config:
         from_attributes = True
@@ -785,15 +819,24 @@ class MealPlanShareResponse(BaseModel):
 SharedMealPlanOwner = ShareableUser
 
 
-class SharedMealPlanAccess(BaseModel):
-    """Info about a meal plan shared with the current user."""
-    id: str
+class SharedMealPlanCalendarAccess(BaseModel):
+    """Info about a calendar shared with the current user."""
+    id: str  # share id
+    calendar_id: str
+    calendar_name: str
     owner: SharedMealPlanOwner
     permission: str
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+# Deprecated aliases for backwards compatibility
+MealPlanShareCreate = MealPlanCalendarShareCreate
+MealPlanShareUpdate = MealPlanCalendarShareUpdate
+MealPlanShareResponse = MealPlanCalendarShareResponse
+SharedMealPlanAccess = SharedMealPlanCalendarAccess
 
 
 # ============================================================================
@@ -914,6 +957,7 @@ class GroceryListGenerateRequest(BaseModel):
     start_date: date
     end_date: date
     merge: bool = False  # True = merge with existing, False = replace
+    calendar_ids: Optional[List[str]] = None  # Filter by specific calendars
 
 
 class GroceryListBulkCheckRequest(BaseModel):

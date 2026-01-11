@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { mealPlanApi, authApi } from '@/lib/api';
+import { mealPlanApi, authApi, getErrorMessage } from '@/lib/api';
 import {
   CalendarViewMode,
   DAYS,
@@ -12,7 +12,7 @@ import {
   isToday as checkIsToday,
   isCurrentMonth,
 } from '@/lib/calendar-utils';
-import type { MealPlan, MealType, UserSettings, SearchRecipeResult } from '@/types';
+import type { MealPlan, MealType, UserSettings, SearchRecipeResult, MealPlanCalendar } from '@/types';
 
 interface ClipboardState {
   meal: MealPlan;
@@ -53,6 +53,18 @@ interface UseCalendarReturn {
   goMobile3DayToday: () => void;
   mobileSelectedDate: Date | null;
   setMobileSelectedDate: (date: Date | null) => void;
+
+  // Calendars
+  calendars: MealPlanCalendar[];
+  calendarsLoading: boolean;
+  selectedCalendarIds: string[];
+  toggleCalendar: (calendarId: string) => void;
+  selectAllCalendars: () => void;
+  createCalendar: (name?: string) => Promise<MealPlanCalendar>;
+  renameCalendar: (calendarId: string, name: string) => Promise<void>;
+  deleteCalendar: (calendarId: string) => Promise<void>;
+  leaveCalendar: (calendarId: string) => Promise<void>;
+  getDefaultCalendarId: () => string | null;
 
   // Meal plans
   mealPlans: MealPlan[];
@@ -154,6 +166,12 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
       setViewMode(newMode);
     }
   }, [searchParams]);
+
+  // Calendar state
+  const [calendars, setCalendars] = useState<MealPlanCalendar[]>([]);
+  const [calendarsLoading, setCalendarsLoading] = useState(true);
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>([]);
+
   const [mealPlans, setMealPlans] = useState<MealPlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
@@ -246,13 +264,87 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
       .catch(err => console.error('Failed to fetch user settings:', err));
   }, []);
 
+  // Fetch calendars on mount
+  const fetchCalendars = useCallback(async () => {
+    setCalendarsLoading(true);
+    try {
+      const data = await mealPlanApi.listCalendars();
+      setCalendars(data);
+      // Select all calendars by default if none selected
+      if (selectedCalendarIds.length === 0 && data.length > 0) {
+        setSelectedCalendarIds(data.map(c => c.id));
+      }
+    } catch (err) {
+      console.error('Failed to fetch calendars:', err);
+    } finally {
+      setCalendarsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isActive) {
+      fetchCalendars();
+    }
+  }, [isActive, fetchCalendars]);
+
+  // Calendar management functions
+  const toggleCalendar = useCallback((calendarId: string) => {
+    setSelectedCalendarIds(prev => {
+      if (prev.includes(calendarId)) {
+        // Don't allow deselecting all calendars
+        if (prev.length === 1) return prev;
+        return prev.filter(id => id !== calendarId);
+      }
+      return [...prev, calendarId];
+    });
+  }, []);
+
+  const selectAllCalendars = useCallback(() => {
+    setSelectedCalendarIds(calendars.map(c => c.id));
+  }, [calendars]);
+
+  const createCalendar = useCallback(async (name?: string): Promise<MealPlanCalendar> => {
+    const calendar = await mealPlanApi.createCalendar(name ? { name } : undefined);
+    setCalendars(prev => [...prev, calendar]);
+    setSelectedCalendarIds(prev => [...prev, calendar.id]);
+    return calendar;
+  }, []);
+
+  const renameCalendar = useCallback(async (calendarId: string, name: string) => {
+    const updated = await mealPlanApi.updateCalendar(calendarId, { name });
+    setCalendars(prev => prev.map(c => c.id === calendarId ? updated : c));
+  }, []);
+
+  const deleteCalendar = useCallback(async (calendarId: string) => {
+    await mealPlanApi.deleteCalendar(calendarId);
+    setCalendars(prev => prev.filter(c => c.id !== calendarId));
+    setSelectedCalendarIds(prev => prev.filter(id => id !== calendarId));
+  }, []);
+
+  const leaveCalendar = useCallback(async (calendarId: string) => {
+    await mealPlanApi.leaveCalendar(calendarId);
+    setCalendars(prev => prev.filter(c => c.id !== calendarId));
+    setSelectedCalendarIds(prev => prev.filter(id => id !== calendarId));
+  }, []);
+
+  const getDefaultCalendarId = useCallback((): string | null => {
+    // Return first owned calendar
+    const ownedCalendar = calendars.find(c => c.is_owner);
+    return ownedCalendar?.id || calendars[0]?.id || null;
+  }, [calendars]);
+
   // Fetch meal plans when active and date range changes
   const fetchMealPlans = useCallback(async () => {
+    if (selectedCalendarIds.length === 0) {
+      setMealPlans([]);
+      return;
+    }
     setLoading(true);
     try {
       const response = await mealPlanApi.list(
         formatDateForApi(calendarStartDate),
-        formatDateForApi(calendarEndDate)
+        formatDateForApi(calendarEndDate),
+        selectedCalendarIds
       );
       setMealPlans(response.items);
     } catch (err) {
@@ -260,13 +352,13 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     } finally {
       setLoading(false);
     }
-  }, [calendarStartDate, calendarEndDate]);
+  }, [calendarStartDate, calendarEndDate, selectedCalendarIds]);
 
   useEffect(() => {
-    if (isActive) {
+    if (isActive && !calendarsLoading) {
       fetchMealPlans();
     }
-  }, [isActive, fetchMealPlans]);
+  }, [isActive, calendarsLoading, fetchMealPlans]);
 
   // Navigation
   const goToPrevious = useCallback(() => {
@@ -341,8 +433,11 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
   // Select recipe handler
   const handleSelectRecipe = useCallback(async (recipe: SearchRecipeResult) => {
     if (!selectedSlot) return;
+    const calendarId = getDefaultCalendarId();
+    if (!calendarId) throw new Error('No calendar available');
     try {
       const newMeal = await mealPlanApi.create({
+        calendar_id: calendarId,
         recipe_id: recipe.id,
         planned_date: formatDateForApi(selectedSlot.date),
         meal_type: selectedSlot.mealType,
@@ -354,7 +449,7 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
       console.error('Failed to add meal:', err);
       throw err;
     }
-  }, [selectedSlot, userSettings, closeAddModal]);
+  }, [selectedSlot, userSettings, closeAddModal, getDefaultCalendarId]);
 
   // Delete meal
   const handleDeleteMeal = useCallback(async (mealId: string, e: React.MouseEvent) => {
@@ -390,8 +485,11 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     try {
       if (clipboard.action === 'copy') {
         // Handle both recipe-based and custom items
+        // Use the same calendar as the original meal
+        const calendarId = clipboard.meal.calendar_id;
         const isCustom = !clipboard.meal.recipe;
         const newMeal = await mealPlanApi.create({
+          calendar_id: calendarId,
           recipe_id: isCustom ? undefined : clipboard.meal.recipe?.id,
           custom_title: isCustom ? clipboard.meal.custom_title : undefined,
           custom_description: isCustom ? clipboard.meal.custom_description : undefined,
@@ -548,11 +646,13 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     try {
       const mealDate = repeatMeal.planned_date;
       const startDate = new Date(mealDate + 'T00:00:00');
+      const calendarId = repeatMeal.calendar_id;
       const newMeals: MealPlan[] = [];
       for (let i = 1; i <= repeatWeeksCount; i++) {
         const targetDate = new Date(startDate);
         targetDate.setDate(targetDate.getDate() + (7 * i));
         const newMeal = await mealPlanApi.create({
+          calendar_id: calendarId,
           recipe_id: repeatMeal.recipe.id,
           planned_date: formatDateForApi(targetDate),
           meal_type: repeatMeal.meal_type,
@@ -586,6 +686,18 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     goMobile3DayToday,
     mobileSelectedDate,
     setMobileSelectedDate,
+    // Calendars
+    calendars,
+    calendarsLoading,
+    selectedCalendarIds,
+    toggleCalendar,
+    selectAllCalendars,
+    createCalendar,
+    renameCalendar,
+    deleteCalendar,
+    leaveCalendar,
+    getDefaultCalendarId,
+    // Meal plans
     mealPlans,
     loading,
     getMealsForSlot,

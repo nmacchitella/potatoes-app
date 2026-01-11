@@ -376,7 +376,8 @@ async def generate_grocery_list(
         user=current_user,
         start_date=request.start_date,
         end_date=request.end_date,
-        merge=request.merge
+        merge=request.merge,
+        calendar_ids=request.calendar_ids
     )
 
     # Reload with relationships

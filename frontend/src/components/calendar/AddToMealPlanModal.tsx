@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { mealPlanApi, authApi } from '@/lib/api';
 import { formatDateForApi, getStartOfWeek } from '@/lib/calendar-utils';
-import type { MealType, MealPlan, UserSettings } from '@/types';
+import type { MealType, MealPlan, UserSettings, MealPlanCalendar } from '@/types';
 
 interface AddToMealPlanModalProps {
   isOpen: boolean;
@@ -39,9 +39,27 @@ export function AddToMealPlanModal({
   const [existingMeals, setExistingMeals] = useState<MealPlan[]>([]);
   const [loadingMeals, setLoadingMeals] = useState(false);
 
-  // Load user settings for default servings
+  // Calendar state
+  const [calendars, setCalendars] = useState<MealPlanCalendar[]>([]);
+  const [selectedCalendarId, setSelectedCalendarId] = useState<string | null>(null);
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
+
+  // Load calendars and user settings when modal opens
   useEffect(() => {
     if (isOpen) {
+      // Load calendars
+      setLoadingCalendars(true);
+      mealPlanApi.listCalendars()
+        .then(data => {
+          setCalendars(data);
+          // Select first owned calendar by default
+          const ownedCalendar = data.find(c => c.is_owner);
+          setSelectedCalendarId(ownedCalendar?.id || data[0]?.id || null);
+        })
+        .catch(err => console.error('Failed to fetch calendars:', err))
+        .finally(() => setLoadingCalendars(false));
+
+      // Load user settings
       authApi.getSettings()
         .then(settings => {
           setUserSettings(settings);
@@ -116,13 +134,14 @@ export function AddToMealPlanModal({
   };
 
   const handleSubmit = async () => {
-    if (!selectedDate || !selectedMealType) return;
+    if (!selectedDate || !selectedMealType || !selectedCalendarId) return;
 
     setIsSubmitting(true);
     setError(null);
 
     try {
       await mealPlanApi.create({
+        calendar_id: selectedCalendarId,
         recipe_id: recipeId,
         planned_date: selectedDate,
         meal_type: selectedMealType,
@@ -343,26 +362,49 @@ export function AddToMealPlanModal({
 
         {/* Footer */}
         <div className="border-t border-border bg-cream/30 p-4 shrink-0">
-          <div className="flex items-center justify-between">
-            {/* Servings control */}
-            <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-charcoal">Servings:</label>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            {/* Calendar selector + Servings control */}
+            <div className="flex items-center gap-4">
+              {/* Calendar selector */}
+              {calendars.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-charcoal">Calendar:</label>
+                  <select
+                    value={selectedCalendarId || ''}
+                    onChange={(e) => setSelectedCalendarId(e.target.value)}
+                    className="px-2 py-1.5 text-sm border border-border rounded-lg bg-white"
+                    disabled={loadingCalendars}
+                  >
+                    {calendars.map(cal => (
+                      <option key={cal.id} value={cal.id}>
+                        {cal.name}
+                        {!cal.is_owner && cal.owner ? ` (${cal.owner.name})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Servings control */}
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setServings(s => Math.max(1, s - 1))}
-                  className="w-7 h-7 rounded-lg bg-cream hover:bg-cream-dark flex items-center justify-center text-charcoal transition-colors text-sm"
-                >
-                  -
-                </button>
-                <span className="w-6 text-center text-charcoal font-medium">{servings}</span>
-                <button
-                  type="button"
-                  onClick={() => setServings(s => s + 1)}
-                  className="w-7 h-7 rounded-lg bg-cream hover:bg-cream-dark flex items-center justify-center text-charcoal transition-colors text-sm"
-                >
-                  +
-                </button>
+                <label className="text-sm font-medium text-charcoal">Servings:</label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setServings(s => Math.max(1, s - 1))}
+                    className="w-7 h-7 rounded-lg bg-cream hover:bg-cream-dark flex items-center justify-center text-charcoal transition-colors text-sm"
+                  >
+                    -
+                  </button>
+                  <span className="w-6 text-center text-charcoal font-medium">{servings}</span>
+                  <button
+                    type="button"
+                    onClick={() => setServings(s => s + 1)}
+                    className="w-7 h-7 rounded-lg bg-cream hover:bg-cream-dark flex items-center justify-center text-charcoal transition-colors text-sm"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -388,7 +430,7 @@ export function AddToMealPlanModal({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting || !selectedDate || !selectedMealType}
+                disabled={isSubmitting || !selectedDate || !selectedMealType || !selectedCalendarId}
                 className="px-5 py-2 bg-gold hover:bg-gold-dark text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? 'Adding...' : 'Add to Plan'}
