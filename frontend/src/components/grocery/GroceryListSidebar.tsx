@@ -106,7 +106,7 @@ export function GroceryListSidebar({
       <div className="p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">
-            My Lists
+            Lists
           </span>
           <button
             onClick={() => setIsCreating(true)}
@@ -168,138 +168,138 @@ export function GroceryListSidebar({
           </div>
         )}
 
-        {/* Grocery lists */}
+        {/* Grocery lists - unified view (own + shared) */}
         <div className="space-y-0.5">
-          {myLists.length === 0 ? (
+          {myLists.length === 0 && acceptedShares.length === 0 ? (
             <p className="px-3 py-2 text-sm text-warm-gray">
               No lists yet
             </p>
           ) : (
-            myLists.map((list) => (
-              <div key={list.id}>
-                {editingListId === list.id ? (
-                  <div className="flex items-center gap-1 p-2 bg-cream-dark rounded-lg">
-                    <input
-                      type="text"
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleRenameList(list.id);
-                        if (e.key === 'Escape') {
-                          setEditingListId(null);
-                          setEditingName('');
-                        }
-                      }}
-                      className="flex-1 px-2 py-1 text-sm border border-gold rounded focus:outline-none"
-                      autoFocus
-                    />
-                    <button
-                      onClick={() => handleRenameList(list.id)}
-                      className="p-1 text-green-600 hover:text-green-700"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => { setEditingListId(null); setEditingName(''); }}
-                      className="p-1 text-warm-gray hover:text-charcoal"
-                    >
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ) : showDeleteConfirm === list.id ? (
-                  <div className="p-2 bg-red-50 rounded-lg">
-                    <p className="text-sm text-red-700 mb-2">Delete &quot;{list.name}&quot;?</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleDeleteList(list.id)}
-                        className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        onClick={() => setShowDeleteConfirm(null)}
-                        className="px-2 py-1 text-xs text-warm-gray hover:text-charcoal"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
-                    selectedListId === list.id
-                      ? 'bg-charcoal/5 text-charcoal font-medium'
-                      : 'hover:bg-cream-dark'
-                  }`}>
-                    <button
-                      onClick={() => onSelectList(list.id)}
-                      className="flex-1 text-left text-sm min-w-0"
-                    >
-                      <span className="block truncate">{list.name}</span>
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingListId(list.id);
-                          setEditingName(list.name);
+            <>
+              {/* Own lists */}
+              {myLists.map((list) => (
+                <div key={list.id}>
+                  {editingListId === list.id ? (
+                    <div className="flex items-center gap-1 p-2 bg-cream-dark rounded-lg">
+                      <input
+                        type="text"
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameList(list.id);
+                          if (e.key === 'Escape') {
+                            setEditingListId(null);
+                            setEditingName('');
+                          }
                         }}
-                        className="p-1 text-warm-gray hover:text-gold"
-                        title="Rename"
+                        className="flex-1 px-2 py-1 text-sm border border-gold rounded focus:outline-none"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleRenameList(list.id)}
+                        className="p-1 text-green-600 hover:text-green-700"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
                       </button>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowDeleteConfirm(list.id);
-                        }}
-                        className="p-1 text-warm-gray hover:text-red-500"
-                        title="Delete"
+                        onClick={() => { setEditingListId(null); setEditingName(''); }}
+                        className="p-1 text-warm-gray hover:text-charcoal"
                       >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Shared with me section */}
-        {acceptedShares.length > 0 && (
-          <div className="mt-4">
-            <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-2 px-3">
-              Shared with me
-            </span>
-            <div className="space-y-0.5">
+                  ) : showDeleteConfirm === list.id ? (
+                    <div className="p-2 bg-red-50 rounded-lg">
+                      <p className="text-sm text-red-700 mb-2">Delete &quot;{list.name}&quot;?</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleDeleteList(list.id)}
+                          className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                        >
+                          Delete
+                        </button>
+                        <button
+                          onClick={() => setShowDeleteConfirm(null)}
+                          className="px-2 py-1 text-xs text-warm-gray hover:text-charcoal"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
+                      selectedListId === list.id
+                        ? 'bg-charcoal/5 text-charcoal font-medium'
+                        : 'hover:bg-cream-dark'
+                    }`}>
+                      <button
+                        onClick={() => onSelectList(list.id)}
+                        className="flex-1 text-left text-sm min-w-0"
+                      >
+                        <span className="block truncate">{list.name}</span>
+                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingListId(list.id);
+                            setEditingName(list.name);
+                          }}
+                          className="p-1 text-warm-gray hover:text-gold"
+                          title="Rename"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDeleteConfirm(list.id);
+                          }}
+                          className="p-1 text-warm-gray hover:text-red-500"
+                          title="Delete"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {/* Shared lists - integrated with shared icon */}
               {acceptedShares.map((share) => (
-                <button
+                <div
                   key={share.id}
-                  onClick={() => onSelectList(share.grocery_list_id)}
-                  className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm text-left transition-colors ${
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
                     selectedListId === share.grocery_list_id
                       ? 'bg-charcoal/5 text-charcoal font-medium'
                       : 'hover:bg-cream-dark'
                   }`}
                 >
-                  <div className="min-w-0">
+                  <button
+                    onClick={() => onSelectList(share.grocery_list_id)}
+                    className="flex-1 text-left text-sm min-w-0"
+                  >
                     <span className="block truncate">{share.grocery_list_name}</span>
                     <span className="text-[10px] text-warm-gray">by {share.owner.name}</span>
-                  </div>
-                </button>
+                  </button>
+                  <span title={`Shared by ${share.owner.name}`}>
+                    <svg className="w-4 h-4 text-warm-gray" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                  </span>
+                </div>
               ))}
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
 
         {/* Pending invitations */}
         {pendingShares.length > 0 && (

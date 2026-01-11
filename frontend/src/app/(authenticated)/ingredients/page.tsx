@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { ingredientApi, getErrorMessage } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
+import MainNavigation from '@/components/layout/MainNavigation';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { Ingredient } from '@/types';
 
@@ -118,25 +119,26 @@ export default function IngredientsPage() {
       <Navbar />
       <MobileNavWrapper />
 
-      <main className="max-w-4xl mx-auto px-4 md:px-8 py-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-serif text-charcoal">Ingredients</h1>
-            <p className="text-sm text-warm-gray mt-1">
-              Manage ingredient categories for better grocery list organization
-            </p>
-          </div>
-          <Link
-            href="/grocery"
-            className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:text-gold transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-            </svg>
-            <span className="hidden sm:inline">Grocery List</span>
-          </Link>
-        </div>
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
+        <div className="flex gap-8">
+          {/* Desktop Sidebar */}
+          <aside className="hidden lg:block w-56 flex-shrink-0">
+            <div className="sticky top-24">
+              <MainNavigation currentPage="ingredients" />
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1 min-w-0">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-2xl font-serif text-charcoal">Ingredients</h1>
+                <p className="text-sm text-warm-gray mt-1">
+                  Manage ingredient categories for better grocery list organization
+                </p>
+              </div>
+            </div>
 
         {/* Search and Filter */}
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -287,7 +289,9 @@ export default function IngredientsPage() {
             </div>
           </>
         )}
-      </main>
+          </main>
+        </div>
+      </div>
     </div>
   );
 }
