@@ -17,6 +17,7 @@ import math
 from database import get_db
 from auth import get_current_user, get_current_user_optional
 from models import User, Recipe, Tag, Collection, recipe_sub_recipes
+from routers.library_router import get_library_partners
 from schemas import (
     RecipeCreate, RecipeUpdate, Recipe as RecipeSchema,
     RecipeSummary, RecipeListResponse, RecipeWithScale, ForkedFromInfo, ClonedByMeInfo,
@@ -57,9 +58,13 @@ async def list_recipes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List current user's recipes with optional filters."""
+    """List current user's recipes and library partners' recipes with optional filters."""
+    # Get library partners (users who share their library with us)
+    partner_ids = get_library_partners(db, current_user.id)
+    all_user_ids = [current_user.id] + partner_ids
+
     query = db.query(Recipe).filter(
-        Recipe.author_id == current_user.id,
+        Recipe.author_id.in_(all_user_ids),
         Recipe.deleted_at.is_(None)
     )
 

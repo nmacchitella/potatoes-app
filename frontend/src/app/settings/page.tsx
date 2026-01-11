@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { authApi } from '@/lib/api';
+import { authApi, libraryApi, socialApi } from '@/lib/api';
 import { useStore } from '@/store/useStore';
+import type { LibraryPartner, PendingLibraryInvite, LibraryShareResponse, UserSearchResult } from '@/types';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 
@@ -52,6 +53,17 @@ export default function SettingsPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  // Library sharing state
+  const [partners, setPartners] = useState<LibraryPartner[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingLibraryInvite[]>([]);
+  const [sentInvites, setSentInvites] = useState<LibraryShareResponse[]>([]);
+  const [loadingLibrary, setLoadingLibrary] = useState(true);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<UserSearchResult[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [invitingUser, setInvitingUser] = useState<string | null>(null);
+  const [libraryActionLoading, setLibraryActionLoading] = useState<string | null>(null);
+
   useEffect(() => {
     if (user) {
       setProfileForm({
@@ -60,8 +72,122 @@ export default function SettingsPage() {
         is_public: user.is_public || false,
       });
       loadSettings();
+      loadLibraryData();
     }
   }, [user]);
+
+  const loadLibraryData = useCallback(async () => {
+    setLoadingLibrary(true);
+    try {
+      const [partnersData, pendingData, sentData] = await Promise.all([
+        libraryApi.getPartners(),
+        libraryApi.getPendingInvites(),
+        libraryApi.getSentInvites(),
+      ]);
+      setPartners(partnersData);
+      setPendingInvites(pendingData);
+      setSentInvites(sentData);
+    } catch (error) {
+      console.error('Failed to load library data:', error);
+    } finally {
+      setLoadingLibrary(false);
+    }
+  }, []);
+
+  // User search for library sharing
+  useEffect(() => {
+    if (!userSearchQuery.trim() || userSearchQuery.length < 2) {
+      setUserSearchResults([]);
+      return;
+    }
+    setSearchingUsers(true);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await socialApi.searchUsers(userSearchQuery);
+        // Filter out current user and existing partners
+        const partnerIds = new Set(partners.map(p => p.id));
+        const pendingIds = new Set([
+          ...pendingInvites.map(i => i.inviter.id),
+          ...sentInvites.map(i => i.invitee.id),
+        ]);
+        const filtered = results.filter(u =>
+          u.id !== user?.id &&
+          !partnerIds.has(u.id) &&
+          !pendingIds.has(u.id)
+        );
+        setUserSearchResults(filtered);
+      } catch (error) {
+        console.error('User search failed:', error);
+      } finally {
+        setSearchingUsers(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [userSearchQuery, partners, pendingInvites, sentInvites, user?.id]);
+
+  const handleInviteUser = async (userId: string) => {
+    setInvitingUser(userId);
+    try {
+      const invite = await libraryApi.invite({ invitee_id: userId });
+      setSentInvites(prev => [...prev, invite]);
+      setUserSearchQuery('');
+      setUserSearchResults([]);
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to send invitation');
+    } finally {
+      setInvitingUser(null);
+    }
+  };
+
+  const handleAcceptInvite = async (shareId: string) => {
+    setLibraryActionLoading(shareId);
+    try {
+      await libraryApi.acceptInvite(shareId);
+      // Reload all data to get updated partners list
+      await loadLibraryData();
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to accept invitation');
+    } finally {
+      setLibraryActionLoading(null);
+    }
+  };
+
+  const handleDeclineInvite = async (shareId: string) => {
+    setLibraryActionLoading(shareId);
+    try {
+      await libraryApi.declineInvite(shareId);
+      setPendingInvites(prev => prev.filter(i => i.id !== shareId));
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to decline invitation');
+    } finally {
+      setLibraryActionLoading(null);
+    }
+  };
+
+  const handleCancelInvite = async (shareId: string) => {
+    setLibraryActionLoading(shareId);
+    try {
+      await libraryApi.cancelInvite(shareId);
+      setSentInvites(prev => prev.filter(i => i.id !== shareId));
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to cancel invitation');
+    } finally {
+      setLibraryActionLoading(null);
+    }
+  };
+
+  const handleRemovePartner = async (partnerId: string) => {
+    if (!confirm('Stop sharing recipes with this person? You will no longer see each other\'s recipes.')) return;
+    setLibraryActionLoading(partnerId);
+    try {
+      await libraryApi.removePartner(partnerId);
+      setPartners(prev => prev.filter(p => p.id !== partnerId));
+    } catch (error: any) {
+      alert(error.response?.data?.detail || 'Failed to remove partner');
+    } finally {
+      setLibraryActionLoading(null);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -254,6 +380,183 @@ export default function SettingsPage() {
                 {profileSaving ? 'Saving...' : 'Save Profile'}
               </button>
             </form>
+          </section>
+
+          {/* Library Sharing Section */}
+          <section className="card">
+            <h2 className="font-serif text-2xl text-charcoal mb-2">Library Sharing</h2>
+            <p className="text-warm-gray text-sm mb-6">
+              Share your entire recipe library with family or partners. Both users can see and edit all recipes and collections.
+            </p>
+
+            {loadingLibrary ? (
+              <div className="animate-pulse space-y-3">
+                <div className="h-12 bg-cream-dark rounded" />
+                <div className="h-12 bg-cream-dark rounded" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Current Partners */}
+                {partners.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-charcoal mb-3">Sharing with</h3>
+                    <div className="space-y-2">
+                      {partners.map(partner => (
+                        <div key={partner.id} className="flex items-center justify-between p-3 bg-cream-dark rounded-lg">
+                          <div className="flex items-center gap-3">
+                            {partner.profile_image_url ? (
+                              <img src={partner.profile_image_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center">
+                                <span className="text-gold font-medium">{partner.name.charAt(0).toUpperCase()}</span>
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-charcoal font-medium">{partner.name}</p>
+                              <p className="text-xs text-warm-gray">
+                                Sharing since {new Date(partner.since).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRemovePartner(partner.id)}
+                            disabled={libraryActionLoading === partner.id}
+                            className="text-sm text-red-500 hover:text-red-600 disabled:opacity-50"
+                          >
+                            {libraryActionLoading === partner.id ? 'Removing...' : 'Remove'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pending Invitations Received */}
+                {pendingInvites.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-charcoal mb-3">Invitations</h3>
+                    <div className="space-y-2">
+                      {pendingInvites.map(invite => (
+                        <div key={invite.id} className="flex items-center justify-between p-3 bg-gold/10 rounded-lg border border-gold/20">
+                          <div className="flex items-center gap-3">
+                            {invite.inviter.profile_image_url ? (
+                              <img src={invite.inviter.profile_image_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center">
+                                <span className="text-gold font-medium">{invite.inviter.name.charAt(0).toUpperCase()}</span>
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-charcoal font-medium">{invite.inviter.name}</p>
+                              <p className="text-xs text-warm-gray">wants to share recipes with you</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleAcceptInvite(invite.id)}
+                              disabled={libraryActionLoading === invite.id}
+                              className="px-3 py-1.5 text-sm bg-gold text-white rounded-full hover:bg-gold-dark disabled:opacity-50"
+                            >
+                              {libraryActionLoading === invite.id ? '...' : 'Accept'}
+                            </button>
+                            <button
+                              onClick={() => handleDeclineInvite(invite.id)}
+                              disabled={libraryActionLoading === invite.id}
+                              className="px-3 py-1.5 text-sm text-warm-gray hover:text-charcoal disabled:opacity-50"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sent Invitations */}
+                {sentInvites.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-charcoal mb-3">Pending sent invitations</h3>
+                    <div className="space-y-2">
+                      {sentInvites.map(invite => (
+                        <div key={invite.id} className="flex items-center justify-between p-3 bg-cream-dark rounded-lg">
+                          <div className="flex items-center gap-3">
+                            {invite.invitee.profile_image_url ? (
+                              <img src={invite.invitee.profile_image_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-warm-gray/20 flex items-center justify-center">
+                                <span className="text-warm-gray font-medium">{invite.invitee.name.charAt(0).toUpperCase()}</span>
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-charcoal font-medium">{invite.invitee.name}</p>
+                              <p className="text-xs text-warm-gray">Invitation pending</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleCancelInvite(invite.id)}
+                            disabled={libraryActionLoading === invite.id}
+                            className="text-sm text-warm-gray hover:text-charcoal disabled:opacity-50"
+                          >
+                            {libraryActionLoading === invite.id ? 'Canceling...' : 'Cancel'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Invite New Partner */}
+                <div>
+                  <h3 className="text-sm font-medium text-charcoal mb-3">Invite someone</h3>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={userSearchQuery}
+                      onChange={e => setUserSearchQuery(e.target.value)}
+                      placeholder="Search by name or email..."
+                      className="input-field w-full"
+                    />
+                    {searchingUsers && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Search Results */}
+                  {userSearchResults.length > 0 && (
+                    <div className="mt-2 border border-cream-dark rounded-lg overflow-hidden">
+                      {userSearchResults.map(resultUser => (
+                        <div key={resultUser.id} className="flex items-center justify-between p-3 hover:bg-cream-dark">
+                          <div className="flex items-center gap-3">
+                            {resultUser.profile_image_url ? (
+                              <img src={resultUser.profile_image_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-8 h-8 rounded-full bg-warm-gray/20 flex items-center justify-center">
+                                <span className="text-warm-gray text-sm font-medium">{resultUser.name.charAt(0).toUpperCase()}</span>
+                              </div>
+                            )}
+                            <span className="text-charcoal">{resultUser.name}</span>
+                          </div>
+                          <button
+                            onClick={() => handleInviteUser(resultUser.id)}
+                            disabled={invitingUser === resultUser.id}
+                            className="px-3 py-1.5 text-sm bg-gold text-white rounded-full hover:bg-gold-dark disabled:opacity-50"
+                          >
+                            {invitingUser === resultUser.id ? 'Sending...' : 'Invite'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {userSearchQuery.length >= 2 && !searchingUsers && userSearchResults.length === 0 && (
+                    <p className="mt-2 text-sm text-warm-gray">No users found</p>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* Preferences Section */}

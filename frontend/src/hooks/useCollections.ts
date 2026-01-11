@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { collectionApi, socialApi } from '@/lib/api';
-import type { Collection, SharedCollection, CollectionShare, UserSearchResult } from '@/types';
+import type { Collection, CollectionShare, UserSearchResult } from '@/types';
 
 interface UseCollectionsReturn {
-  // Collections data
+  // Collections data (includes both own and partner collections via library sharing)
   collections: Collection[];
-  sharedCollections: SharedCollection[];
   loading: boolean;
   selectedCollection: string | null;
   setSelectedCollection: (id: string | null) => void;
@@ -34,7 +33,7 @@ interface UseCollectionsReturn {
   // Collection click handler
   handleCollectionClick: (collectionId: string | null, onSelect?: () => void) => void;
 
-  // Sharing
+  // Sharing (for explicit collection shares, not library sharing)
   isShareModalOpen: boolean;
   shares: CollectionShare[];
   loadingShares: boolean;
@@ -48,7 +47,6 @@ interface UseCollectionsReturn {
   handleShareWithUser: (userId: string, permission?: 'viewer' | 'editor') => Promise<void>;
   handleUpdatePermission: (userId: string, permission: 'viewer' | 'editor') => Promise<void>;
   handleRemoveShare: (userId: string) => Promise<void>;
-  handleLeaveCollection: () => Promise<void>;
 
   // Refresh
   refresh: () => Promise<void>;
@@ -58,9 +56,8 @@ interface UseCollectionsReturn {
 }
 
 export function useCollections(): UseCollectionsReturn {
-  // Collections data
+  // Collections data (includes both own and partner collections)
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [sharedCollections, setSharedCollections] = useState<SharedCollection[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
 
@@ -85,15 +82,12 @@ export function useCollections(): UseCollectionsReturn {
   const [sharingUser, setSharingUser] = useState<string | null>(null);
 
   // Load collections on mount
+  // The API now returns both own and partner collections with include_partners=true (default)
   const loadCollections = useCallback(async () => {
     setLoading(true);
     try {
-      const [ownCollections, shared] = await Promise.all([
-        collectionApi.list(),
-        collectionApi.listSharedWithMe(),
-      ]);
-      setCollections(ownCollections);
-      setSharedCollections(shared);
+      const allCollections = await collectionApi.list();
+      setCollections(allCollections);
     } catch (error) {
       console.error('Failed to load collections:', error);
     } finally {
@@ -191,7 +185,7 @@ export function useCollections(): UseCollectionsReturn {
     onSelect?.();
   }, [isManageMode]);
 
-  // Sharing handlers
+  // Sharing handlers (for explicit collection shares)
   const loadShares = useCallback(async () => {
     if (!selectedCollection) return;
     setLoadingShares(true);
@@ -272,18 +266,6 @@ export function useCollections(): UseCollectionsReturn {
     }
   }, [selectedCollection]);
 
-  const handleLeaveCollection = useCallback(async () => {
-    if (!selectedCollection) return;
-    if (!confirm('Leave this shared collection? You will no longer have access.')) return;
-    try {
-      await collectionApi.leave(selectedCollection);
-      setSharedCollections(prev => prev.filter(c => c.id !== selectedCollection));
-      setSelectedCollection(null);
-    } catch (error) {
-      console.error('Failed to leave collection:', error);
-    }
-  }, [selectedCollection]);
-
   const updateCollectionCount = useCallback((collectionId: string, delta: number) => {
     setCollections(prev => prev.map(c =>
       c.id === collectionId
@@ -294,7 +276,6 @@ export function useCollections(): UseCollectionsReturn {
 
   return {
     collections,
-    sharedCollections,
     loading,
     selectedCollection,
     setSelectedCollection,
@@ -329,7 +310,6 @@ export function useCollections(): UseCollectionsReturn {
     handleShareWithUser,
     handleUpdatePermission,
     handleRemoveShare,
-    handleLeaveCollection,
     refresh: loadCollections,
     updateCollectionCount,
   };

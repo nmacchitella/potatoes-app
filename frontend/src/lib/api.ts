@@ -16,6 +16,7 @@ import type {
   GroceryListItemCreateInput, GroceryListItemUpdateInput, GroceryListGenerateInput,
   GroceryListShare, GroceryListShareCreateInput, GroceryListShareUpdateInput, SharedGroceryListAccess,
   GroceryListEmailShareResponse, GroceryListAcceptPublicShareResponse,
+  LibraryShareResponse, LibraryPartner, PendingLibraryInvite, LibraryShareCreateInput,
 } from '@/types';
 import {
   getAccessToken,
@@ -928,6 +929,57 @@ export const groceryListApi = {
   acceptPublicShare: async (token: string): Promise<GroceryListAcceptPublicShareResponse> => {
     const response = await api.post<GroceryListAcceptPublicShareResponse>(`/grocery-list/public/${token}/accept`);
     return response.data;
+  },
+};
+
+// ============================================================================
+// LIBRARY SHARING API (Partner/Family Sharing)
+// ============================================================================
+
+export const libraryApi = {
+  // Get all library partners (accepted shares)
+  getPartners: async (): Promise<LibraryPartner[]> => {
+    const response = await api.get<LibraryPartner[]>('/library/partners');
+    return response.data;
+  },
+
+  // Get pending invitations received
+  getPendingInvites: async (): Promise<PendingLibraryInvite[]> => {
+    const response = await api.get<PendingLibraryInvite[]>('/library/invites/pending');
+    return response.data;
+  },
+
+  // Get pending invitations sent
+  getSentInvites: async (): Promise<LibraryShareResponse[]> => {
+    const response = await api.get<LibraryShareResponse[]>('/library/invites/sent');
+    return response.data;
+  },
+
+  // Invite a user to share libraries
+  invite: async (data: LibraryShareCreateInput): Promise<LibraryShareResponse> => {
+    const response = await api.post<LibraryShareResponse>('/library/invite', data);
+    return response.data;
+  },
+
+  // Accept an invitation
+  acceptInvite: async (shareId: string): Promise<LibraryShareResponse> => {
+    const response = await api.post<LibraryShareResponse>(`/library/invites/${shareId}/accept`);
+    return response.data;
+  },
+
+  // Decline an invitation
+  declineInvite: async (shareId: string): Promise<void> => {
+    await api.post(`/library/invites/${shareId}/decline`);
+  },
+
+  // Cancel a sent invitation
+  cancelInvite: async (shareId: string): Promise<void> => {
+    await api.delete(`/library/invites/${shareId}`);
+  },
+
+  // Remove a library partner
+  removePartner: async (partnerId: string): Promise<void> => {
+    await api.delete(`/library/partners/${partnerId}`);
   },
 };
 

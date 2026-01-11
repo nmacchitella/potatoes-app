@@ -6,7 +6,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import { collectionApi } from '@/lib/api';
 import { UserAvatar } from '@/components/ui';
-import type { Collection, SharedCollection } from '@/types';
+import type { Collection } from '@/types';
 
 type CalendarMode = 'day' | 'week' | 'month';
 
@@ -47,7 +47,6 @@ export default function MobileSidebar({
   const { user, logout } = useStore();
 
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [sharedCollections, setSharedCollections] = useState<SharedCollection[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Inline collection management state
@@ -99,12 +98,9 @@ export default function MobileSidebar({
 
   const loadCollections = async () => {
     try {
-      const [ownCollections, shared] = await Promise.all([
-        collectionApi.list(),
-        collectionApi.listSharedWithMe(),
-      ]);
-      setCollections(ownCollections);
-      setSharedCollections(shared);
+      // API now returns both own and partner collections with owner field set for partner's
+      const allCollections = await collectionApi.list();
+      setCollections(allCollections);
     } catch (error) {
       console.error('Failed to load collections:', error);
     } finally {
@@ -601,7 +597,8 @@ export default function MobileSidebar({
                     </button>
 
                     {/* User collections */}
-                    {collections.map(collection => (
+                    {/* Own collections (editable) */}
+                    {collections.filter(c => !c.owner).map(collection => (
                           <div
                             key={collection.id}
                             className={`flex items-center justify-between w-full px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -686,8 +683,8 @@ export default function MobileSidebar({
                           </div>
                         ))}
 
-                    {/* Shared collections - integrated into main list */}
-                    {sharedCollections.map(collection => (
+                    {/* Partner collections (from library sharing) */}
+                    {collections.filter(c => !!c.owner).map(collection => (
                       <button
                         key={collection.id}
                         onClick={() => handleCollectionClick(collection.id)}
@@ -700,14 +697,14 @@ export default function MobileSidebar({
                         <span className="flex items-center gap-1.5">
                           <span className="truncate">{collection.name}</span>
                           {/* Shared icon */}
-                          <span title={`Shared by ${collection.owner.name}`}>
+                          <span title={`Shared by ${collection.owner!.name}`}>
                             <svg className="w-3.5 h-3.5 text-warm-gray flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                             </svg>
                           </span>
                           <span className="text-xs text-warm-gray ml-auto">{collection.recipe_count}</span>
                         </span>
-                        <span className="text-[10px] text-warm-gray block">by {collection.owner.name}</span>
+                        <span className="text-[10px] text-warm-gray block">by {collection.owner!.name}</span>
                       </button>
                     ))}
 

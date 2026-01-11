@@ -10,7 +10,7 @@ import RecipeSearchModal from '@/components/search/RecipeSearchModal';
 import { ShareModal } from '@/components/sharing';
 import { CollectionSidebar } from '@/components/collections';
 import { RecipeFilterSection, RecipeGrid } from '@/components/recipes';
-import type { RecipeSummary, Collection, Tag, SharedCollection, CollectionShare, UserSearchResult, SearchRecipeResult } from '@/types';
+import type { RecipeSummary, Collection, Tag, CollectionShare, UserSearchResult, SearchRecipeResult } from '@/types';
 
 function RecipesPageContent() {
   const searchParams = useSearchParams();
@@ -47,8 +47,6 @@ function RecipesPageContent() {
   const [tagFilterMode, setTagFilterMode] = useState<'all' | 'any'>('all'); // 'all' = AND, 'any' = OR
   const [recipeViewMode, setRecipeViewMode] = useState<'grid' | 'table'>('table');
 
-  // Shared collections state
-  const [sharedCollections, setSharedCollections] = useState<SharedCollection[]>([]);
 
   // Sharing modal state
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -75,12 +73,9 @@ function RecipesPageContent() {
 
   const loadCollections = async () => {
     try {
-      const [ownCollections, shared] = await Promise.all([
-        collectionApi.list(),
-        collectionApi.listSharedWithMe(),
-      ]);
-      setCollections(ownCollections);
-      setSharedCollections(shared);
+      // API now returns both own and partner collections with owner field set for partner's
+      const allCollections = await collectionApi.list();
+      setCollections(allCollections);
     } catch (error) {
       console.error('Failed to load collections:', error);
     } finally {
@@ -92,15 +87,14 @@ function RecipesPageContent() {
   useEffect(() => {
     if (!loadingCollections && !initialCollectionLoaded) {
       const collectionParam = searchParams.get('collection');
-      const isOwnCollection = collections.some(c => c.id === collectionParam);
-      const isSharedCollection = sharedCollections.some(c => c.id === collectionParam);
-      if (collectionParam && (isOwnCollection || isSharedCollection)) {
+      const collectionExists = collections.some(c => c.id === collectionParam);
+      if (collectionParam && collectionExists) {
         setSelectedCollection(collectionParam);
       }
       prevUrlCollectionRef.current = collectionParam;
       setInitialCollectionLoaded(true);
     }
-  }, [loadingCollections, initialCollectionLoaded, collections, sharedCollections, searchParams]);
+  }, [loadingCollections, initialCollectionLoaded, collections, searchParams]);
 
   // Handle external URL changes (e.g., browser back/forward, clicking logo)
   useEffect(() => {
@@ -113,14 +107,13 @@ function RecipesPageContent() {
       if (!collectionParam) {
         setSelectedCollection(null);
       } else {
-        const isOwnCollection = collections.some(c => c.id === collectionParam);
-        const isSharedCollection = sharedCollections.some(c => c.id === collectionParam);
-        if (isOwnCollection || isSharedCollection) {
+        const collectionExists = collections.some(c => c.id === collectionParam);
+        if (collectionExists) {
           setSelectedCollection(collectionParam);
         }
       }
     }
-  }, [searchParams, initialCollectionLoaded, collections, sharedCollections]);
+  }, [searchParams, initialCollectionLoaded, collections]);
 
   // Update URL when collection changes from sidebar clicks
   const updateUrlForCollection = useCallback((collectionId: string | null) => {
@@ -354,25 +347,21 @@ function RecipesPageContent() {
     }
   };
 
-  const selectedCollectionName = selectedCollection
-    ? collections.find(c => c.id === selectedCollection)?.name ||
-      sharedCollections.find(c => c.id === selectedCollection)?.name
+  const selectedCollectionData = selectedCollection
+    ? collections.find(c => c.id === selectedCollection)
     : null;
+  const selectedCollectionName = selectedCollectionData?.name ?? null;
 
   const managingCollection = managingCollectionId
     ? collections.find(c => c.id === managingCollectionId)
     : null;
 
-  // Determine if selected collection is a shared one (not owned by user)
-  const selectedSharedCollection = selectedCollection
-    ? sharedCollections.find(c => c.id === selectedCollection)
-    : null;
-  const isSharedCollection = !!selectedSharedCollection;
-  const selectedOwnCollection = selectedCollection
-    ? collections.find(c => c.id === selectedCollection)
-    : null;
-  const canShare = selectedOwnCollection || (selectedSharedCollection?.permission === 'editor');
-  const canEditCollection = canShare; // Same permission level allows editing recipes in collection
+  // Determine if selected collection is a partner's collection (via library sharing)
+  // Partner collections have the `owner` field set
+  const isPartnerCollection = !!selectedCollectionData?.owner;
+  // For partner collections, user has editor access via library sharing
+  const canShare = selectedCollectionData && !isPartnerCollection; // Only owner can share
+  const canEditCollection = !!selectedCollectionData; // Both own and partner collections can be edited
 
   // Load shares when modal opens
   const loadShares = async () => {
@@ -456,7 +445,7 @@ function RecipesPageContent() {
     if (!confirm('Leave this collection? You will no longer have access to it.')) return;
     try {
       await collectionApi.leave(selectedCollection);
-      setSharedCollections(prev => prev.filter(c => c.id !== selectedCollection));
+      setCollections(prev => prev.filter(c => c.id !== selectedCollection));
       setSelectedCollection(null);
     } catch (error) {
       console.error('Failed to leave collection:', error);
@@ -544,7 +533,6 @@ function RecipesPageContent() {
               {/* Collection Sidebar */}
               <CollectionSidebar
                 collections={collections}
-                sharedCollections={sharedCollections}
                 selectedCollection={selectedCollection}
                 loadingCollections={loadingCollections}
                 isManageMode={isManageMode}
@@ -585,10 +573,10 @@ function RecipesPageContent() {
                   <h1 className="font-serif text-2xl text-charcoal">
                     {selectedCollectionName || 'All Recipes'}
                   </h1>
-                  {/* Shared badge for shared collections */}
-                  {isSharedCollection && (
+                  {/* Shared badge for partner collections */}
+                  {isPartnerCollection && (
                     <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
-                      Shared by {selectedSharedCollection?.owner.name}
+                      Shared by {selectedCollectionData?.owner?.name}
                     </span>
                   )}
                 </div>
@@ -625,7 +613,7 @@ function RecipesPageContent() {
                         Share
                       </button>
                     )}
-                    {isSharedCollection && (
+                    {isPartnerCollection && (
                       <button
                         onClick={handleLeaveCollection}
                         className="flex items-center gap-2 px-3 py-2 text-sm border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors"

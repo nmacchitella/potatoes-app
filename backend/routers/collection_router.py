@@ -11,10 +11,11 @@ from typing import List, Optional, Tuple
 
 from database import get_db
 from auth import get_current_user
-from models import User, Collection, Recipe, collection_recipes, CollectionShare, Notification
+from models import User, Collection, Recipe, collection_recipes, CollectionShare, Notification, LibraryShare
+from routers.library_router import get_library_partners
 from schemas import (
     CollectionCreate, CollectionUpdate, Collection as CollectionSchema,
-    CollectionWithRecipes, RecipeSummary,
+    CollectionWithRecipes, RecipeSummary, ShareableUser,
     CollectionShareCreate, CollectionShareUpdate, CollectionShare as CollectionShareSchema,
     CollectionShareUser, SharedCollection,
 )
@@ -44,7 +45,7 @@ def get_collection_access(
     if collection.user_id == user.id:
         return collection, "owner"
 
-    # Check if shared with user
+    # Check if shared via explicit CollectionShare
     share = db.query(CollectionShare).filter(
         CollectionShare.collection_id == collection_id,
         CollectionShare.user_id == user.id
@@ -52,6 +53,11 @@ def get_collection_access(
 
     if share:
         return collection, share.permission
+
+    # Check if shared via library sharing (partner mode) - grants editor access
+    partner_ids = get_library_partners(db, user.id)
+    if collection.user_id in partner_ids:
+        return collection, "editor"
 
     return collection, None
 
@@ -90,21 +96,41 @@ def can_share_collection(permission: str) -> bool:
 
 @router.get("", response_model=List[CollectionSchema])
 async def list_collections(
+    include_partners: bool = Query(True, description="Include library partners' collections"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List current user's collections."""
-    # Get collections with recipe counts
-    collections = db.query(Collection).filter(
+    """List current user's collections and optionally library partners' collections."""
+    # Get user's own collections
+    own_collections = db.query(Collection).filter(
         Collection.user_id == current_user.id
     ).order_by(Collection.sort_order, Collection.created_at).all()
 
-    # Add recipe counts
     result = []
-    for collection in collections:
+    for collection in own_collections:
         schema = CollectionSchema.model_validate(collection)
         schema.recipe_count = len(collection.recipes)
         result.append(schema)
+
+    # Get library partners' collections if requested
+    if include_partners:
+        partner_ids = get_library_partners(db, current_user.id)
+        if partner_ids:
+            partner_collections = db.query(Collection).filter(
+                Collection.user_id.in_(partner_ids)
+            ).order_by(Collection.sort_order, Collection.created_at).all()
+
+            for collection in partner_collections:
+                owner = db.query(User).filter(User.id == collection.user_id).first()
+                schema = CollectionSchema.model_validate(collection)
+                schema.recipe_count = len(collection.recipes)
+                if owner:
+                    schema.owner = ShareableUser(
+                        id=owner.id,
+                        name=owner.name,
+                        profile_image_url=owner.profile_image_url
+                    )
+                result.append(schema)
 
     return result
 

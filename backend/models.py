@@ -362,6 +362,30 @@ class MealPlanShare(Base):
     shared_with = relationship("User", foreign_keys=[shared_with_id], backref="meal_plan_shares_received")
 
 
+class LibraryShare(Base):
+    """
+    Represents mutual library sharing between two users (partner/family mode).
+    When accepted, both users can see and edit each other's recipes and collections.
+    """
+    __tablename__ = "library_shares"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    inviter_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    invitee_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    status = Column(String(20), default="pending")  # pending, accepted, declined
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        # Ensure no duplicate invitations (in either direction)
+        UniqueConstraint('inviter_id', 'invitee_id', name='uq_library_share'),
+    )
+
+    # Relationships
+    inviter = relationship("User", foreign_keys=[inviter_id], backref="library_invites_sent")
+    invitee = relationship("User", foreign_keys=[invitee_id], backref="library_invites_received")
+
+
 # ============================================================================
 # GROCERY LIST MODELS
 # ============================================================================
