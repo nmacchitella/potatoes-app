@@ -15,7 +15,7 @@ import os
 
 from database import get_db
 from auth import get_current_user, get_current_user_optional
-from models import User, GroceryList, GroceryListItem, GroceryListShare, Recipe, Notification
+from models import User, GroceryList, GroceryListItem, GroceryListShare, Recipe, Notification, Ingredient
 from schemas import (
     GroceryListResponse, GroceryListItemCreate, GroceryListItemUpdate,
     GroceryListItemResponse, GroceryListGenerateRequest, GroceryListBulkCheckRequest,
@@ -27,7 +27,7 @@ from schemas import (
 )
 from services.grocery_list_service import (
     clear_grocery_list, generate_from_meal_plan, group_items_by_category,
-    DEFAULT_CATEGORY
+    DEFAULT_CATEGORY, normalize_ingredient_name
 )
 from services.email_service import EmailService
 
@@ -457,6 +457,49 @@ async def update_item(
 
     # Update fields
     update_data = item_data.model_dump(exclude_unset=True)
+
+    # If category is being updated, also update the master Ingredient
+    if "category" in update_data and update_data["category"]:
+        new_category = update_data["category"]
+        normalized_name = normalize_ingredient_name(item.name)
+
+        # First check for user's custom ingredient
+        user_ingredient = db.query(Ingredient).filter(
+            Ingredient.user_id == current_user.id,
+            Ingredient.normalized_name == normalized_name
+        ).first()
+
+        if user_ingredient:
+            # Update user's custom ingredient
+            user_ingredient.category = new_category
+        else:
+            # Check for system ingredient
+            system_ingredient = db.query(Ingredient).filter(
+                Ingredient.is_system == True,
+                Ingredient.normalized_name == normalized_name
+            ).first()
+
+            if system_ingredient:
+                # Create a user-specific copy with the new category
+                user_ingredient = Ingredient(
+                    name=system_ingredient.name,
+                    normalized_name=normalized_name,
+                    category=new_category,
+                    is_system=False,
+                    user_id=current_user.id,
+                )
+                db.add(user_ingredient)
+            else:
+                # No existing ingredient - create a new user ingredient
+                user_ingredient = Ingredient(
+                    name=item.name,
+                    normalized_name=normalized_name,
+                    category=new_category,
+                    is_system=False,
+                    user_id=current_user.id,
+                )
+                db.add(user_ingredient)
+
     for field, value in update_data.items():
         setattr(item, field, value)
 
