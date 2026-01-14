@@ -533,6 +533,75 @@ async def create_meal_plan(
     return meal_plan
 
 
+# ============================================================================
+# STATIC PATH ENDPOINTS (must be before dynamic /{meal_plan_id} routes)
+# ============================================================================
+
+@router.get("/shares", response_model=List[MealPlanCalendarShareResponse])
+async def list_shares_legacy(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """[DEPRECATED] List users you've shared your calendars with."""
+    # Get first calendar's shares for backwards compatibility
+    calendar = db.query(MealPlanCalendarModel).filter(
+        MealPlanCalendarModel.user_id == current_user.id
+    ).first()
+
+    if not calendar:
+        return []
+
+    shares = db.query(MealPlanShareModel).options(
+        joinedload(MealPlanShareModel.user)
+    ).filter(
+        MealPlanShareModel.calendar_id == calendar.id
+    ).all()
+
+    return shares
+
+
+@router.get("/shared-with-me", response_model=List[SharedMealPlanCalendarAccess])
+async def list_shared_with_me(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List calendars shared with the current user."""
+    shares = db.query(
+        MealPlanShareModel,
+        MealPlanCalendarModel,
+        User
+    ).join(
+        MealPlanCalendarModel,
+        MealPlanCalendarModel.id == MealPlanShareModel.calendar_id
+    ).join(
+        User,
+        User.id == MealPlanCalendarModel.user_id
+    ).filter(
+        MealPlanShareModel.user_id == current_user.id
+    ).all()
+
+    result = []
+    for share, calendar, owner in shares:
+        result.append(SharedMealPlanCalendarAccess(
+            id=share.id,
+            calendar_id=calendar.id,
+            calendar_name=calendar.name,
+            owner={
+                "id": owner.id,
+                "name": owner.name,
+                "profile_image_url": owner.profile_image_url
+            },
+            permission=share.permission,
+            created_at=share.created_at
+        ))
+
+    return result
+
+
+# ============================================================================
+# DYNAMIC PATH ENDPOINTS (/{meal_plan_id} routes)
+# ============================================================================
+
 @router.get("/{meal_plan_id}", response_model=MealPlanSchema)
 async def get_meal_plan(
     meal_plan_id: str,
@@ -818,68 +887,3 @@ async def swap_meals(
     db.commit()
 
     return {"status": "swapped"}
-
-
-# ============================================================================
-# BACKWARDS COMPATIBILITY ENDPOINTS (to be deprecated)
-# ============================================================================
-
-@router.get("/shares", response_model=List[MealPlanCalendarShareResponse])
-async def list_shares_legacy(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """[DEPRECATED] List users you've shared your calendars with."""
-    # Get first calendar's shares for backwards compatibility
-    calendar = db.query(MealPlanCalendarModel).filter(
-        MealPlanCalendarModel.user_id == current_user.id
-    ).first()
-
-    if not calendar:
-        return []
-
-    shares = db.query(MealPlanShareModel).options(
-        joinedload(MealPlanShareModel.user)
-    ).filter(
-        MealPlanShareModel.calendar_id == calendar.id
-    ).all()
-
-    return shares
-
-
-@router.get("/shared-with-me", response_model=List[SharedMealPlanCalendarAccess])
-async def list_shared_with_me(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """List calendars shared with the current user."""
-    shares = db.query(
-        MealPlanShareModel,
-        MealPlanCalendarModel,
-        User
-    ).join(
-        MealPlanCalendarModel,
-        MealPlanCalendarModel.id == MealPlanShareModel.calendar_id
-    ).join(
-        User,
-        User.id == MealPlanCalendarModel.user_id
-    ).filter(
-        MealPlanShareModel.user_id == current_user.id
-    ).all()
-
-    result = []
-    for share, calendar, owner in shares:
-        result.append(SharedMealPlanCalendarAccess(
-            id=share.id,
-            calendar_id=calendar.id,
-            calendar_name=calendar.name,
-            owner={
-                "id": owner.id,
-                "name": owner.name,
-                "profile_image_url": owner.profile_image_url
-            },
-            permission=share.permission,
-            created_at=share.created_at
-        ))
-
-    return result
