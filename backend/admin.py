@@ -7,7 +7,7 @@ from database import engine, SessionLocal
 from models import (
     User, RefreshToken, VerificationToken, Notification, UserFollow,
     Recipe, RecipeIngredient, RecipeInstruction, Tag, Ingredient, MeasurementUnit,
-    Collection, CollectionShare, UserSettings, MealPlan, MealPlanShare, URLCheck
+    Collection, CollectionShare, UserSettings, MealPlanCalendar, MealPlan, MealPlanShare, URLCheck
 )
 from config import settings, logger
 import httpx
@@ -384,12 +384,28 @@ class CollectionShareAdmin(ModelView, model=CollectionShare):
 # MEAL PLAN ADMIN VIEWS
 # ============================================================================
 
+class MealPlanCalendarAdmin(ModelView, model=MealPlanCalendar):
+    name = "Meal Plan Calendar"
+    name_plural = "Meal Plan Calendars"
+    icon = "fa-solid fa-calendar"
+
+    column_list = [MealPlanCalendar.id, MealPlanCalendar.user, MealPlanCalendar.name, MealPlanCalendar.created_at, MealPlanCalendar.updated_at]
+    column_searchable_list = [MealPlanCalendar.name]
+    column_sortable_list = [MealPlanCalendar.name, MealPlanCalendar.created_at]
+    column_default_sort = [(MealPlanCalendar.created_at, True)]
+
+    can_create = True
+    can_edit = True
+    can_delete = True
+    can_view_details = True
+
+
 class MealPlanAdmin(ModelView, model=MealPlan):
     name = "Meal Plan"
     name_plural = "Meal Plans"
     icon = "fa-solid fa-calendar-days"
 
-    column_list = [MealPlan.id, MealPlan.user, MealPlan.recipe, MealPlan.planned_date, MealPlan.meal_type, MealPlan.servings, MealPlan.created_at]
+    column_list = [MealPlan.id, MealPlan.calendar, MealPlan.recipe, MealPlan.planned_date, MealPlan.meal_type, MealPlan.servings, MealPlan.created_at]
     column_searchable_list = [MealPlan.meal_type, MealPlan.notes]
     column_sortable_list = [MealPlan.planned_date, MealPlan.created_at, MealPlan.meal_type]
     column_default_sort = [(MealPlan.planned_date, True)]
@@ -405,7 +421,7 @@ class MealPlanShareAdmin(ModelView, model=MealPlanShare):
     name_plural = "Meal Plan Shares"
     icon = "fa-solid fa-users"
 
-    column_list = [MealPlanShare.id, MealPlanShare.owner, MealPlanShare.shared_with, MealPlanShare.permission, MealPlanShare.created_at]
+    column_list = [MealPlanShare.id, MealPlanShare.calendar, MealPlanShare.user, MealPlanShare.permission, MealPlanShare.created_at]
     column_sortable_list = [MealPlanShare.created_at, MealPlanShare.permission]
     column_default_sort = [(MealPlanShare.created_at, True)]
 
@@ -634,6 +650,7 @@ def create_admin(app):
     admin.add_view(CollectionShareAdmin)
 
     # Register meal plan views
+    admin.add_view(MealPlanCalendarAdmin)
     admin.add_view(MealPlanAdmin)
     admin.add_view(MealPlanShareAdmin)
 
