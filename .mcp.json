@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "potatoes-monitor": {
+      "command": "node",
+      "args": ["tools/mcp-monitor/index.js"],
+      "env": {}
+    }
+  }
+}

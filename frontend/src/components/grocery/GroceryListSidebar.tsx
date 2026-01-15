@@ -31,6 +31,7 @@ export function GroceryListSidebar({
   onLeaveSharedList,
   loading,
 }: GroceryListSidebarProps) {
+  const [isManageMode, setIsManageMode] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newListName, setNewListName] = useState('');
   const [editingListId, setEditingListId] = useState<string | null>(null);
@@ -90,47 +91,204 @@ export function GroceryListSidebar({
 
   if (loading) {
     return (
-      <div className="w-64 bg-white border-r border-border p-4">
+      <nav className="flex flex-col max-h-[calc(100vh-10rem)]">
         <div className="animate-pulse space-y-3">
-          <div className="h-6 bg-cream rounded w-24"></div>
-          <div className="h-10 bg-cream rounded"></div>
-          <div className="h-10 bg-cream rounded"></div>
+          <div className="h-6 bg-cream-dark rounded w-24"></div>
+          <div className="h-8 bg-cream-dark rounded"></div>
+          <div className="h-8 bg-cream-dark rounded"></div>
         </div>
-      </div>
+      </nav>
     );
   }
 
   return (
-    <div className="w-56 bg-cream flex flex-col h-full">
+    <nav className="flex flex-col max-h-[calc(100vh-10rem)]">
       {/* Header */}
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="flex-shrink-0 mb-3">
+        <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-warm-gray uppercase tracking-wide">
             Lists
           </span>
-          <button
-            onClick={() => setIsCreating(true)}
-            className="text-xs text-gold hover:text-gold-dark transition-colors"
-          >
-            + New
-          </button>
+          {myLists.length > 0 && (
+            <button
+              onClick={() => setIsManageMode(!isManageMode)}
+              className={`text-xs transition-colors ${isManageMode ? 'text-gold font-medium' : 'text-warm-gray hover:text-gold'}`}
+            >
+              {isManageMode ? 'Done' : 'Manage'}
+            </button>
+          )}
         </div>
+      </div>
 
-        {/* Error message */}
-        {error && (
-          <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-            <div className="flex items-start gap-2">
-              <svg className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
+      {/* Error message */}
+      {error && (
+        <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg flex-shrink-0">
+          <div className="flex items-start gap-2">
+            <svg className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-sm text-red-700">{error}</p>
           </div>
+        </div>
+      )}
+
+      {/* Scrollable list */}
+      <div className="flex-1 overflow-y-auto min-h-0 space-y-0.5">
+        {myLists.length === 0 && acceptedShares.length === 0 ? (
+          <p className="px-3 py-2 text-sm text-warm-gray">
+            No lists yet
+          </p>
+        ) : (
+          <>
+            {/* Own lists */}
+            {myLists.map((list) => (
+              <div key={list.id} className="group relative">
+                {editingListId === list.id ? (
+                  <div className="flex items-center gap-1 px-2">
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleRenameList(list.id);
+                        if (e.key === 'Escape') {
+                          setEditingListId(null);
+                          setEditingName('');
+                        }
+                      }}
+                      className="flex-1 px-2 py-1.5 text-sm border border-gold rounded focus:outline-none"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleRenameList(list.id)}
+                      className="p-1 text-green-600 hover:text-green-700"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => { setEditingListId(null); setEditingName(''); }}
+                      className="p-1 text-warm-gray hover:text-charcoal"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : showDeleteConfirm === list.id ? (
+                  <div className="p-2 bg-red-50 rounded-lg">
+                    <p className="text-sm text-red-700 mb-2">Delete &quot;{list.name}&quot;?</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDeleteList(list.id)}
+                        className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(null)}
+                        className="px-2 py-1 text-xs text-warm-gray hover:text-charcoal"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : isManageMode ? (
+                  // Manage mode view
+                  <div className="flex items-center gap-2 px-2 py-2 rounded-lg text-sm hover:bg-cream-dark group/item">
+                    <div className="flex-1 min-w-0">
+                      <span className="block truncate text-charcoal">{list.name}</span>
+                    </div>
+                    <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => {
+                          setEditingListId(list.id);
+                          setEditingName(list.name);
+                        }}
+                        className="p-1 text-warm-gray hover:text-gold"
+                        title="Rename"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(list.id)}
+                        className="p-1 text-warm-gray hover:text-red-500"
+                        title="Delete"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  // Normal view
+                  <button
+                    onClick={() => onSelectList(list.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                      selectedListId === list.id
+                        ? 'bg-charcoal/5 text-charcoal font-medium'
+                        : 'text-charcoal hover:bg-cream-dark'
+                    }`}
+                  >
+                    <span className="block truncate">{list.name}</span>
+                  </button>
+                )}
+              </div>
+            ))}
+
+            {/* Shared lists - integrated with shared icon */}
+            {acceptedShares.map((share) => (
+              <div key={share.id} className="group relative">
+                {isManageMode ? (
+                  <div className="flex items-center gap-2 px-2 py-2 rounded-lg text-sm hover:bg-cream-dark group/item">
+                    <div className="flex-1 min-w-0">
+                      <span className="block truncate text-charcoal">{share.grocery_list_name}</span>
+                      <span className="text-[10px] text-warm-gray">by {share.owner.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => onLeaveSharedList(share.id)}
+                        className="p-1 text-warm-gray hover:text-red-500"
+                        title="Leave list"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => onSelectList(share.grocery_list_id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                      selectedListId === share.grocery_list_id
+                        ? 'bg-charcoal/5 text-charcoal font-medium'
+                        : 'text-charcoal hover:bg-cream-dark'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate">{share.grocery_list_name}</span>
+                      <span title={`Shared by ${share.owner.name}`}>
+                        <svg className="w-3.5 h-3.5 text-warm-gray flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-warm-gray block">by {share.owner.name}</span>
+                  </button>
+                )}
+              </div>
+            ))}
+          </>
         )}
 
-        {/* Create new list form */}
-        {isCreating && (
-          <div className="mb-3 p-2 bg-cream-dark rounded-lg">
+        {/* Create new list */}
+        {isCreating ? (
+          <div className="flex items-center gap-1 px-2 mt-1">
             <input
               type="text"
               value={newListName}
@@ -146,192 +304,67 @@ export function GroceryListSidebar({
                 }
               }}
               placeholder="List name..."
-              className="w-full px-2 py-1.5 text-sm border border-gold rounded focus:outline-none mb-2"
+              className="flex-1 px-2 py-1.5 text-sm border border-gold rounded focus:outline-none"
               autoFocus
             />
-            <div className="flex gap-2">
-              <button
-                onClick={(e) => handleCreateList(e as any)}
-                disabled={!newListName.trim()}
-                className="flex-1 px-2 py-1 text-xs bg-gold text-white rounded hover:bg-gold-dark disabled:opacity-50"
-              >
-                Create
-              </button>
-              <button
-                type="button"
-                onClick={() => { setIsCreating(false); setNewListName(''); }}
-                className="px-2 py-1 text-xs text-warm-gray hover:text-charcoal"
-              >
-                Cancel
-              </button>
-            </div>
+            <button
+              onClick={(e) => handleCreateList(e as any)}
+              disabled={!newListName.trim()}
+              className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+            <button
+              onClick={() => { setIsCreating(false); setNewListName(''); }}
+              className="p-1 text-warm-gray hover:text-charcoal"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-        )}
-
-        {/* Grocery lists - unified view (own + shared) */}
-        <div className="space-y-0.5">
-          {myLists.length === 0 && acceptedShares.length === 0 ? (
-            <p className="px-3 py-2 text-sm text-warm-gray">
-              No lists yet
-            </p>
-          ) : (
-            <>
-              {/* Own lists */}
-              {myLists.map((list) => (
-                <div key={list.id}>
-                  {editingListId === list.id ? (
-                    <div className="flex items-center gap-1 p-2 bg-cream-dark rounded-lg">
-                      <input
-                        type="text"
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleRenameList(list.id);
-                          if (e.key === 'Escape') {
-                            setEditingListId(null);
-                            setEditingName('');
-                          }
-                        }}
-                        className="flex-1 px-2 py-1 text-sm border border-gold rounded focus:outline-none"
-                        autoFocus
-                      />
-                      <button
-                        onClick={() => handleRenameList(list.id)}
-                        className="p-1 text-green-600 hover:text-green-700"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => { setEditingListId(null); setEditingName(''); }}
-                        className="p-1 text-warm-gray hover:text-charcoal"
-                      >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ) : showDeleteConfirm === list.id ? (
-                    <div className="p-2 bg-red-50 rounded-lg">
-                      <p className="text-sm text-red-700 mb-2">Delete &quot;{list.name}&quot;?</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleDeleteList(list.id)}
-                          className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          onClick={() => setShowDeleteConfirm(null)}
-                          className="px-2 py-1 text-xs text-warm-gray hover:text-charcoal"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
-                      selectedListId === list.id
-                        ? 'bg-charcoal/5 text-charcoal font-medium'
-                        : 'hover:bg-cream-dark'
-                    }`}>
-                      <button
-                        onClick={() => onSelectList(list.id)}
-                        className="flex-1 text-left text-sm min-w-0"
-                      >
-                        <span className="block truncate">{list.name}</span>
-                      </button>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingListId(list.id);
-                            setEditingName(list.name);
-                          }}
-                          className="p-1 text-warm-gray hover:text-gold"
-                          title="Rename"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setShowDeleteConfirm(list.id);
-                          }}
-                          className="p-1 text-warm-gray hover:text-red-500"
-                          title="Delete"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {/* Shared lists - integrated with shared icon */}
-              {acceptedShares.map((share) => (
-                <div
-                  key={share.id}
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
-                    selectedListId === share.grocery_list_id
-                      ? 'bg-charcoal/5 text-charcoal font-medium'
-                      : 'hover:bg-cream-dark'
-                  }`}
-                >
-                  <button
-                    onClick={() => onSelectList(share.grocery_list_id)}
-                    className="flex-1 text-left text-sm min-w-0"
-                  >
-                    <span className="block truncate">{share.grocery_list_name}</span>
-                    <span className="text-[10px] text-warm-gray">by {share.owner.name}</span>
-                  </button>
-                  <span title={`Shared by ${share.owner.name}`}>
-                    <svg className="w-4 h-4 text-warm-gray" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </span>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-
-        {/* Pending invitations */}
-        {pendingShares.length > 0 && (
-          <div className="mt-4">
-            <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-2 px-3">
-              Pending Invites
-            </span>
-            <div className="space-y-2">
-              {pendingShares.map((share) => (
-                <div key={share.id} className="p-2 bg-cream-dark rounded-lg">
-                  <p className="text-sm font-medium text-charcoal truncate">{share.grocery_list_name}</p>
-                  <p className="text-xs text-warm-gray mb-2">by {share.owner.name}</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onAcceptShare(share.id)}
-                      className="flex-1 px-2 py-1 text-xs bg-gold text-white rounded hover:bg-gold-dark"
-                    >
-                      Accept
-                    </button>
-                    <button
-                      onClick={() => onDeclineShare(share.id)}
-                      className="px-2 py-1 text-xs text-warm-gray hover:text-charcoal"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+        ) : (
+          <button
+            onClick={() => setIsCreating(true)}
+            className="block w-full text-left px-3 py-2 text-sm text-gold hover:text-gold-dark"
+          >
+            + New List
+          </button>
         )}
       </div>
-    </div>
+
+      {/* Pending invitations */}
+      {pendingShares.length > 0 && (
+        <div className="mt-4 flex-shrink-0">
+          <span className="text-xs font-medium text-warm-gray uppercase tracking-wide block mb-2 px-3">
+            Pending Invites
+          </span>
+          <div className="space-y-2">
+            {pendingShares.map((share) => (
+              <div key={share.id} className="p-2 bg-cream-dark rounded-lg">
+                <p className="text-sm font-medium text-charcoal truncate">{share.grocery_list_name}</p>
+                <p className="text-xs text-warm-gray mb-2">by {share.owner.name}</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onAcceptShare(share.id)}
+                    className="flex-1 px-2 py-1 text-xs bg-gold text-white rounded hover:bg-gold-dark"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => onDeclineShare(share.id)}
+                    className="px-2 py-1 text-xs text-warm-gray hover:text-charcoal"
+                  >
+                    Decline
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </nav>
   );
 }

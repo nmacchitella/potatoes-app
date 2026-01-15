@@ -122,19 +122,17 @@ export default function CalendarPage() {
               <MainNavigation currentPage="calendar" />
 
               {/* Calendar sidebar */}
-              <div className="bg-white rounded-lg border border-border overflow-hidden">
-                <MealPlanSidebar
-                  calendars={calendar.calendars}
-                  selectedCalendarIds={calendar.selectedCalendarIds}
-                  onToggleCalendar={calendar.toggleCalendar}
-                  onSelectAllCalendars={calendar.selectAllCalendars}
-                  onCreateCalendar={calendar.createCalendar}
-                  onRenameCalendar={calendar.renameCalendar}
-                  onDeleteCalendar={calendar.deleteCalendar}
-                  onLeaveCalendar={calendar.leaveCalendar}
-                  loading={calendar.calendarsLoading}
-                />
-              </div>
+              <MealPlanSidebar
+                calendars={calendar.calendars}
+                selectedCalendarIds={calendar.selectedCalendarIds}
+                onToggleCalendar={calendar.toggleCalendar}
+                onSelectAllCalendars={calendar.selectAllCalendars}
+                onCreateCalendar={calendar.createCalendar}
+                onRenameCalendar={calendar.renameCalendar}
+                onDeleteCalendar={calendar.deleteCalendar}
+                onLeaveCalendar={calendar.leaveCalendar}
+                loading={calendar.calendarsLoading}
+              />
             </div>
           </aside>
 

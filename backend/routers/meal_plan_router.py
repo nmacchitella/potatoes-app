@@ -356,7 +356,7 @@ async def share_calendar(
     # Create notification for the shared user
     notification = Notification(
         user_id=data.user_id,
-        notification_type="meal_plan_shared",
+        type="meal_plan_shared",
         title="Meal Plan Shared",
         message=f"{current_user.name} shared their meal plan '{calendar.name}' with you",
         link="/calendar",
