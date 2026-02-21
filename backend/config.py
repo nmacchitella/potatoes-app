@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./potatoes.db"
 
     # Security
-    secret_key: str = "dev-secret-key-change-in-production"
+    secret_key: str = ""
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
@@ -75,7 +75,13 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """Get cached settings instance."""
-    return Settings()
+    s = Settings()
+    if not s.secret_key:
+        raise RuntimeError(
+            "SECRET_KEY environment variable is not set. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    return s
 
 
 def setup_logging(settings: Settings) -> logging.Logger:

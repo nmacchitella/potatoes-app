@@ -89,7 +89,7 @@ class VerificationToken(Base):
     __tablename__ = "verification_tokens"
 
     token = Column(String, primary_key=True)
-    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
     type = Column(String, nullable=False)  # 'verify_email' or 'reset_password'
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -99,14 +99,18 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
     type = Column(String, nullable=False)
     title = Column(String, nullable=False)
     message = Column(String, nullable=False)
     link = Column(String, nullable=True)
-    is_read = Column(Boolean, default=False)
+    is_read = Column(Boolean, default=False, index=True)
     data = Column('metadata', JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('ix_notifications_user_unread', 'user_id', 'is_read'),
+    )
 
     # Relationship
     recipient = relationship("User", back_populates="notifications")
@@ -116,8 +120,8 @@ class UserFollow(Base):
     __tablename__ = "user_follows"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    follower_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
-    following_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    follower_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
+    following_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
     status = Column(String, nullable=False)  # 'pending', 'confirmed', 'declined'
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -135,7 +139,7 @@ class Recipe(Base):
     __tablename__ = "recipes"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    author_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    author_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     yield_quantity = Column(Float, nullable=True)  # None means not specified
@@ -156,6 +160,13 @@ class Recipe(Base):
     # Clone/Fork tracking
     forked_from_recipe_id = Column(String, ForeignKey("recipes.id", ondelete='SET NULL'), nullable=True)
     forked_from_user_id = Column(String, ForeignKey("users.id", ondelete='SET NULL'), nullable=True)
+
+    __table_args__ = (
+        # Most common query: author's non-deleted recipes ordered by updated_at
+        Index('ix_recipes_author_deleted', 'author_id', 'deleted_at'),
+        # Public feed queries
+        Index('ix_recipes_privacy_status', 'privacy_level', 'status', 'deleted_at'),
+    )
 
     # Relationships
     author = relationship("User", back_populates="recipes", foreign_keys=[author_id])
@@ -257,7 +268,7 @@ class Collection(Base):
     __tablename__ = "collections"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
     cover_image_url = Column(String(500), nullable=True)
@@ -318,7 +329,7 @@ class MealPlanCalendar(Base):
     __tablename__ = "meal_plan_calendars"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
     name = Column(String(200), default="Meal Plan")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -387,8 +398,8 @@ class LibraryShare(Base):
     __tablename__ = "library_shares"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    inviter_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
-    invitee_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    inviter_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
+    invitee_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
     status = Column(String(20), default="pending")  # pending, accepted, declined
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     accepted_at = Column(DateTime(timezone=True), nullable=True)
@@ -412,7 +423,7 @@ class GroceryList(Base):
     __tablename__ = "grocery_lists"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
     name = Column(String(200), default="Grocery List")
     share_token = Column(String(32), unique=True, index=True, nullable=True)  # Public share token
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -429,7 +440,7 @@ class GroceryListItem(Base):
     __tablename__ = "grocery_list_items"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    grocery_list_id = Column(String, ForeignKey("grocery_lists.id", ondelete='CASCADE'), nullable=False)
+    grocery_list_id = Column(String, ForeignKey("grocery_lists.id", ondelete='CASCADE'), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     quantity = Column(Float, nullable=True)
     unit = Column(String(50), nullable=True)

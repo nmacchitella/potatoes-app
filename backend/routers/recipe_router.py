@@ -99,7 +99,11 @@ async def list_recipes(
     total = query.count()
 
     # Apply pagination and ordering
-    query = query.options(joinedload(Recipe.author), joinedload(Recipe.tags))
+    query = query.options(
+        joinedload(Recipe.author),
+        joinedload(Recipe.tags),
+        joinedload(Recipe.collections),
+    )
     query = query.order_by(Recipe.updated_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
 
@@ -624,7 +628,11 @@ async def get_public_feed(
 
     total = query.count()
 
-    query = query.options(joinedload(Recipe.author), joinedload(Recipe.tags))
+    query = query.options(
+        joinedload(Recipe.author),
+        joinedload(Recipe.tags),
+        joinedload(Recipe.collections),
+    )
     query = query.order_by(Recipe.created_at.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
 

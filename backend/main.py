@@ -1,6 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.orm import Session
 from database import engine, Base, SessionLocal
 from config import settings, logger
@@ -92,6 +95,44 @@ app.include_router(admin_router.router, prefix="/api")
 
 # Create admin interface (must be after app creation and middleware setup)
 admin = create_admin(app)
+
+
+# ============================================================================
+# GLOBAL EXCEPTION HANDLERS
+# ============================================================================
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Return a consistent JSON error shape for all HTTP errors."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "status_code": exc.status_code},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return a consistent JSON error shape for request validation errors."""
+    errors = exc.errors()
+    # Simplify the error list for the client
+    simplified = [
+        {"field": " -> ".join(str(loc) for loc in e["loc"]), "message": e["msg"]}
+        for e in errors
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={"detail": "Validation error", "errors": simplified, "status_code": 422},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all for unhandled exceptions — log and return 500."""
+    logger.exception(f"Unhandled exception on {request.method} {request.url}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "status_code": 500},
+    )
 
 
 @app.get("/")
