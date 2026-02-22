@@ -110,6 +110,28 @@ admin = create_admin(app)
 if _mcp_result:
     app.mount("/mcp", _mcp_result[0])
 
+    # Claude.ai looks for OAuth discovery endpoints at the domain root (RFC 9728 / RFC 8414),
+    # not under the /mcp mount path. Proxy these root-level requests to the MCP sub-app.
+    @app.get("/.well-known/oauth-protected-resource")
+    @app.get("/.well-known/oauth-protected-resource/{path:path}")
+    async def oauth_protected_resource(request: Request):
+        """RFC 9728 — tell clients where the OAuth authorization server is."""
+        return JSONResponse({
+            "resource": f"{settings.backend_url}/mcp/",
+            "authorization_servers": [f"{settings.backend_url}/mcp"],
+        })
+
+    @app.get("/.well-known/oauth-authorization-server")
+    async def oauth_authorization_server(request: Request):
+        """RFC 8414 — proxy to MCP's OAuth metadata."""
+        import httpx as _httpx
+        async with _httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{settings.backend_url}/mcp/.well-known/oauth-authorization-server",
+                timeout=10,
+            )
+            return JSONResponse(resp.json(), status_code=resp.status_code)
+
 
 # ============================================================================
 # GLOBAL EXCEPTION HANDLERS
