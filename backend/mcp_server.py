@@ -4,6 +4,10 @@ Potatoes MCP Server
 Exposes kitchen assistant tools for Claude via the Model Context Protocol.
 Mounted on the FastAPI app at /mcp. Tools call the backend API internally
 via httpx (localhost), reusing all existing validation and business logic.
+
+Auth modes:
+- Google OAuth (for Claude.ai): Uses FastMCP's GoogleProvider when GOOGLE_CLIENT_ID is set
+- Bearer token (for Claude Code): Falls back to MCP_AUTH_TOKEN when Google OAuth is not configured
 """
 
 import json
@@ -11,13 +15,38 @@ import secrets as secrets_mod
 from datetime import timedelta
 
 from fastmcp import FastMCP
-from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 import httpx
 
 from config import settings, logger
 from auth import create_access_token
+
+
+# ---------------------------------------------------------------------------
+# Auth setup
+# ---------------------------------------------------------------------------
+
+def _build_google_auth():
+    """Build GoogleProvider if Google OAuth credentials are available."""
+    if not settings.google_client_id or not settings.google_client_secret:
+        return None
+    try:
+        from fastmcp.server.auth.providers.google import GoogleProvider
+        return GoogleProvider(
+            client_id=settings.google_client_id,
+            client_secret=settings.google_client_secret,
+            base_url=f"{settings.backend_url}/mcp",
+            required_scopes=["openid", "https://www.googleapis.com/auth/userinfo.email"],
+            require_authorization_consent=False,
+            jwt_signing_key=settings.secret_key,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to initialize Google OAuth for MCP: {e}")
+        return None
+
+
+_google_auth = _build_google_auth()
 
 
 # ---------------------------------------------------------------------------
@@ -30,11 +59,12 @@ mcp = FastMCP(
         "You are a kitchen assistant for the Potatoes family app. "
         "Use these tools to manage recipes, meal plans, and grocery lists."
     ),
+    auth=_google_auth,
 )
 
 
 # ---------------------------------------------------------------------------
-# Auth middleware — protects the /mcp endpoint with a bearer token
+# Bearer token middleware — fallback when Google OAuth is not available
 # ---------------------------------------------------------------------------
 
 class MCPAuthMiddleware:
@@ -697,13 +727,34 @@ async def search(query: str, category: str = "", page: int = 1, page_size: int =
 # Build the mountable ASGI app
 # ---------------------------------------------------------------------------
 
-def create_mcp_app() -> ASGIApp | None:
-    """Create the MCP ASGI app with auth middleware. Returns None if not configured."""
-    if not settings.mcp_auth_token or not settings.mcp_user_email:
-        logger.info("MCP server disabled (MCP_AUTH_TOKEN and MCP_USER_EMAIL required)")
+def create_mcp_app() -> tuple[ASGIApp, object] | None:
+    """Create the MCP ASGI app with auth. Returns (asgi_app, mcp_app) or None.
+
+    Auth strategy:
+    - If Google OAuth is configured: FastMCP handles OAuth internally (for Claude.ai)
+    - Else if MCP_AUTH_TOKEN is set: Bearer token middleware (for Claude Code)
+    - Else: MCP server is disabled
+    """
+    if not settings.mcp_user_email:
+        logger.info("MCP server disabled (MCP_USER_EMAIL required)")
+        return None
+
+    # Need at least one auth method (Google OAuth or bearer token)
+    has_google_auth = _google_auth is not None
+    has_bearer_auth = bool(settings.mcp_auth_token)
+
+    if not has_google_auth and not has_bearer_auth:
+        logger.info("MCP server disabled (need GOOGLE_CLIENT_ID or MCP_AUTH_TOKEN)")
         return None
 
     mcp_app = mcp.http_app(path="/")
-    authed_app = MCPAuthMiddleware(mcp_app, settings.mcp_auth_token)
-    logger.info(f"MCP server enabled for user {settings.mcp_user_email}")
-    return authed_app, mcp_app
+
+    if has_google_auth:
+        # Google OAuth is handled by FastMCP internally — no extra middleware needed
+        logger.info(f"MCP server enabled with Google OAuth for user {settings.mcp_user_email}")
+        return mcp_app, mcp_app
+    else:
+        # Fall back to bearer token auth
+        authed_app = MCPAuthMiddleware(mcp_app, settings.mcp_auth_token)
+        logger.info(f"MCP server enabled with bearer token for user {settings.mcp_user_email}")
+        return authed_app, mcp_app
