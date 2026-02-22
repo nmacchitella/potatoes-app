@@ -1,66 +1,121 @@
 # Potatoes
 
-A family kitchen app for organizing recipes, meal planning, and shopping lists.
+A kitchen app. Recipes, meal plans, grocery lists, the whole thing.
 
-## Features
+Built because every recipe app is either too much or not enough. This one is just right — if you're the kind of person who actually cooks and wants to share a kitchen with someone without shouting across the room "what are we eating Thursday?"
 
-- **Recipe Management** - Save and organize family recipes
-- **Meal Planning** - Collaborate on weekly meal plans
-- **Shopping Lists** - Auto-generate lists from meal plans
-- **Family Sharing** - Invite family members to collaborate
+## What it does
 
-## Tech Stack
+- **Recipes.** Save them, tag them, draft them, publish them. Import from any URL or YouTube video — AI does the scraping so you don't have to.
+- **Meal planning.** Drag recipes onto a calendar. Breakfast, lunch, dinner, snack. Share calendars with your people.
+- **Grocery lists.** Auto-generated from your meal plan. Shareable via link so someone else can do the shopping.
+- **Partner mode.** Link with another person. See each other's entire library. Built for couples, roommates, families — anyone sharing a fridge.
+- **Collections.** Curate recipe lists. Give viewer or editor access.
+- **Social.** Follow people, discover recipes, fork the ones you like.
+- **Claude integration.** MCP server baked in. Talk to your kitchen through Claude — search recipes, plan meals, manage groceries, all conversational.
+- **PWA + Mobile.** Install it on your phone from the browser, or use the native app.
 
-| Layer | Technologies |
-|-------|-------------|
-| **Frontend** | Next.js 14, React 18, TypeScript, Tailwind CSS, Zustand |
-| **Backend** | FastAPI, SQLAlchemy 2.0, SQLite/PostgreSQL, JWT auth |
-| **Mobile** | React Native, Expo 54, NativeWind |
-| **Infrastructure** | Fly.io, GitHub Actions, Docker |
+## Stack
 
-## Quick Start
+| | |
+|---|---|
+| Backend | FastAPI, SQLAlchemy, SQLite, Alembic |
+| Frontend | Next.js 14, TypeScript, Tailwind, Zustand |
+| Mobile | React Native, Expo, NativeWind |
+| AI | Google Gemini |
+| Images | Cloudinary |
+| Infra | Fly.io, Docker, GitHub Actions |
+
+## Run it yourself
+
+### Docker (fastest)
 
 ```bash
-# Clone and start with Docker
+git clone <repo-url>
+cd potatoes
 docker-compose up
 ```
 
-**Access:**
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+Frontend at `localhost:3000`. API at `localhost:8000`. Docs at `localhost:8000/docs`.
 
-For manual setup, see [Local Development Guide](documentation/02-local-development.md).
+### Manual
 
-## Project Structure
+You'll need Python 3.11+ and Node 18+.
+
+**Backend:**
+
+```bash
+cd backend
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # edit this — SECRET_KEY is the only required one
+alembic upgrade head
+uvicorn main:app --reload --port 8000
+```
+
+**Frontend:**
+
+```bash
+cd frontend
+npm install
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000/api" > .env.local
+npm run dev
+```
+
+**Mobile (optional):**
+
+```bash
+cd mobile
+npm install
+npm start
+```
+
+### Or just
+
+```bash
+./setup.sh
+```
+
+## Environment
+
+Only `SECRET_KEY` is truly required. Everything else turns on optional features.
+
+| Variable | Does what |
+|---|---|
+| `SECRET_KEY` | Signs JWTs. Generate: `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `GEMINI_API_KEY` | AI recipe import from URLs and YouTube |
+| `GOOGLE_CLIENT_ID` / `SECRET` | Google OAuth login |
+| `CLOUDINARY_*` | Image uploads |
+| `MAIL_*` | Email verification |
+| `MCP_AUTH_TOKEN` / `MCP_USER_EMAIL` | Claude MCP server |
+| `ADMIN_EMAIL` | Auto-promotes this user to admin |
+
+Full list in [`backend/.env.example`](backend/.env.example).
+
+## Test data
+
+```bash
+cd backend && source venv/bin/activate
+python scripts/seed_users.py
+```
+
+Five users: alice, bob, carol, david, emma. All `@example.com`, password `password123`.
+
+## Structure
 
 ```
 potatoes/
-├── backend/           # FastAPI application
-├── frontend/          # Next.js web application
-├── mobile/            # React Native/Expo app
-├── documentation/     # Technical documentation
+├── backend/          # FastAPI — models, routers, services, migrations
+├── frontend/         # Next.js 14 — App Router, PWA
+├── mobile/           # React Native + Expo
+├── documentation/    # Deep-dive technical docs
 └── docker-compose.yml
 ```
 
-## Documentation
+## Docs
 
-| Document | Description |
-|----------|-------------|
-| [Architecture](documentation/01-architecture.md) | System overview, component diagram |
-| [Local Development](documentation/02-local-development.md) | Setup guide, seeding data |
-| [Environment Variables](documentation/03-environment.md) | All env vars explained |
-| [Auth System](documentation/04-auth-system.md) | JWT, OAuth, security |
-| [Database Schema](documentation/05-database.md) | Models and relationships |
-| [API Reference](documentation/06-api-reference.md) | Endpoint documentation |
-| [Deployment](documentation/07-deployment.md) | CI/CD, Fly.io setup |
-| [Integrations](documentation/08-integrations.md) | Google OAuth, SMTP setup |
-| [Mobile App](documentation/09-mobile.md) | Expo/React Native |
-
-## License
-
-Private and proprietary. All rights reserved.
+The [`documentation/`](documentation/) folder has detailed guides on [architecture](documentation/01-architecture.md), [local dev](documentation/02-local-development.md), [env vars](documentation/03-environment.md), [auth](documentation/04-auth-system.md), [database](documentation/05-database.md), [API](documentation/06-api-reference.md), [deployment](documentation/07-deployment.md), [integrations](documentation/08-integrations.md), and [mobile](documentation/09-mobile.md).
 
 ---
 
-**Built by Nicola Macchitella**
+Built by [Nicola Macchitella](https://macchitella.xyz)
