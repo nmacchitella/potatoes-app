@@ -10,6 +10,8 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=15
       - FRONTEND_URL=http://localhost:3000
       - BACKEND_URL=http://localhost:8000
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:-dev-mcp-token}
+      - MCP_USER_EMAIL=${MCP_USER_EMAIL:-}
     volumes:
       - ./backend:/app
       - backend_data:/app/data
@@ -40,18 +42,6 @@ services:
     restart: unless-stopped
     command: npm run dev
 
-  mcp-server:
-    build: ./mcp-server
-    ports:
-      - "8001:8001"
-    environment:
-      - POTATOES_API_URL=http://backend:8000
-      - POTATOES_API_TOKEN=${MCP_SERVICE_TOKEN}
-      - MCP_HOST=0.0.0.0
-      - MCP_PORT=8001
-    depends_on:
-      - backend
-    restart: unless-stopped
 
 volumes:
   backend_data:

@@ -1,9 +1,28 @@
-"""Potatoes MCP Server — Kitchen assistant tools for Claude."""
+"""
+Potatoes MCP Server
+
+Exposes kitchen assistant tools for Claude via the Model Context Protocol.
+Mounted on the FastAPI app at /mcp. Tools call the backend API internally
+via httpx (localhost), reusing all existing validation and business logic.
+"""
 
 import json
-import os
-from mcp.server.fastmcp import FastMCP
-from api_client import api
+import secrets as secrets_mod
+from datetime import timedelta
+
+from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
+import httpx
+
+from config import settings, logger
+from auth import create_access_token
+
+
+# ---------------------------------------------------------------------------
+# MCP instance
+# ---------------------------------------------------------------------------
 
 mcp = FastMCP(
     "Potatoes Kitchen",
@@ -15,7 +34,91 @@ mcp = FastMCP(
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Auth middleware — protects the /mcp endpoint with a bearer token
+# ---------------------------------------------------------------------------
+
+class MCPAuthMiddleware:
+    """ASGI middleware that rejects requests without a valid bearer token."""
+
+    def __init__(self, app: ASGIApp, token: str):
+        self.app = app
+        self.token = token
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] == "http":
+            headers = dict(scope.get("headers", []))
+            auth_header = headers.get(b"authorization", b"").decode()
+            provided = auth_header.removeprefix("Bearer ").strip()
+            if not provided or not secrets_mod.compare_digest(provided, self.token):
+                resp = JSONResponse(status_code=401, content={"error": "Unauthorized"})
+                await resp(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+# ---------------------------------------------------------------------------
+# Internal API client — calls the backend's own REST API via localhost
+# ---------------------------------------------------------------------------
+
+_client: httpx.AsyncClient | None = None
+
+
+def _get_api_token() -> str:
+    """Generate a long-lived JWT for the MCP user."""
+    return create_access_token(
+        data={"sub": settings.mcp_user_email},
+        expires_delta=timedelta(days=3650),
+    )
+
+
+async def api() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(
+            base_url=f"{settings.backend_url}/api",
+            headers={"Authorization": f"Bearer {_get_api_token()}"},
+            timeout=30.0,
+        )
+    return _client
+
+
+async def api_get(path: str, params: dict | None = None) -> dict | list:
+    c = await api()
+    resp = await c.get(path, params=params)
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def api_post(path: str, body: dict | None = None) -> dict:
+    c = await api()
+    resp = await c.post(path, json=body)
+    resp.raise_for_status()
+    return resp.json() if resp.status_code != 204 else {"status": "ok"}
+
+
+async def api_put(path: str, body: dict | None = None) -> dict:
+    c = await api()
+    resp = await c.put(path, json=body)
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def api_patch(path: str, body: dict | None = None) -> dict:
+    c = await api()
+    resp = await c.patch(path, json=body)
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def api_delete(path: str) -> dict:
+    c = await api()
+    resp = await c.delete(path)
+    resp.raise_for_status()
+    return resp.json() if resp.status_code != 204 else {"status": "deleted"}
+
+
+# ---------------------------------------------------------------------------
+# Formatters
 # ---------------------------------------------------------------------------
 
 def _fmt_recipe_summary(r: dict) -> str:
@@ -40,7 +143,6 @@ def _fmt_recipe_full(r: dict) -> str:
     lines = [f"# {r['title']}", ""]
     if r.get("description"):
         lines += [r["description"], ""]
-
     meta = []
     if r.get("yield_quantity"):
         unit = r.get("yield_unit") or "servings"
@@ -53,57 +155,48 @@ def _fmt_recipe_full(r: dict) -> str:
         meta.append(f"Difficulty: {r['difficulty']}")
     if meta:
         lines += [" | ".join(meta), ""]
-
     if r.get("tags"):
-        tag_names = [t["name"] for t in r["tags"]]
-        lines += [f"Tags: {', '.join(tag_names)}", ""]
-
+        lines += [f"Tags: {', '.join(t['name'] for t in r['tags'])}", ""]
     if r.get("ingredients"):
         lines.append("## Ingredients")
-        current_group = None
+        group = None
         for ing in r["ingredients"]:
-            group = ing.get("ingredient_group")
-            if group and group != current_group:
-                lines.append(f"\n### {group}")
-                current_group = group
-            qty = ""
-            if ing.get("quantity"):
-                qty = str(ing["quantity"])
-                if ing.get("quantity_max"):
-                    qty += f"-{ing['quantity_max']}"
+            g = ing.get("ingredient_group")
+            if g and g != group:
+                lines.append(f"\n### {g}")
+                group = g
+            qty = str(ing["quantity"]) if ing.get("quantity") else ""
+            if ing.get("quantity_max"):
+                qty += f"-{ing['quantity_max']}"
             unit = ing.get("unit") or ""
             prep = f", {ing['preparation']}" if ing.get("preparation") else ""
-            optional = " (optional)" if ing.get("is_optional") else ""
-            lines.append(f"- {qty} {unit} {ing['name']}{prep}{optional}".strip())
+            opt = " (optional)" if ing.get("is_optional") else ""
+            lines.append(f"- {qty} {unit} {ing['name']}{prep}{opt}".strip())
         lines.append("")
-
     if r.get("instructions"):
         lines.append("## Instructions")
-        current_group = None
+        group = None
         for inst in r["instructions"]:
-            group = inst.get("instruction_group")
-            if group and group != current_group:
-                lines.append(f"\n### {group}")
-                current_group = group
+            g = inst.get("instruction_group")
+            if g and g != group:
+                lines.append(f"\n### {g}")
+                group = g
             lines.append(f"{inst['step_number']}. {inst['instruction_text']}")
         lines.append("")
-
     if r.get("source_url"):
         lines.append(f"Source: {r['source_url']}")
-
     lines.append(f"\nID: {r['id']}")
     return "\n".join(lines)
 
 
 def _fmt_meal(m: dict) -> str:
     title = m.get("custom_title") or (m.get("recipe") or {}).get("title") or "Untitled"
-    recipe_id = m.get("recipe_id") or ""
-    parts = [f"- [{m['meal_type']}] {title} ({m['servings']} servings)"]
-    if recipe_id:
-        parts[0] += f"  [recipe:{recipe_id}]"
+    line = f"- [{m['meal_type']}] {title} ({m['servings']} servings)"
+    if m.get("recipe_id"):
+        line += f"  [recipe:{m['recipe_id']}]"
     if m.get("notes"):
-        parts.append(f"  Note: {m['notes']}")
-    return "\n".join(parts)
+        line += f"\n  Note: {m['notes']}"
+    return line
 
 
 def _fmt_grocery_item(item: dict) -> str:
@@ -140,7 +233,7 @@ async def search_recipes(
         page: Page number (starts at 1)
         page_size: Results per page (max 100)
     """
-    params = {"page": page, "page_size": page_size}
+    params: dict = {"page": page, "page_size": page_size}
     if query:
         params["search"] = query
     if tag_ids:
@@ -149,15 +242,12 @@ async def search_recipes(
         params["difficulty"] = difficulty
     if collection_id:
         params["collection_id"] = collection_id
-
-    data = await api.get("/recipes", params=params)
+    data = await api_get("/recipes", params=params)
     items = data.get("items", [])
-    total = data.get("total", 0)
-    total_pages = data.get("total_pages", 1)
-
     if not items:
         return "No recipes found."
-
+    total = data.get("total", 0)
+    total_pages = data.get("total_pages", 1)
     lines = [f"Found {total} recipes (page {page}/{total_pages}):", ""]
     lines += [_fmt_recipe_summary(r) for r in items]
     return "\n".join(lines)
@@ -171,10 +261,8 @@ async def get_recipe(recipe_id: str, scale: float = 1.0) -> str:
         recipe_id: The recipe ID
         scale: Scale factor for ingredients (e.g., 2.0 for double)
     """
-    params = {}
-    if scale != 1.0:
-        params["scale"] = scale
-    data = await api.get(f"/recipes/{recipe_id}", params=params)
+    params = {"scale": scale} if scale != 1.0 else {}
+    data = await api_get(f"/recipes/{recipe_id}", params=params)
     return _fmt_recipe_full(data)
 
 
@@ -229,8 +317,7 @@ async def create_recipe(
         body["difficulty"] = difficulty
     if tag_ids:
         body["tag_ids"] = [t.strip() for t in tag_ids.split(",")]
-
-    data = await api.post("/recipes", json=body)
+    data = await api_post("/recipes", body)
     return f"Recipe created: **{data['title']}** (ID: {data['id']})"
 
 
@@ -292,8 +379,7 @@ async def update_recipe(
         body["tag_ids"] = [t.strip() for t in tag_ids.split(",")]
     if status:
         body["status"] = status
-
-    data = await api.put(f"/recipes/{recipe_id}", json=body)
+    data = await api_put(f"/recipes/{recipe_id}", body)
     return f"Recipe updated: **{data['title']}** (ID: {data['id']})"
 
 
@@ -304,7 +390,7 @@ async def delete_recipe(recipe_id: str) -> str:
     Args:
         recipe_id: The recipe ID to delete
     """
-    await api.delete(f"/recipes/{recipe_id}")
+    await api_delete(f"/recipes/{recipe_id}")
     return f"Recipe {recipe_id} deleted."
 
 
@@ -315,24 +401,19 @@ async def import_recipe(url: str) -> str:
     Args:
         url: The URL to import from
     """
-    data = await api.post("/recipes/import", json={"url": url})
+    data = await api_post("/recipes/import", {"url": url})
     recipes = data.get("recipes", [])
     source = data.get("source_type", "unknown")
-
     if not recipes:
         return "Could not parse any recipes from that URL."
-
     lines = [f"Imported {len(recipes)} recipe(s) from {source}:", ""]
     for r in recipes:
         lines.append(f"**{r['title']}**")
         if r.get("description"):
             lines.append(f"  {r['description'][:120]}")
-        ing_count = len(r.get("ingredients", []))
-        step_count = len(r.get("instructions", []))
-        lines.append(f"  {ing_count} ingredients, {step_count} steps")
-        lines.append(f"  (This is a preview — use create_recipe to save it)")
+        lines.append(f"  {len(r.get('ingredients', []))} ingredients, {len(r.get('instructions', []))} steps")
+        lines.append(f"  (Preview only — use create_recipe to save)")
         lines.append("")
-
     return "\n".join(lines)
 
 
@@ -344,13 +425,11 @@ async def discover_recipes(page: int = 1, page_size: int = 20) -> str:
         page: Page number
         page_size: Results per page
     """
-    data = await api.get("/recipes/public/feed", params={"page": page, "page_size": page_size})
+    data = await api_get("/recipes/public/feed", params={"page": page, "page_size": page_size})
     items = data.get("items", [])
-    total = data.get("total", 0)
-
     if not items:
         return "No public recipes found."
-
+    total = data.get("total", 0)
     lines = [f"Public recipes ({total} total, page {page}):", ""]
     for r in items:
         author = r.get("author", {}).get("name", "Unknown")
@@ -372,29 +451,23 @@ async def get_meal_plan(start_date: str, end_date: str, calendar_ids: str = "") 
         end_date: End date (YYYY-MM-DD)
         calendar_ids: Comma-separated calendar IDs (optional, defaults to all)
     """
-    params = {"start": start_date, "end": end_date}
+    params: dict = {"start": start_date, "end": end_date}
     if calendar_ids:
         params["calendar_ids"] = calendar_ids
-
-    data = await api.get("/meal-plan", params=params)
+    data = await api_get("/meal-plan", params=params)
     items = data.get("items", [])
-
     if not items:
         return f"No meals planned from {start_date} to {end_date}."
-
-    # Group by date
     by_date: dict[str, list] = {}
     for m in items:
         d = m.get("planned_date", "unknown")
         by_date.setdefault(d, []).append(m)
-
     lines = [f"Meal plan: {start_date} to {end_date}", ""]
     for date in sorted(by_date):
         lines.append(f"### {date}")
         for m in by_date[date]:
             lines.append(_fmt_meal(m))
         lines.append("")
-
     return "\n".join(lines)
 
 
@@ -431,8 +504,7 @@ async def add_to_meal_plan(
         body["custom_title"] = custom_title
     if notes:
         body["notes"] = notes
-
-    data = await api.post("/meal-plan", json=body)
+    data = await api_post("/meal-plan", body)
     title = data.get("custom_title") or (data.get("recipe") or {}).get("title") or "Meal"
     return f"Added **{title}** on {planned_date} ({meal_type}) — ID: {data['id']}"
 
@@ -463,8 +535,7 @@ async def update_meal(
         body["servings"] = servings
     if notes:
         body["notes"] = notes
-
-    data = await api.patch(f"/meal-plan/{meal_plan_id}", json=body)
+    data = await api_patch(f"/meal-plan/{meal_plan_id}", body)
     return f"Meal updated (ID: {data['id']})"
 
 
@@ -475,7 +546,7 @@ async def remove_from_meal_plan(meal_plan_id: str) -> str:
     Args:
         meal_plan_id: The meal plan entry ID to remove
     """
-    await api.delete(f"/meal-plan/{meal_plan_id}")
+    await api_delete(f"/meal-plan/{meal_plan_id}")
     return f"Meal {meal_plan_id} removed from plan."
 
 
@@ -491,22 +562,17 @@ async def get_grocery_list(list_id: str = "") -> str:
         list_id: Grocery list ID (optional — fetches default list if omitted)
     """
     if not list_id:
-        lists = await api.get("/grocery-list")
+        lists = await api_get("/grocery-list")
         if not lists:
             return "No grocery lists found."
         list_id = lists[0]["id"]
-
-    data = await api.get(f"/grocery-list/{list_id}")
+    data = await api_get(f"/grocery-list/{list_id}")
     items = data.get("items", [])
     name = data.get("name", "Grocery List")
-
     if not items:
         return f"**{name}** is empty."
-
-    # Group by category
     by_cat = data.get("items_by_category", {})
     lines = [f"# {name}", f"{len(items)} items", ""]
-
     if by_cat:
         for cat, cat_items in by_cat.items():
             lines.append(f"## {cat}")
@@ -516,7 +582,6 @@ async def get_grocery_list(list_id: str = "") -> str:
     else:
         for item in items:
             lines.append(f"  {_fmt_grocery_item(item)}")
-
     lines.append(f"\nList ID: {list_id}")
     return "\n".join(lines)
 
@@ -539,22 +604,16 @@ async def generate_grocery_list(
         calendar_ids: Comma-separated calendar IDs (optional)
     """
     if not list_id:
-        lists = await api.get("/grocery-list")
+        lists = await api_get("/grocery-list")
         if not lists:
             return "No grocery lists found."
         list_id = lists[0]["id"]
-
-    body: dict = {
-        "start_date": start_date,
-        "end_date": end_date,
-        "merge": merge,
-    }
+    body: dict = {"start_date": start_date, "end_date": end_date, "merge": merge}
     if calendar_ids:
         body["calendar_ids"] = [c.strip() for c in calendar_ids.split(",")]
-
-    data = await api.post(f"/grocery-list/{list_id}/generate", json=body)
-    item_count = len(data.get("items", []))
-    return f"Grocery list generated with {item_count} items from meals {start_date} to {end_date}. List ID: {list_id}"
+    data = await api_post(f"/grocery-list/{list_id}/generate", body)
+    count = len(data.get("items", []))
+    return f"Grocery list generated with {count} items from meals {start_date} to {end_date}. List ID: {list_id}"
 
 
 @mcp.tool()
@@ -575,11 +634,10 @@ async def add_grocery_item(
         category: Category (e.g., Produce, Dairy, Meat)
     """
     if not list_id:
-        lists = await api.get("/grocery-list")
+        lists = await api_get("/grocery-list")
         if not lists:
             return "No grocery lists found."
         list_id = lists[0]["id"]
-
     body: dict = {"name": name}
     if quantity is not None:
         body["quantity"] = quantity
@@ -587,8 +645,7 @@ async def add_grocery_item(
         body["unit"] = unit
     if category:
         body["category"] = category
-
-    data = await api.post(f"/grocery-list/{list_id}/items", json=body)
+    data = await api_post(f"/grocery-list/{list_id}/items", body)
     return f"Added **{data['name']}** to grocery list."
 
 
@@ -609,11 +666,8 @@ async def search(query: str, category: str = "", page: int = 1, page_size: int =
     params: dict = {"q": query, "page": page, "page_size": page_size}
     if category:
         params["category"] = category
-
-    data = await api.get("/search/full", params=params)
-
+    data = await api_get("/search/full", params=params)
     lines = [f"Search results for \"{query}\":", ""]
-
     for key in ["recipes", "tags", "collections", "users", "ingredients"]:
         section = data.get(key)
         if not section:
@@ -621,13 +675,12 @@ async def search(query: str, category: str = "", page: int = 1, page_size: int =
         items = section.get("items", section) if isinstance(section, dict) else section
         if not items:
             continue
-
         lines.append(f"## {key.title()}")
         for item in items[:10]:
             if key == "recipes":
                 lines.append(f"- **{item['title']}** (ID: {item['id']})")
             elif key == "tags":
-                lines.append(f"- {item.get('name', item.get('id', str(item)))}")
+                lines.append(f"- {item.get('name', str(item))}")
             elif key == "collections":
                 lines.append(f"- {item.get('name', '')} (ID: {item.get('id', '')})")
             elif key == "users":
@@ -635,18 +688,22 @@ async def search(query: str, category: str = "", page: int = 1, page_size: int =
             elif key == "ingredients":
                 lines.append(f"- {item.get('name', str(item))}")
         lines.append("")
-
     if len(lines) <= 2:
         return f"No results for \"{query}\"."
-
     return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Build the mountable ASGI app
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    host = os.environ.get("MCP_HOST", "0.0.0.0")
-    port = int(os.environ.get("MCP_PORT", "8001"))
-    mcp.run(transport="streamable-http", host=host, port=port)
+def create_mcp_app() -> ASGIApp | None:
+    """Create the MCP ASGI app with auth middleware. Returns None if not configured."""
+    if not settings.mcp_auth_token or not settings.mcp_user_email:
+        logger.info("MCP server disabled (MCP_AUTH_TOKEN and MCP_USER_EMAIL required)")
+        return None
+
+    mcp_app = mcp.http_app(path="/")
+    authed_app = MCPAuthMiddleware(mcp_app, settings.mcp_auth_token)
+    logger.info(f"MCP server enabled for user {settings.mcp_user_email}")
+    return authed_app, mcp_app

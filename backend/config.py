@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     # Admin user (promoted to admin on startup if set)
     admin_email: str = ""
 
+    # MCP Server
+    mcp_auth_token: str = ""  # Bearer token clients must send to access /mcp
+    mcp_user_email: str = ""  # User email the MCP acts on behalf of
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -10,6 +12,7 @@ from config import settings, logger
 from routers import auth_router, google_auth, recipe_router, collection_router, tag_router, social_router, notification_router, ingredient_router, search_router, meal_plan_router, admin_router, grocery_list_router, library_router
 from admin import create_admin
 from models import User
+from mcp_server import create_mcp_app
 
 # NOTE: Do not use Base.metadata.create_all() here — rely solely on Alembic migrations
 # to avoid schema drift between what Alembic tracks and what exists in the database.
@@ -40,11 +43,26 @@ ensure_admin_user()
 
 logger.info(f"Starting {settings.app_name}")
 
+# Build MCP app (returns None if not configured)
+_mcp_result = create_mcp_app()
+_mcp_lifespan = _mcp_result[1].router.lifespan_context if _mcp_result else None
+
+
+@asynccontextmanager
+async def lifespan(app):
+    if _mcp_lifespan:
+        async with _mcp_lifespan(app):
+            yield
+    else:
+        yield
+
+
 app = FastAPI(
     title=settings.app_name,
     description="FamilyKitchen - Collaborative meal planning and recipe management",
     version="1.0.0",
     root_path="",
+    lifespan=lifespan,
     servers=[
         {"url": settings.backend_url, "description": "Current"},
     ]
@@ -87,6 +105,10 @@ app.include_router(admin_router.router, prefix="/api")
 
 # Create admin interface (must be after app creation and middleware setup)
 admin = create_admin(app)
+
+# Mount MCP server at /mcp (if configured)
+if _mcp_result:
+    app.mount("/mcp", _mcp_result[0])
 
 
 # ============================================================================

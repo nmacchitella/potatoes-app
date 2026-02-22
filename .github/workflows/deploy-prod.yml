@@ -26,23 +26,6 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-  deploy-mcp-prod:
-    name: Deploy MCP Server to Production
-    runs-on: ubuntu-latest
-    needs: deploy-backend-prod
-    defaults:
-      run:
-        working-directory: mcp-server
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
-
-      - name: Deploy MCP Server to Production
-        run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
   deploy-frontend-prod:
     name: Deploy Frontend to Production
     runs-on: ubuntu-latest
