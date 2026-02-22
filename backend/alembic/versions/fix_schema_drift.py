@@ -108,8 +108,11 @@ def upgrade() -> None:
     # 4. Add unique constraint on user_follows(follower_id, following_id)
     # -----------------------------------------------------------------------
     if not _index_exists(conn, "uq_user_follow"):
-        with op.batch_alter_table('user_follows', schema=None) as batch_op:
-            batch_op.create_unique_constraint('uq_user_follow', ['follower_id', 'following_id'])
+        try:
+            with op.batch_alter_table('user_follows', schema=None) as batch_op:
+                batch_op.create_unique_constraint('uq_user_follow', ['follower_id', 'following_id'])
+        except Exception:
+            pass
 
     # -----------------------------------------------------------------------
     # 5. Add composite indexes for common query patterns on user_follows

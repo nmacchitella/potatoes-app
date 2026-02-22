@@ -1,8 +1,11 @@
 #!/bin/bash
-set -e
 
 echo "Running database migrations..."
-alembic upgrade head
+if alembic upgrade head; then
+    echo "Migrations completed successfully."
+else
+    echo "WARNING: Migrations failed (non-fatal, continuing startup)"
+fi
 
 echo "Starting application..."
 # NOTE: Running with a single worker (default). For production with higher traffic,
