@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     secret_key: str = ""
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
-    refresh_token_expire_days: int = 7
+    refresh_token_expire_days: int = 7  # Default: 7 days for refresh token validity
 
     # OAuth
     google_client_id: str = ""
@@ -40,7 +40,10 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: List[str] = [
         "http://localhost:3000",
+        "http://localhost:3001",
         "http://127.0.0.1:3000",
+        "https://potatoes-frontend.fly.dev",
+        "https://potatoes-frontend-dev.fly.dev",
     ]
 
     # Email

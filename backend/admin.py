@@ -15,7 +15,7 @@ import secrets
 import os
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Get absolute path to templates directory
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
@@ -558,8 +558,8 @@ def create_recipe_from_json(db: Session, data: dict, user_id: str) -> Recipe:
         source_name=data.get("source_name"),
         cover_image_url=data.get("cover_image_url"),
         status="published",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
     )
     db.add(recipe)
 
@@ -613,7 +613,7 @@ def create_recipe_from_json(db: Session, data: dict, user_id: str) -> Recipe:
 def create_admin(app):
     """Create and configure the admin interface"""
     # Create authentication backend
-    authentication_backend = AdminAuth(secret_key=secrets.token_urlsafe(32))
+    authentication_backend = AdminAuth(secret_key=settings.secret_key)
 
     # Create admin instance with dark theme
     admin = Admin(

@@ -11,8 +11,8 @@ from routers import auth_router, google_auth, recipe_router, collection_router, 
 from admin import create_admin
 from models import User
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+# NOTE: Do not use Base.metadata.create_all() here — rely solely on Alembic migrations
+# to avoid schema drift between what Alembic tracks and what exists in the database.
 
 
 def ensure_admin_user():
@@ -46,33 +46,25 @@ app = FastAPI(
     version="1.0.0",
     root_path="",
     servers=[
-        {"url": "https://potatoes-backend.fly.dev", "description": "Production"},
-        {"url": settings.backend_url, "description": "Development"}
+        {"url": settings.backend_url, "description": "Current"},
     ]
 )
 
-# Add session middleware (https_only=False for local development)
+# Add session middleware
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
     session_cookie="admin_session",
     max_age=3600,
     same_site="lax",
-    https_only=False  # Must be False for localhost; Fly.io handles HTTPS at edge
+    https_only=not settings.debug,  # True in production, False for localhost
 )
 
-# Configure CORS
+# Configure CORS — origins are managed centrally in config.py / CORS_ORIGINS env var
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3000",
-        "https://potatoes-frontend.fly.dev",
-        "https://potatoes-frontend-dev.fly.dev",
-        *settings.cors_origins,
-    ],
-    allow_origin_regex=r"^http://192\.168\.\d{1,3}\.\d{1,3}:3000$",
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=r"^http://192\.168\.\d{1,3}\.\d{1,3}:(3000|3001)$" if settings.debug else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

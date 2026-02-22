@@ -30,8 +30,8 @@ function LoginContent() {
 
   if (mounted && token && hasAccessTokenCookie()) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-bg">
-        <div className="text-white text-xl">Redirecting...</div>
+      <div className="min-h-screen flex items-center justify-center bg-cream">
+        <div className="text-charcoal text-xl">Redirecting...</div>
       </div>
     );
   }
@@ -50,12 +50,12 @@ function LoginContent() {
   };
 
   return (
-    <div className="min-h-screen flex bg-dark-bg">
+    <div className="min-h-screen flex bg-cream">
       {/* Left side - Landing content */}
-      <div className="hidden lg:flex lg:w-1/2 bg-dark-lighter p-12 flex-col justify-center relative overflow-hidden border-r border-gray-800/50">
+      <div className="hidden lg:flex lg:w-1/2 bg-cream-dark p-12 flex-col justify-center relative overflow-hidden border-r border-border">
         <div className="relative z-10 max-w-lg">
-          <h1 className="text-5xl font-bold text-text-primary mb-6 tracking-tight">🥔 Potatoes</h1>
-          <p className="text-2xl text-gray-400 font-light">
+          <h1 className="text-5xl font-bold text-charcoal mb-6 tracking-tight">Potatoes</h1>
+          <p className="text-2xl text-warm-gray font-light">
             Your family kitchen, organized.
           </p>
         </div>
@@ -65,22 +65,22 @@ function LoginContent() {
       <div className="w-full lg:w-1/2 flex items-center justify-center px-6 py-12">
         <div className="max-w-md w-full space-y-8">
           <div className="text-center lg:hidden">
-            <h1 className="text-4xl font-bold text-text-primary mb-2 tracking-tight">🥔 Potatoes</h1>
-            <p className="text-gray-400">Your family kitchen, organized</p>
+            <h1 className="text-4xl font-bold text-charcoal mb-2 tracking-tight">Potatoes</h1>
+            <p className="text-warm-gray">Your family kitchen, organized</p>
           </div>
 
           <div className="hidden lg:block text-center">
-            <h2 className="text-3xl font-bold text-text-primary mb-2">
+            <h2 className="text-3xl font-bold text-charcoal mb-2">
               Welcome
             </h2>
-            <p className="text-gray-400">
+            <p className="text-warm-gray">
               Sign in to access your recipes
             </p>
           </div>
 
           <div className="card">
             {error && (
-              <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded text-sm mb-4">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm mb-4">
                 {error}
               </div>
             )}
@@ -101,7 +101,7 @@ function LoginContent() {
             </button>
           </div>
 
-          <p className="text-center text-gray-500 text-sm">
+          <p className="text-center text-warm-gray text-sm">
             By signing in, you agree to organize your family meals together.
           </p>
         </div>
@@ -113,8 +113,8 @@ function LoginContent() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-dark-bg">
-        <div className="text-white text-xl">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-cream">
+        <div className="text-charcoal text-xl">Loading...</div>
       </div>
     }>
       <LoginContent />

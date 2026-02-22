@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import type { RecipeSummary } from '@/types';
 
 type RecipeCardVariant = 'default' | 'compact';
@@ -31,15 +32,17 @@ export function RecipeCard({ recipe, showAuthor = false, variant = 'default' }: 
     return (
       <Link
         href={`/recipes/${recipe.id}`}
-        className="flex-shrink-0 w-64 bg-dark-card rounded-lg border border-dark-border hover:border-primary/50 transition-colors overflow-hidden group"
+        className="flex-shrink-0 w-64 bg-white rounded-lg border border-border hover:border-gold/50 transition-colors overflow-hidden group"
       >
         {/* Cover Image */}
-        <div className="h-36 bg-dark-hover overflow-hidden">
+        <div className="relative h-36 bg-cream-dark overflow-hidden">
           {recipe.cover_image_url ? (
-            <img
+            <Image
               src={recipe.cover_image_url}
               alt={recipe.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              fill
+              sizes="256px"
+              className="object-cover group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-gray-600">
@@ -52,18 +55,18 @@ export function RecipeCard({ recipe, showAuthor = false, variant = 'default' }: 
 
         {/* Content */}
         <div className="p-3">
-          <h3 className="font-medium text-sm line-clamp-1 group-hover:text-primary transition-colors">
+          <h3 className="font-medium text-sm line-clamp-1 group-hover:text-gold transition-colors">
             {recipe.title}
           </h3>
 
           {showAuthor && recipe.author && (
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-warm-gray mt-1">
               by {recipe.author.name}
             </p>
           )}
 
           {/* Meta info */}
-          <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
+          <div className="flex items-center gap-3 mt-2 text-xs text-warm-gray">
             {totalTime > 0 && (
               <span className="flex items-center gap-1">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,13 +88,13 @@ export function RecipeCard({ recipe, showAuthor = false, variant = 'default' }: 
               {recipe.tags.slice(0, 2).map(tag => (
                 <span
                   key={tag.id}
-                  className="px-1.5 py-0.5 bg-dark-hover rounded text-xs text-gray-400"
+                  className="px-1.5 py-0.5 bg-cream-dark rounded text-xs text-warm-gray"
                 >
                   {tag.name}
                 </span>
               ))}
               {recipe.tags.length > 2 && (
-                <span className="text-xs text-gray-500">+{recipe.tags.length - 2}</span>
+                <span className="text-xs text-warm-gray">+{recipe.tags.length - 2}</span>
               )}
             </div>
           )}
@@ -103,14 +106,16 @@ export function RecipeCard({ recipe, showAuthor = false, variant = 'default' }: 
   // Default variant - full card
   return (
     <Link href={`/recipes/${recipe.id}`}>
-      <div className="card hover:border-primary/50 transition-all cursor-pointer group">
+      <div className="card hover:border-gold/50 transition-all cursor-pointer group">
         {/* Cover Image */}
-        <div className="aspect-video bg-dark-hover rounded-lg mb-4 overflow-hidden relative">
+        <div className="relative aspect-video bg-cream-dark rounded-lg mb-4 overflow-hidden">
           {recipe.cover_image_url ? (
-            <img
+            <Image
               src={recipe.cover_image_url}
               alt={recipe.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+              fill
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              className="object-cover group-hover:scale-105 transition-transform"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-4xl">
@@ -125,18 +130,18 @@ export function RecipeCard({ recipe, showAuthor = false, variant = 'default' }: 
         </div>
 
         {/* Content */}
-        <h3 className="font-semibold text-lg mb-2 group-hover:text-primary transition-colors line-clamp-1">
+        <h3 className="font-semibold text-lg mb-2 group-hover:text-gold transition-colors line-clamp-1">
           {recipe.title}
         </h3>
 
         {recipe.description && (
-          <p className="text-gray-400 text-sm mb-3 line-clamp-2">
+          <p className="text-warm-gray text-sm mb-3 line-clamp-2">
             {recipe.description}
           </p>
         )}
 
         {/* Meta */}
-        <div className="flex items-center gap-4 text-sm text-gray-500">
+        <div className="flex items-center gap-4 text-sm text-warm-gray">
           {totalTime > 0 && (
             <span className="flex items-center gap-1">
               <span>⏱️</span>
@@ -158,19 +163,21 @@ export function RecipeCard({ recipe, showAuthor = false, variant = 'default' }: 
 
         {/* Author */}
         {showAuthor && recipe.author && (
-          <div className="mt-3 pt-3 border-t border-dark-hover flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-dark-hover flex items-center justify-center overflow-hidden flex-shrink-0">
+          <div className="mt-3 pt-3 border-t border-cream-dark flex items-center gap-2">
+            <div className="relative w-6 h-6 rounded-full bg-cream-dark flex items-center justify-center overflow-hidden flex-shrink-0">
               {recipe.author.profile_image_url ? (
-                <img
+                <Image
                   src={recipe.author.profile_image_url}
                   alt={recipe.author.name}
-                  className="w-full h-full object-cover"
+                  fill
+                  sizes="24px"
+                  className="object-cover"
                 />
               ) : (
                 <span className="text-xs">{recipe.author.name.charAt(0)}</span>
               )}
             </div>
-            <span className="text-sm text-gray-400 truncate">{recipe.author.name}</span>
+            <span className="text-sm text-warm-gray truncate">{recipe.author.name}</span>
           </div>
         )}
       </div>

@@ -1,6 +1,12 @@
 /**
  * Auth token storage utilities
- * Stores tokens in both localStorage (for client-side) and cookies (for middleware)
+ *
+ * Tokens are stored in both localStorage and cookies:
+ * - localStorage: Used for client-side API requests (acceptable for SPAs since
+ *   XSS is the primary threat vector regardless of storage mechanism, and our
+ *   CSP headers mitigate this risk).
+ * - Cookies: Used by Next.js middleware for server-side auth checks.
+ *   Cookies are set with Secure and SameSite=Lax flags.
  */
 
 import { AUTH_CONFIG } from './constants';
@@ -15,7 +21,7 @@ const TOKEN_EXPIRY_KEY = 'token_expires_at';
 
 function setCookie(name: string, value: string, maxAge: number) {
   if (typeof document === 'undefined') return;
-  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  document.cookie = `${name}=${value}; path=/; max-age=${maxAge}; SameSite=Lax; Secure`;
 }
 
 function deleteCookie(name: string) {

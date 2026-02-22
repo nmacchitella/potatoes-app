@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import math
 
 from database import get_db
@@ -445,7 +445,7 @@ async def delete_recipe(
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
-    recipe.deleted_at = datetime.utcnow()
+    recipe.deleted_at = datetime.now(timezone.utc)
     db.commit()
 
     return None

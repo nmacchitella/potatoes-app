@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { collectionApi, socialApi } from '@/lib/api';
+import { collectionApi, socialApi, getErrorMessage } from '@/lib/api';
 import type { Collection, CollectionShare, UserSearchResult } from '@/types';
 
 interface UseCollectionsReturn {
@@ -152,8 +152,8 @@ export function useCollections(): UseCollectionsReturn {
       if (selectedCollection === collectionId) {
         setSelectedCollection(null);
       }
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to delete collection');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to delete collection'));
     }
   }, [selectedCollection]);
 
@@ -238,8 +238,8 @@ export function useCollections(): UseCollectionsReturn {
       setShares(prev => [...prev, newShare]);
       setUserSearchQuery('');
       setUserSearchResults([]);
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to share collection');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to share collection'));
     } finally {
       setSharingUser(null);
     }

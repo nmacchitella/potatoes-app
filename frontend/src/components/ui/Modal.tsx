@@ -15,6 +15,10 @@ interface ModalProps {
   blur?: boolean;
   closeOnEscape?: boolean;
   closeOnBackdropClick?: boolean;
+  /** Accessible label for the dialog (use when there is no visible title) */
+  ariaLabel?: string;
+  /** ID of the element that labels the dialog (use when there is a visible title) */
+  ariaLabelledBy?: string;
 }
 
 const sizeClasses: Record<ModalSize, string> = {
@@ -35,6 +39,8 @@ export default function Modal({
   blur = false,
   closeOnEscape = true,
   closeOnBackdropClick = true,
+  ariaLabel,
+  ariaLabelledBy,
 }: ModalProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
@@ -119,6 +125,8 @@ export default function Modal({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabelledBy}
         tabIndex={-1}
       >
         {children}

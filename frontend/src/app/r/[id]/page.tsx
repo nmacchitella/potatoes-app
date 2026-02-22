@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { recipeApi } from '@/lib/api';
+import { recipeApi, isAxiosError } from '@/lib/api';
 import { formatIngredient } from '@/lib/constants';
 import { useStore } from '@/store/useStore';
 import { YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
@@ -29,8 +29,8 @@ export default function PublicRecipePage() {
       try {
         const data = await recipeApi.get(recipeId, scale !== 1 ? scale : undefined);
         setRecipe(data);
-      } catch (err: any) {
-        if (err.response?.status === 404) {
+      } catch (err: unknown) {
+        if (isAxiosError(err) && err.response?.status === 404) {
           setError('Recipe not found or is private');
         } else {
           setError('Failed to load recipe');
@@ -42,7 +42,7 @@ export default function PublicRecipePage() {
     fetchRecipe();
   }, [recipeId, scale]);
 
-  const handleAuthAction = (action: string) => {
+  const handleAuthAction = () => {
     if (!user) {
       setShowAuthModal(true);
     } else {
@@ -225,7 +225,7 @@ export default function PublicRecipePage() {
             {/* Action buttons */}
             <div className="flex items-center gap-3 pt-3 border-t border-border">
               <button
-                onClick={() => handleAuthAction('save')}
+                onClick={() => handleAuthAction()}
                 className="flex items-center gap-1.5 text-xs text-warm-gray hover:text-gold transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

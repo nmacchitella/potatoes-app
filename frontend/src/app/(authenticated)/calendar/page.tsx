@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { mealPlanApi, socialApi } from '@/lib/api';
+import { mealPlanApi, socialApi, getErrorMessage } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import MainNavigation from '@/components/layout/MainNavigation';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
@@ -81,8 +81,8 @@ export default function CalendarPage() {
       setCalendarShares(prev => [...prev, newShare]);
       setCalendarUserSearchQuery('');
       setCalendarUserSearchResults([]);
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to share calendar');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to share calendar'));
     } finally {
       setSharingCalendarUser(null);
     }

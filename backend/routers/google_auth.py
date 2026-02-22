@@ -10,7 +10,7 @@ import models
 import httpx
 import secrets
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,47 @@ class OAuthCodeExchangeRequest(BaseModel):
 _oauth_code_store: dict = {}
 
 router = APIRouter(prefix="/auth/google", tags=["google-auth"])
+
+
+def _find_or_create_google_user(db: Session, email: str, name: str, google_id: str) -> models.User:
+    """Find existing user or create a new one from Google OAuth data.
+
+    Handles linking OAuth to existing accounts and creating default resources.
+    Uses a single transaction for atomicity.
+    """
+    db_user = db.query(models.User).filter(models.User.email == email).first()
+
+    if db_user:
+        if not db_user.oauth_provider:
+            db_user.oauth_provider = "google"
+            db_user.oauth_id = google_id
+        if not db_user.is_verified:
+            db_user.is_verified = True
+        db.commit()
+        db.refresh(db_user)
+    else:
+        db_user = models.User(
+            email=email,
+            name=name,
+            hashed_password=None,
+            oauth_provider="google",
+            oauth_id=google_id,
+            is_verified=True
+        )
+        db.add(db_user)
+        db.flush()  # Get user ID without committing
+
+        # Create default grocery list in the same transaction
+        default_grocery_list = models.GroceryList(
+            user_id=db_user.id,
+            name="My Grocery List"
+        )
+        db.add(default_grocery_list)
+        db.commit()
+        db.refresh(db_user)
+
+    return db_user
+
 
 # Initialize OAuth
 oauth = OAuth()
@@ -64,7 +105,7 @@ async def google_login():
 
 def _cleanup_expired_codes():
     """Remove expired OAuth codes from memory"""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expired = [code for code, data in _oauth_code_store.items() if data["expires_at"] < now]
     for code in expired:
         del _oauth_code_store[code]
@@ -76,7 +117,7 @@ def _create_oauth_code(tokens: dict) -> str:
     code = secrets.token_urlsafe(32)
     _oauth_code_store[code] = {
         "tokens": tokens,
-        "expires_at": datetime.utcnow() + timedelta(minutes=5)
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
     }
     return code
 
@@ -142,37 +183,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
             name = user_info.get("name", email.split("@")[0])
             google_id = user_info.get("id")
 
-            db_user = db.query(models.User).filter(models.User.email == email).first()
-
-            if db_user:
-                if not db_user.oauth_provider:
-                    db_user.oauth_provider = "google"
-                    db_user.oauth_id = google_id
-                if not db_user.is_verified:
-                    db_user.is_verified = True
-                db.commit()
-                db.refresh(db_user)
-            else:
-                db_user = models.User(
-                    email=email,
-                    name=name,
-                    hashed_password=None,
-                    oauth_provider="google",
-                    oauth_id=google_id,
-                    is_verified=True
-                )
-                db.add(db_user)
-                db.commit()
-                db.refresh(db_user)
-
-                # Create default grocery list for the new user
-                default_grocery_list = models.GroceryList(
-                    user_id=db_user.id,
-                    name="My Grocery List"
-                )
-                db.add(default_grocery_list)
-                db.commit()
-
+            db_user = _find_or_create_google_user(db, email, name, google_id)
             jwt_tokens = auth.create_token_pair(db_user, db)
 
             # Create a short-lived code instead of putting tokens in URL
@@ -207,7 +218,7 @@ async def exchange_oauth_code(request: OAuthCodeExchangeRequest):
             detail="Invalid or expired code"
         )
 
-    if code_data["expires_at"] < datetime.utcnow():
+    if code_data["expires_at"] < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Code has expired"
@@ -248,37 +259,14 @@ async def google_mobile_auth(
             name = user_info.get("name", email.split("@")[0])
             google_id = user_info.get("id")
 
-            # Find or create user
-            db_user = db.query(models.User).filter(models.User.email == email).first()
-
-            if db_user:
-                if not db_user.oauth_provider:
-                    db_user.oauth_provider = "google"
-                    db_user.oauth_id = google_id
-                if not db_user.is_verified:
-                    db_user.is_verified = True
-                db.commit()
-                db.refresh(db_user)
-            else:
-                db_user = models.User(
-                    email=email,
-                    name=name,
-                    hashed_password=None,
-                    oauth_provider="google",
-                    oauth_id=google_id,
-                    is_verified=True
-                )
-                db.add(db_user)
-                db.commit()
-                db.refresh(db_user)
-
-            # Return tokens
+            db_user = _find_or_create_google_user(db, email, name, google_id)
             return auth.create_token_pair(db_user, db)
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.exception("Mobile authentication failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Mobile authentication failed: {str(e)}"
+            detail="Authentication failed. Please try again."
         )

@@ -18,7 +18,7 @@ from pydantic import BaseModel
 
 from database import get_db
 from auth import get_current_user
-from models import User, Recipe, Tag, Collection, Ingredient, RecipeIngredient
+from models import User, Recipe, Tag, Collection, Ingredient, RecipeIngredient, collection_recipes, recipe_tags
 
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -228,12 +228,24 @@ async def search_autocomplete(
         func.lower(Collection.name).like(search_term)
     ).limit(limit).all()
 
+    # Use SQL count instead of loading all recipes into memory
+    collection_ids = [c.id for c in collections_query]
+    collection_counts = {}
+    if collection_ids:
+        count_rows = db.query(
+            collection_recipes.c.collection_id,
+            func.count(collection_recipes.c.recipe_id)
+        ).filter(
+            collection_recipes.c.collection_id.in_(collection_ids)
+        ).group_by(collection_recipes.c.collection_id).all()
+        collection_counts = {row[0]: row[1] for row in count_rows}
+
     collections = [
         SearchCollectionResult(
             id=c.id,
             name=c.name,
             description=c.description,
-            recipe_count=len(c.recipes)
+            recipe_count=collection_counts.get(c.id, 0)
         )
         for c in collections_query
     ]
@@ -382,12 +394,24 @@ async def search_full(
         collections_total = collections_query.count()
         collections_data = collections_query.offset(offset if category else 0).limit(cat_limit).all()
 
+        # Use SQL count instead of loading all recipes into memory
+        coll_ids = [c.id for c in collections_data]
+        coll_counts = {}
+        if coll_ids:
+            coll_count_rows = db.query(
+                collection_recipes.c.collection_id,
+                func.count(collection_recipes.c.recipe_id)
+            ).filter(
+                collection_recipes.c.collection_id.in_(coll_ids)
+            ).group_by(collection_recipes.c.collection_id).all()
+            coll_counts = {row[0]: row[1] for row in coll_count_rows}
+
         collections = [
             SearchCollectionResult(
                 id=c.id,
                 name=c.name,
                 description=c.description,
-                recipe_count=len(c.recipes)
+                recipe_count=coll_counts.get(c.id, 0)
             )
             for c in collections_data
         ]

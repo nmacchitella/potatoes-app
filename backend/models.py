@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, ForeignKey, String, DateTime, Date, JSON, Integer, Float, Text, Table, UniqueConstraint, Index
+from sqlalchemy import Boolean, Column, ForeignKey, String, DateTime, Date, JSON, Integer, Float, Text, Table, UniqueConstraint, Index, CheckConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -126,6 +126,13 @@ class UserFollow(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    __table_args__ = (
+        UniqueConstraint('follower_id', 'following_id', name='uq_user_follow'),
+        CheckConstraint('follower_id != following_id', name='ck_no_self_follow'),
+        Index('ix_user_follows_follower_status', 'follower_id', 'status'),
+        Index('ix_user_follows_following_status', 'following_id', 'status'),
+    )
+
     # Relationships
     follower = relationship("User", foreign_keys=[follower_id], back_populates="following")
     following_user = relationship("User", foreign_keys=[following_id], back_populates="followers")
@@ -191,7 +198,7 @@ class RecipeIngredient(Base):
     __tablename__ = "recipe_ingredients"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=False)
+    recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=False, index=True)
     ingredient_id = Column(String, ForeignKey("ingredients.id", ondelete='SET NULL'), nullable=True)  # Link to master ingredient
     sort_order = Column(Integer, nullable=False, default=0)
     quantity = Column(Float, nullable=True)
@@ -213,7 +220,7 @@ class RecipeInstruction(Base):
     __tablename__ = "recipe_instructions"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=False)
+    recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=False, index=True)
     step_number = Column(Integer, nullable=False)
     instruction_text = Column(Text, nullable=False)
     duration_minutes = Column(Integer, nullable=True)
@@ -289,8 +296,8 @@ class CollectionShare(Base):
     __tablename__ = "collection_shares"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    collection_id = Column(String, ForeignKey("collections.id", ondelete='CASCADE'), nullable=False)
-    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)  # shared with
+    collection_id = Column(String, ForeignKey("collections.id", ondelete='CASCADE'), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)  # shared with
     permission = Column(String(20), default="viewer")  # viewer, editor
     invited_by_id = Column(String, ForeignKey("users.id", ondelete='SET NULL'), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -461,8 +468,8 @@ class GroceryListShare(Base):
     __tablename__ = "grocery_list_shares"
 
     id = Column(String, primary_key=True, default=generate_uuid)
-    grocery_list_id = Column(String, ForeignKey("grocery_lists.id", ondelete='CASCADE'), nullable=False)
-    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False)
+    grocery_list_id = Column(String, ForeignKey("grocery_lists.id", ondelete='CASCADE'), nullable=False, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), nullable=False, index=True)
     permission = Column(String(20), default="editor")  # editor (shared users can edit)
     status = Column(String(20), default="pending")  # pending, accepted, declined
     created_at = Column(DateTime(timezone=True), server_default=func.now())

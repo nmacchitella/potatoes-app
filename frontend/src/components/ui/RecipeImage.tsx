@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 interface RecipeImageProps {
   src?: string | null;
   alt?: string;
@@ -40,10 +42,10 @@ export default function RecipeImage({
 
   return (
     <div
-      className={`bg-cream-dark flex-shrink-0 overflow-hidden flex items-center justify-center ${sizeClass} ${roundedClass} ${className}`}
+      className={`relative bg-cream-dark flex-shrink-0 overflow-hidden flex items-center justify-center ${sizeClass} ${roundedClass} ${className}`}
     >
       {src ? (
-        <img src={src} alt={alt} className="w-full h-full object-cover" />
+        <Image src={src} alt={alt} fill sizes="96px" className="object-cover" />
       ) : (
         <svg
           className={`text-warm-gray-light ${iconSize}`}

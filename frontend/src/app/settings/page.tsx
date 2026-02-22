@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { authApi, libraryApi, socialApi } from '@/lib/api';
+import { authApi, libraryApi, socialApi, getErrorMessage } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import type { LibraryPartner, PendingLibraryInvite, LibraryShareResponse, UserSearchResult } from '@/types';
 import Navbar from '@/components/layout/Navbar';
@@ -132,8 +132,8 @@ export default function SettingsPage() {
       setSentInvites(prev => [...prev, invite]);
       setUserSearchQuery('');
       setUserSearchResults([]);
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to send invitation');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to send invitation'));
     } finally {
       setInvitingUser(null);
     }
@@ -145,8 +145,8 @@ export default function SettingsPage() {
       await libraryApi.acceptInvite(shareId);
       // Reload all data to get updated partners list
       await loadLibraryData();
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to accept invitation');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to accept invitation'));
     } finally {
       setLibraryActionLoading(null);
     }
@@ -157,8 +157,8 @@ export default function SettingsPage() {
     try {
       await libraryApi.declineInvite(shareId);
       setPendingInvites(prev => prev.filter(i => i.id !== shareId));
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to decline invitation');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to decline invitation'));
     } finally {
       setLibraryActionLoading(null);
     }
@@ -169,8 +169,8 @@ export default function SettingsPage() {
     try {
       await libraryApi.cancelInvite(shareId);
       setSentInvites(prev => prev.filter(i => i.id !== shareId));
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to cancel invitation');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to cancel invitation'));
     } finally {
       setLibraryActionLoading(null);
     }
@@ -182,8 +182,8 @@ export default function SettingsPage() {
     try {
       await libraryApi.removePartner(partnerId);
       setPartners(prev => prev.filter(p => p.id !== partnerId));
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to remove partner');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to remove partner'));
     } finally {
       setLibraryActionLoading(null);
     }
@@ -220,8 +220,8 @@ export default function SettingsPage() {
       await fetchUserProfile();
       setProfileMessage('Profile updated successfully');
       setTimeout(() => setProfileMessage(''), 3000);
-    } catch (error: any) {
-      setProfileMessage(error.response?.data?.detail || 'Failed to update profile');
+    } catch (error: unknown) {
+      setProfileMessage(getErrorMessage(error, 'Failed to update profile'));
     } finally {
       setProfileSaving(false);
     }
@@ -239,8 +239,8 @@ export default function SettingsPage() {
       });
       setPrefsMessage('Preferences saved');
       setTimeout(() => setPrefsMessage(''), 3000);
-    } catch (error: any) {
-      setPrefsMessage(error.response?.data?.detail || 'Failed to save preferences');
+    } catch (error: unknown) {
+      setPrefsMessage(getErrorMessage(error, 'Failed to save preferences'));
     } finally {
       setPrefsSaving(false);
     }
@@ -259,8 +259,8 @@ export default function SettingsPage() {
       });
       setNotifMessage('Notification settings saved');
       setTimeout(() => setNotifMessage(''), 3000);
-    } catch (error: any) {
-      setNotifMessage(error.response?.data?.detail || 'Failed to save');
+    } catch (error: unknown) {
+      setNotifMessage(getErrorMessage(error, 'Failed to save'));
     } finally {
       setNotifSaving(false);
     }
@@ -291,8 +291,8 @@ export default function SettingsPage() {
       setPasswordForm({ current_password: '', new_password: '', confirm_password: '' });
       setPasswordMessage('Password changed successfully');
       setTimeout(() => setPasswordMessage(''), 3000);
-    } catch (error: any) {
-      setPasswordError(error.response?.data?.detail || 'Failed to change password');
+    } catch (error: unknown) {
+      setPasswordError(getErrorMessage(error, 'Failed to change password'));
     } finally {
       setPasswordSaving(false);
     }

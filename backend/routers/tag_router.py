@@ -90,7 +90,7 @@ async def delete_tag(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Delete a custom tag (system tags cannot be deleted)."""
+    """Delete a custom tag (system tags cannot be deleted, only admins can delete)."""
     tag = db.query(Tag).filter(Tag.id == tag_id).first()
 
     if not tag:
@@ -98,6 +98,9 @@ async def delete_tag(
 
     if tag.is_system:
         raise HTTPException(status_code=400, detail="Cannot delete system tags")
+
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can delete tags")
 
     db.delete(tag)
     db.commit()

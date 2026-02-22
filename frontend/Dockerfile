@@ -27,6 +27,9 @@ WORKDIR /app
 # Set to production
 ENV NODE_ENV=production
 
+# Create a non-root user
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+
 # Copy standalone server files
 COPY --from=builder /app/.next/standalone ./
 
@@ -36,8 +39,15 @@ COPY --from=builder /app/.next/static ./.next/static
 # Copy public files
 COPY --from=builder /app/public ./public
 
+RUN chown -R appuser:appgroup /app
+
+USER appuser
+
 # Expose port
 EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
 # Run the application
 CMD ["node", "server.js"]

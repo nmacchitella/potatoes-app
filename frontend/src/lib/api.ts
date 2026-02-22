@@ -84,16 +84,14 @@ export function getErrorMessage(error: unknown, fallback = 'An error occurred'):
 }
 
 const getApiUrl = (): string => {
+  // NEXT_PUBLIC_API_URL should be set in all environments (development, staging, production)
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+
+  // Fallback for local development when env var is not set
   if (typeof window === 'undefined') {
-    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-  }
-
-  if (window.location.hostname === 'potatoes-frontend.fly.dev') {
-    return 'https://potatoes-backend.fly.dev/api';
-  }
-
-  if (window.location.hostname === 'potatoes-frontend-dev.fly.dev') {
-    return 'https://potatoes-backend-dev.fly.dev/api';
+    return 'http://localhost:8000/api';
   }
 
   const protocol = window.location.protocol;

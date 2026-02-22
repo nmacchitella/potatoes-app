@@ -353,19 +353,17 @@ async def resend_verification(
     db: Session = Depends(get_db)
 ):
     """Resend verification email"""
+    generic_msg = {"message": "If an account exists, a verification email has been sent"}
     user = auth.get_user_by_email(db, email)
-    if not user:
-        return {"message": "If an account exists, a verification email has been sent"}
-
-    if user.is_verified:
-        return {"message": "Email already verified"}
+    if not user or user.is_verified:
+        return generic_msg
 
     token = auth.create_verification_token(user.id, "verify_email", db)
 
     email_service = EmailService()
     await email_service.send_verification_email(user.email, token, background_tasks)
 
-    return {"message": "Verification email sent"}
+    return generic_msg
 
 
 @router.post("/forgot-password")
@@ -389,12 +387,11 @@ async def forgot_password(
 
 @router.post("/reset-password")
 def reset_password(
-    token: str,
-    new_password: str,
+    request: schemas.ResetPasswordRequest,
     db: Session = Depends(get_db)
 ):
     """Reset password using token"""
-    user_id = auth.verify_verification_token(token, "reset_password", db)
+    user_id = auth.verify_verification_token(request.token, "reset_password", db)
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -405,10 +402,10 @@ def reset_password(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.hashed_password = auth.get_password_hash(new_password)
+    user.hashed_password = auth.get_password_hash(request.new_password)
 
     db.query(auth.models.VerificationToken).filter(
-        auth.models.VerificationToken.token == token
+        auth.models.VerificationToken.token == request.token
     ).delete()
 
     db.commit()

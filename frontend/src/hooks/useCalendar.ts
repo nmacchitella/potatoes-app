@@ -93,6 +93,7 @@ interface UseCalendarReturn {
   clipboard: ClipboardState | null;
   handleCopy: (meal: MealPlan, e: React.MouseEvent) => void;
   handleCut: (meal: MealPlan, e: React.MouseEvent) => void;
+  handlePaste: (date: Date, mealType: MealType) => Promise<void>;
   clearClipboard: () => void;
 
   // Meal actions
@@ -716,6 +717,7 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     clipboard,
     handleCopy,
     handleCut,
+    handlePaste,
     clearClipboard,
     handleDeleteMeal,
     draggedMeal,

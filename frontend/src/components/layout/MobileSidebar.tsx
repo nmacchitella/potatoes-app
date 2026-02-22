@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useStore } from '@/store/useStore';
-import { collectionApi } from '@/lib/api';
+import { collectionApi, getErrorMessage } from '@/lib/api';
 import { UserAvatar } from '@/components/ui';
 import type { Collection } from '@/types';
 
@@ -170,8 +170,8 @@ export default function MobileSidebar({
       if (selectedCollection === collectionId) {
         router.push('/');
       }
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to delete collection');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to delete collection'));
     }
   };
 

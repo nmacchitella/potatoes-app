@@ -20,15 +20,15 @@ const getTimeAgo = (date: string): string => {
 const getNotificationIcon = (type: string): string => {
   switch (type) {
     case 'follow_request':
-      return '👤';
+      return '\u{1F464}';
     case 'follow_accepted':
-      return '✅';
+      return '\u2705';
     case 'new_recipe':
-      return '🍽️';
+      return '\u{1F37D}\uFE0F';
     case 'recipe_cloned':
-      return '📋';
+      return '\u{1F4CB}';
     default:
-      return '🔔';
+      return '\u{1F514}';
   }
 };
 
@@ -85,18 +85,18 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
-    <div className="min-h-screen bg-dark-bg has-bottom-nav">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <Navbar />
       <MobileNavWrapper />
       <div className="p-8">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold">Notifications</h1>
+          <h1 className="font-serif text-3xl text-charcoal">Notifications</h1>
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllAsRead}
-              className="text-primary hover:underline text-sm"
+              className="text-gold hover:underline text-sm"
             >
               Mark all as read
             </button>
@@ -104,13 +104,13 @@ export default function NotificationsPage() {
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex gap-1 bg-dark-card rounded-lg p-1 mb-6 w-fit">
+        <div className="flex gap-1 bg-white rounded-lg border border-border p-1 mb-6 w-fit">
           <button
             onClick={() => setFilter('all')}
             className={`px-4 py-2 rounded-md text-sm transition-colors ${
               filter === 'all'
-                ? 'bg-primary text-black font-medium'
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-gold text-white font-medium'
+                : 'text-warm-gray hover:text-charcoal'
             }`}
           >
             All
@@ -119,8 +119,8 @@ export default function NotificationsPage() {
             onClick={() => setFilter('unread')}
             className={`px-4 py-2 rounded-md text-sm transition-colors ${
               filter === 'unread'
-                ? 'bg-primary text-black font-medium'
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-gold text-white font-medium'
+                : 'text-warm-gray hover:text-charcoal'
             }`}
           >
             Unread {unreadCount > 0 && `(${unreadCount})`}
@@ -132,14 +132,14 @@ export default function NotificationsPage() {
           <div className="space-y-3">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="animate-pulse">
-                <div className="h-20 bg-dark-card rounded-lg" />
+                <div className="h-20 bg-white rounded-lg border border-border" />
               </div>
             ))}
           </div>
         ) : notifications.length === 0 ? (
           <div className="card text-center py-16">
             <svg
-              className="w-16 h-16 mx-auto text-gray-500 mb-4"
+              className="w-16 h-16 mx-auto text-warm-gray mb-4"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -151,10 +151,10 @@ export default function NotificationsPage() {
                 d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
               />
             </svg>
-            <p className="text-gray-400 mb-2">
+            <p className="text-warm-gray mb-2">
               {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
             </p>
-            <p className="text-gray-500 text-sm">
+            <p className="text-warm-gray text-sm">
               {filter === 'unread'
                 ? 'You\'re all caught up!'
                 : 'When you get notifications, they\'ll appear here'}
@@ -166,10 +166,10 @@ export default function NotificationsPage() {
               <div
                 key={notification.id}
                 className={`card flex gap-4 items-start ${
-                  !notification.is_read ? 'border-primary/30' : ''
+                  !notification.is_read ? 'border-gold/30' : ''
                 }`}
               >
-                <div className="w-12 h-12 rounded-full bg-dark-hover flex items-center justify-center text-xl flex-shrink-0">
+                <div className="w-12 h-12 rounded-full bg-cream-dark flex items-center justify-center text-xl flex-shrink-0">
                   {getNotificationIcon(notification.type)}
                 </div>
 
@@ -178,29 +178,29 @@ export default function NotificationsPage() {
                     <Link
                       href={notification.link}
                       onClick={() => !notification.is_read && handleMarkAsRead(notification.id)}
-                      className="block hover:text-primary"
+                      className="block hover:text-gold"
                     >
-                      <p className={`${!notification.is_read ? 'font-semibold' : ''}`}>
+                      <p className={`text-charcoal ${!notification.is_read ? 'font-semibold' : ''}`}>
                         {notification.title}
                       </p>
-                      <p className="text-gray-400 text-sm mt-1">{notification.message}</p>
+                      <p className="text-warm-gray text-sm mt-1">{notification.message}</p>
                     </Link>
                   ) : (
                     <>
-                      <p className={`${!notification.is_read ? 'font-semibold' : ''}`}>
+                      <p className={`text-charcoal ${!notification.is_read ? 'font-semibold' : ''}`}>
                         {notification.title}
                       </p>
-                      <p className="text-gray-400 text-sm mt-1">{notification.message}</p>
+                      <p className="text-warm-gray text-sm mt-1">{notification.message}</p>
                     </>
                   )}
-                  <p className="text-gray-500 text-xs mt-2">{getTimeAgo(notification.created_at)}</p>
+                  <p className="text-warm-gray text-xs mt-2">{getTimeAgo(notification.created_at)}</p>
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {!notification.is_read && (
                     <button
                       onClick={() => handleMarkAsRead(notification.id)}
-                      className="text-gray-400 hover:text-primary text-sm"
+                      className="text-warm-gray hover:text-gold text-sm"
                       title="Mark as read"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,7 +210,7 @@ export default function NotificationsPage() {
                   )}
                   <button
                     onClick={() => handleDelete(notification.id)}
-                    className="text-gray-400 hover:text-red-400"
+                    className="text-warm-gray hover:text-red-500"
                     title="Delete"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 import bcrypt
 import secrets
 from fastapi import Depends, HTTPException, status
@@ -25,9 +26,9 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
@@ -126,7 +127,7 @@ def create_refresh_token(user_id: str, db: Session, expires_delta: timedelta = N
         expires_delta = timedelta(days=settings.refresh_token_expire_days)
 
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + expires_delta
+    expires_at = datetime.now(timezone.utc) + expires_delta
 
     db_refresh_token = models.RefreshToken(
         token=token,
@@ -144,7 +145,7 @@ def verify_refresh_token(token: str, db: Session) -> Optional[models.User]:
     db_token = db.query(models.RefreshToken).filter(
         models.RefreshToken.token == token,
         models.RefreshToken.revoked == False,
-        models.RefreshToken.expires_at > datetime.utcnow()
+        models.RefreshToken.expires_at > datetime.now(timezone.utc)
     ).first()
 
     if not db_token:
@@ -195,7 +196,7 @@ def create_token_pair(user: models.User, db: Session) -> dict:
 def create_verification_token(user_id: str, token_type: str, db: Session) -> str:
     """Create a verification or password reset token"""
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(hours=24)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
 
     db_token = models.VerificationToken(
         token=token,
@@ -213,7 +214,7 @@ def verify_verification_token(token: str, token_type: str, db: Session) -> Optio
     db_token = db.query(models.VerificationToken).filter(
         models.VerificationToken.token == token,
         models.VerificationToken.type == token_type,
-        models.VerificationToken.expires_at > datetime.utcnow()
+        models.VerificationToken.expires_at > datetime.now(timezone.utc)
     ).first()
 
     if not db_token:

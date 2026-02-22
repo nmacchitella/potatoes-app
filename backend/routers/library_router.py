@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from database import get_db
 from auth import get_current_user
@@ -195,7 +195,7 @@ async def invite_to_share_library(
             existing.status = "pending"
             existing.inviter_id = current_user.id
             existing.invitee_id = data.invitee_id
-            existing.created_at = datetime.utcnow()
+            existing.created_at = datetime.now(timezone.utc)
             existing.accepted_at = None
             db.commit()
             db.refresh(existing)
@@ -268,7 +268,7 @@ async def accept_library_invite(
         raise HTTPException(status_code=400, detail=f"Invitation already {share.status}")
 
     share.status = "accepted"
-    share.accepted_at = datetime.utcnow()
+    share.accepted_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(share)
 

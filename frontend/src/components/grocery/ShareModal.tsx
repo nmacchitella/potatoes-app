@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { groceryListApi, getErrorMessage } from '@/lib/api';
+import { Modal } from '@/components/ui';
 import type { GroceryListShare } from '@/types';
 
 interface ShareModalProps {
@@ -47,6 +48,7 @@ export function ShareModal({
       setEmail('');
       setEmailResult(null);
       setLinkCopied(false);
+      setShareLink(null);
     }
   }, [isOpen]);
 
@@ -100,17 +102,15 @@ export function ShareModal({
     }
   };
 
-  if (!isOpen) return null;
-
   const acceptedShares = shares.filter(s => s.status === 'accepted');
   const pendingShares = shares.filter(s => s.status === 'pending');
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <Modal isOpen={isOpen} onClose={onClose} size="md" ariaLabel={`Share ${listName}`}>
+      <div className="bg-white rounded-xl shadow-xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-white">
-          <h2 className="text-lg font-semibold text-charcoal">Share "{listName}"</h2>
+        <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-white rounded-t-xl">
+          <h2 className="text-lg font-semibold text-charcoal">Share &quot;{listName}&quot;</h2>
           <button
             onClick={onClose}
             className="p-1 text-warm-gray hover:text-charcoal transition-colors"
@@ -259,6 +259,6 @@ export function ShareModal({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -22,7 +22,7 @@ export function RecipeInstructionsEdit({
     onChange(updated.map((inst, i) => ({ ...inst, step_number: i + 1 })));
   };
 
-  const updateInstruction = (index: number, field: keyof RecipeInstructionInput, value: any) => {
+  const updateInstruction = (index: number, field: keyof RecipeInstructionInput, value: RecipeInstructionInput[keyof RecipeInstructionInput]) => {
     const updated = [...instructions];
     updated[index] = { ...updated[index], [field]: value };
     onChange(updated);

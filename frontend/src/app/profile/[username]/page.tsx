@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { socialApi } from '@/lib/api';
+import { socialApi, getErrorMessage, isAxiosError } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
@@ -39,8 +39,12 @@ export default function PublicProfilePage() {
       try {
         const profileData = await socialApi.getUserProfile(username);
         setProfile(profileData);
-      } catch (err: any) {
-        setError(err.response?.data?.detail || 'User not found');
+      } catch (err: unknown) {
+        if (isAxiosError(err) && err.response?.status === 404) {
+          setError('User not found');
+        } else {
+          setError(getErrorMessage(err, 'User not found'));
+        }
       } finally {
         setLoading(false);
       }

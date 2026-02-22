@@ -31,7 +31,7 @@ export function RecipeIngredientsEdit({
     onChange(ingredients.filter((_, i) => i !== index));
   };
 
-  const updateIngredient = (index: number, field: keyof RecipeIngredientInput, value: any) => {
+  const updateIngredient = (index: number, field: keyof RecipeIngredientInput, value: RecipeIngredientInput[keyof RecipeIngredientInput]) => {
     const updated = [...ingredients];
     updated[index] = { ...updated[index], [field]: value };
     onChange(updated);

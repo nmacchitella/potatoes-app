@@ -1,7 +1,7 @@
 'use client';
 
 import { useCalendar } from '@/hooks';
-import { getCalendarHeaderText, isCurrentMonth } from '@/lib/calendar-utils';
+import { getCalendarHeaderText, isCurrentMonth, MEAL_TYPES } from '@/lib/calendar-utils';
 import { Modal } from '@/components/ui';
 import CalendarHeader from './CalendarHeader';
 import WeekView from './WeekView';
@@ -9,13 +9,6 @@ import MobileWeekView from './MobileWeekView';
 import DayView from './DayView';
 import MonthView from './MonthView';
 import { AddMealModal } from './AddMealModal';
-import type { MealType } from '@/types';
-
-const MEAL_TYPES: { key: MealType; label: string }[] = [
-  { key: 'breakfast', label: 'Breakfast' },
-  { key: 'lunch', label: 'Lunch' },
-  { key: 'dinner', label: 'Dinner' },
-];
 
 interface CalendarViewProps {
   isActive?: boolean;
@@ -29,14 +22,6 @@ export default function CalendarView({ isActive = true, onOpenShareModal, calend
   const calendar = calendarHook || internalCalendar;
 
   const headerText = getCalendarHeaderText(calendar.currentDate, calendar.viewMode);
-
-  const handlePaste = (date: Date, mealType: MealType) => {
-    if (calendar.clipboard) {
-      // The paste functionality is handled via the clip logic in the hook
-      // For now, we'll trigger the paste via drop
-      calendar.handleDrop(date, mealType, { preventDefault: () => {} } as React.DragEvent);
-    }
-  };
 
   return (
     <div>
@@ -70,7 +55,7 @@ export default function CalendarView({ isActive = true, onOpenShareModal, calend
           onDragOver={calendar.handleDragOver}
           onDragLeave={calendar.handleDragLeave}
           onDrop={calendar.handleDrop}
-          onPaste={handlePaste}
+          onPaste={calendar.handlePaste}
           onCopy={calendar.handleCopy}
           onCut={calendar.handleCut}
           onRepeat={calendar.handleOpenRepeatModal}

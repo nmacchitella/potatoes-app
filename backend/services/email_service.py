@@ -1,22 +1,21 @@
-import os
 import logging
+from datetime import datetime, timezone
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 from pydantic import EmailStr
 from starlette.background import BackgroundTasks
-from dotenv import load_dotenv
-load_dotenv()
+from config import settings
 
 logger = logging.getLogger(__name__)
 
-# Email configuration
+# Email configuration — uses centralized settings from config.py
 conf = ConnectionConfig(
-    MAIL_USERNAME=os.getenv("MAIL_USERNAME", ""),
-    MAIL_PASSWORD=os.getenv("MAIL_PASSWORD", ""),
-    MAIL_FROM=os.getenv("MAIL_FROM", "noreply@potatoes.app"),
-    MAIL_PORT=int(os.getenv("MAIL_PORT", 587)),
-    MAIL_SERVER=os.getenv("MAIL_SERVER", "smtp.gmail.com"),
-    MAIL_STARTTLS=os.getenv("MAIL_STARTTLS", "True").lower() == "true",
-    MAIL_SSL_TLS=os.getenv("MAIL_SSL_TLS", "False").lower() == "true",
+    MAIL_USERNAME=settings.mail_username,
+    MAIL_PASSWORD=settings.mail_password,
+    MAIL_FROM=settings.mail_from,
+    MAIL_PORT=settings.mail_port,
+    MAIL_SERVER=settings.mail_server,
+    MAIL_STARTTLS=settings.mail_starttls,
+    MAIL_SSL_TLS=settings.mail_ssl_tls,
     USE_CREDENTIALS=True,
     VALIDATE_CERTS=True
 )
@@ -79,7 +78,7 @@ class EmailService:
                     <tr>
                         <td style="padding: 24px; text-align: center;">
                             <p style="margin: 0; color: #9ca3af; font-size: 11px;">
-                                © 2024 Potatoes. All rights reserved.
+                                © {datetime.now(timezone.utc).year} Potatoes. All rights reserved.
                             </p>
                         </td>
                     </tr>
@@ -191,7 +190,7 @@ class EmailService:
 
     async def send_verification_email(self, email: EmailStr, token: str, background_tasks: BackgroundTasks):
         """Send verification email"""
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = settings.frontend_url
         link = f"{frontend_url}/auth/verify-email?token={token}"
 
         content = self._get_verification_content(link)
@@ -211,7 +210,7 @@ class EmailService:
 
     async def send_password_reset_email(self, email: EmailStr, token: str, background_tasks: BackgroundTasks):
         """Send password reset email"""
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = settings.frontend_url
         link = f"{frontend_url}/auth/reset-password?token={token}"
 
         content = self._get_reset_password_content(link)

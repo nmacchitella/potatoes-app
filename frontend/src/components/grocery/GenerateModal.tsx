@@ -2,24 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { mealPlanApi } from '@/lib/api';
+import { formatDateForApi, getStartOfWeek } from '@/lib/calendar-utils';
+import { Modal } from '@/components/ui';
 import type { MealPlanCalendar } from '@/types';
-
-// Helper functions to replace date-fns
-function formatDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function getStartOfWeek(date: Date): Date {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function getEndOfWeek(date: Date): Date {
   const start = getStartOfWeek(date);
@@ -53,8 +38,8 @@ export function GenerateModal({
   const thisWeekStart = getStartOfWeek(today);
   const thisWeekEnd = getEndOfWeek(today);
 
-  const [startDate, setStartDate] = useState(formatDate(thisWeekStart));
-  const [endDate, setEndDate] = useState(formatDate(thisWeekEnd));
+  const [startDate, setStartDate] = useState(formatDateForApi(thisWeekStart));
+  const [endDate, setEndDate] = useState(formatDateForApi(thisWeekEnd));
   const [merge, setMerge] = useState(false);
 
   // Calendar state
@@ -104,27 +89,25 @@ export function GenerateModal({
   };
 
   const setThisWeek = () => {
-    setStartDate(formatDate(thisWeekStart));
-    setEndDate(formatDate(thisWeekEnd));
+    setStartDate(formatDateForApi(thisWeekStart));
+    setEndDate(formatDateForApi(thisWeekEnd));
   };
 
   const setNextWeek = () => {
     const nextWeekStart = addDays(thisWeekStart, 7);
     const nextWeekEnd = addDays(thisWeekEnd, 7);
-    setStartDate(formatDate(nextWeekStart));
-    setEndDate(formatDate(nextWeekEnd));
+    setStartDate(formatDateForApi(nextWeekStart));
+    setEndDate(formatDateForApi(nextWeekEnd));
   };
 
   const setNext7Days = () => {
-    setStartDate(formatDate(today));
-    setEndDate(formatDate(addDays(today, 6)));
+    setStartDate(formatDateForApi(today));
+    setEndDate(formatDateForApi(addDays(today, 6)));
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+    <Modal isOpen={isOpen} onClose={onClose} size="md" ariaLabel="Generate Grocery List">
+      <div className="bg-white rounded-xl shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h2 className="text-lg font-semibold text-charcoal">Generate Grocery List</h2>
@@ -295,6 +278,6 @@ export function GenerateModal({
           </div>
         </form>
       </div>
-    </div>
+    </Modal>
   );
 }

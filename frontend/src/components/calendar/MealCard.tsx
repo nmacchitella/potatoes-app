@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import type { MealPlan } from '@/types';
 
 interface MealCardProps {
@@ -63,8 +64,8 @@ export default function MealCard({
               <CustomItemIcon className="w-8 h-8 text-sage" />
             </div>
           ) : meal.recipe?.cover_image_url ? (
-            <div className="aspect-video rounded overflow-hidden mb-1">
-              <img src={meal.recipe.cover_image_url} alt="" className="w-full h-full object-cover" />
+            <div className="relative aspect-video rounded overflow-hidden mb-1">
+              <Image src={meal.recipe.cover_image_url} alt="" fill sizes="200px" className="object-cover" />
             </div>
           ) : null}
 
@@ -176,8 +177,8 @@ export default function MealCard({
           <CustomItemIcon className="w-6 h-6 text-sage" />
         </div>
       ) : meal.recipe?.cover_image_url ? (
-        <div className="aspect-video rounded overflow-hidden mb-1.5">
-          <img src={meal.recipe.cover_image_url} alt={title} className="w-full h-full object-cover" />
+        <div className="relative aspect-video rounded overflow-hidden mb-1.5">
+          <Image src={meal.recipe.cover_image_url} alt={title || ''} fill sizes="200px" className="object-cover" />
         </div>
       ) : null}
 

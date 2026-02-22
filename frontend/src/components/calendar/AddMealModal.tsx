@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { searchApi, mealPlanApi, authApi } from '@/lib/api';
+import { searchApi, mealPlanApi, authApi, getErrorMessage } from '@/lib/api';
 import { useDebouncedSearch } from '@/hooks';
 import { formatDateForApi } from '@/lib/calendar-utils';
 import { RecipeImage, Modal } from '@/components/ui';
@@ -135,9 +135,9 @@ export function AddMealModal({
       });
       onCustomMealSuccess(newMeal);
       handleClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to create custom meal:', err);
-      setError(err.response?.data?.detail || 'Failed to create custom meal');
+      setError(getErrorMessage(err, 'Failed to create custom meal'));
     } finally {
       setIsSubmitting(false);
     }

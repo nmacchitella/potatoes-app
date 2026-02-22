@@ -9,7 +9,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    password: str
+    password: str = Field(..., min_length=8, max_length=128)
 
 
 class UserLogin(BaseModel):
@@ -52,7 +52,12 @@ class UserUpdate(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 class UserProfileUpdate(BaseModel):
@@ -158,11 +163,6 @@ class UserFollow(UserFollowBase):
 
     class Config:
         from_attributes = True
-
-
-class FollowRequest(BaseModel):
-    """Request to follow a user"""
-    user_id: str
 
 
 class FollowResponse(BaseModel):

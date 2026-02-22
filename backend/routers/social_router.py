@@ -2,6 +2,9 @@
 Social Router
 
 Handles user follows, profiles, and social feed.
+
+IMPORTANT: /me/* routes MUST be defined BEFORE /{user_id} routes,
+otherwise FastAPI will match "me" as a user_id parameter.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -25,6 +28,21 @@ from services.notification_service import (
 router = APIRouter(prefix="/users", tags=["social"])
 
 
+def _get_follow_statuses(db: Session, current_user_id: str, user_ids: List[str]) -> dict:
+    """Batch-fetch follow statuses for multiple users. Returns {user_id: UserFollow}."""
+    if not user_ids:
+        return {}
+    follows = db.query(UserFollow).filter(
+        UserFollow.follower_id == current_user_id,
+        UserFollow.following_id.in_(user_ids)
+    ).all()
+    return {f.following_id: f for f in follows}
+
+
+# ============================================================================
+# /search route (literal path, must be before /{user_id})
+# ============================================================================
+
 @router.get("/search", response_model=List[UserSearchResult])
 async def search_users(
     q: str = Query(..., min_length=1, description="Search query"),
@@ -41,14 +59,13 @@ async def search_users(
         User.name.ilike(search_term)
     ).limit(limit).all()
 
-    # Get follow statuses
+    # Batch-fetch follow statuses (fixes N+1 query)
+    user_ids = [u.id for u in users]
+    follow_map = _get_follow_statuses(db, current_user.id, user_ids)
+
     results = []
     for user in users:
-        follow = db.query(UserFollow).filter(
-            UserFollow.follower_id == current_user.id,
-            UserFollow.following_id == user.id
-        ).first()
-
+        follow = follow_map.get(user.id)
         results.append(UserSearchResult(
             id=user.id,
             name=user.name,
@@ -61,209 +78,9 @@ async def search_users(
     return results
 
 
-@router.get("/{user_id}", response_model=UserProfilePublic)
-async def get_user_profile(
-    user_id: str,
-    db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
-):
-    """Get a user's public profile by user ID."""
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Get follower/following counts
-    follower_count = db.query(UserFollow).filter(
-        UserFollow.following_id == user.id,
-        UserFollow.status == 'confirmed'
-    ).count()
-
-    following_count = db.query(UserFollow).filter(
-        UserFollow.follower_id == user.id,
-        UserFollow.status == 'confirmed'
-    ).count()
-
-    # Check if current user follows this user
-    is_followed_by_me = False
-    follow_status = None
-    if current_user and current_user.id != user.id:
-        follow = db.query(UserFollow).filter(
-            UserFollow.follower_id == current_user.id,
-            UserFollow.following_id == user.id
-        ).first()
-        if follow:
-            is_followed_by_me = follow.status == 'confirmed'
-            follow_status = follow.status
-
-    return UserProfilePublic(
-        id=user.id,
-        name=user.name,
-        bio=user.bio,
-        profile_image_url=user.profile_image_url,
-        is_public=user.is_public,
-        follower_count=follower_count,
-        following_count=following_count,
-        is_followed_by_me=is_followed_by_me,
-        follow_status=follow_status,
-    )
-
-
-@router.get("/{user_id}/recipes", response_model=RecipeListResponse)
-async def get_user_recipes(
-    user_id: str,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
-):
-    """Get a user's public recipes."""
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Check if current user can view this user's recipes
-    can_view = False
-    if current_user and current_user.id == user.id:
-        # Viewing own profile - show all recipes
-        can_view = True
-    elif user.is_public:
-        # Public profile - show public recipes
-        can_view = True
-    elif current_user:
-        # Private profile - check if following
-        follow = db.query(UserFollow).filter(
-            UserFollow.follower_id == current_user.id,
-            UserFollow.following_id == user.id,
-            UserFollow.status == 'confirmed'
-        ).first()
-        can_view = follow is not None
-
-    if not can_view:
-        return RecipeListResponse(
-            items=[],
-            total=0,
-            page=page,
-            page_size=page_size,
-            total_pages=1
-        )
-
-    # Build query based on permissions
-    query = db.query(Recipe).filter(
-        Recipe.author_id == user.id,
-        Recipe.deleted_at.is_(None),
-        Recipe.status == 'published'
-    )
-
-    # If viewing own profile, show all recipes including drafts
-    if current_user and current_user.id == user.id:
-        query = db.query(Recipe).filter(
-            Recipe.author_id == user.id,
-            Recipe.deleted_at.is_(None)
-        )
-    else:
-        query = query.filter(Recipe.privacy_level == 'public')
-
-    total = query.count()
-    query = query.options(joinedload(Recipe.author), joinedload(Recipe.tags))
-    query = query.order_by(Recipe.created_at.desc())
-    query = query.offset((page - 1) * page_size).limit(page_size)
-
-    recipes = query.all()
-
-    return RecipeListResponse(
-        items=[RecipeSummary.model_validate(r) for r in recipes],
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=math.ceil(total / page_size) if total > 0 else 1
-    )
-
-
-@router.post("/{user_id}/follow", response_model=FollowResponse)
-async def follow_user(
-    user_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Follow a user."""
-    if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Cannot follow yourself")
-
-    # Check if target user exists
-    target_user = db.query(User).filter(User.id == user_id).first()
-    if not target_user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Check if already following
-    existing = db.query(UserFollow).filter(
-        UserFollow.follower_id == current_user.id,
-        UserFollow.following_id == user_id
-    ).first()
-
-    if existing:
-        if existing.status == 'confirmed':
-            raise HTTPException(status_code=400, detail="Already following this user")
-        elif existing.status == 'pending':
-            raise HTTPException(status_code=400, detail="Follow request already pending")
-        elif existing.status == 'declined':
-            # Allow re-requesting
-            existing.status = 'pending' if not target_user.is_public else 'confirmed'
-            db.commit()
-            return FollowResponse(
-                status=existing.status,
-                message="Follow request sent" if existing.status == 'pending' else "Now following"
-            )
-
-    # Create follow relationship
-    # If user is public, auto-confirm. Otherwise, pending.
-    status = 'confirmed' if target_user.is_public else 'pending'
-
-    follow = UserFollow(
-        follower_id=current_user.id,
-        following_id=user_id,
-        status=status,
-    )
-    db.add(follow)
-
-    # Create notification
-    if status == 'pending':
-        notify_follow_request(db, current_user, target_user)
-    else:
-        notify_new_follower(db, current_user, target_user)
-
-    db.commit()
-
-    return FollowResponse(
-        status=status,
-        message="Now following" if status == 'confirmed' else "Follow request sent"
-    )
-
-
-@router.delete("/{user_id}/follow", response_model=FollowResponse)
-async def unfollow_user(
-    user_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Unfollow a user."""
-    follow = db.query(UserFollow).filter(
-        UserFollow.follower_id == current_user.id,
-        UserFollow.following_id == user_id
-    ).first()
-
-    if not follow:
-        raise HTTPException(status_code=400, detail="Not following this user")
-
-    db.delete(follow)
-    db.commit()
-
-    return FollowResponse(
-        status='confirmed',
-        message="Unfollowed successfully"
-    )
-
+# ============================================================================
+# /me/* routes (MUST be before /{user_id} to avoid shadowing)
+# ============================================================================
 
 @router.get("/me/followers", response_model=List[UserSearchResult])
 async def get_my_followers(
@@ -279,14 +96,12 @@ async def get_my_followers(
     follower_ids = [f.follower_id for f in follows]
     followers = db.query(User).filter(User.id.in_(follower_ids)).all() if follower_ids else []
 
-    # Check if current user follows them back
+    # Batch-check follow-back status (fixes N+1 query)
+    follow_back_map = _get_follow_statuses(db, current_user.id, follower_ids)
+
     results = []
     for user in followers:
-        follow_back = db.query(UserFollow).filter(
-            UserFollow.follower_id == current_user.id,
-            UserFollow.following_id == user.id
-        ).first()
-
+        follow_back = follow_back_map.get(user.id)
         results.append(UserSearchResult(
             id=user.id,
             name=user.name,
@@ -408,12 +223,11 @@ async def decline_follow_request(
     db.commit()
 
     return FollowResponse(
-        status='confirmed',
+        status='declined',
         message="Follow request declined"
     )
 
 
-# Feed endpoint
 @router.get("/me/feed", response_model=RecipeListResponse)
 async def get_feed(
     page: int = Query(1, ge=1),
@@ -459,4 +273,202 @@ async def get_feed(
         page=page,
         page_size=page_size,
         total_pages=math.ceil(total / page_size) if total > 0 else 1
+    )
+
+
+# ============================================================================
+# /{user_id} routes (MUST be after /me/* routes)
+# ============================================================================
+
+@router.get("/{user_id}", response_model=UserProfilePublic)
+async def get_user_profile(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Get a user's public profile by user ID."""
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Get follower/following counts
+    follower_count = db.query(UserFollow).filter(
+        UserFollow.following_id == user.id,
+        UserFollow.status == 'confirmed'
+    ).count()
+
+    following_count = db.query(UserFollow).filter(
+        UserFollow.follower_id == user.id,
+        UserFollow.status == 'confirmed'
+    ).count()
+
+    # Check if current user follows this user
+    is_followed_by_me = False
+    follow_status = None
+    if current_user and current_user.id != user.id:
+        follow = db.query(UserFollow).filter(
+            UserFollow.follower_id == current_user.id,
+            UserFollow.following_id == user.id
+        ).first()
+        if follow:
+            is_followed_by_me = follow.status == 'confirmed'
+            follow_status = follow.status
+
+    return UserProfilePublic(
+        id=user.id,
+        name=user.name,
+        bio=user.bio,
+        profile_image_url=user.profile_image_url,
+        is_public=user.is_public,
+        follower_count=follower_count,
+        following_count=following_count,
+        is_followed_by_me=is_followed_by_me,
+        follow_status=follow_status,
+    )
+
+
+@router.get("/{user_id}/recipes", response_model=RecipeListResponse)
+async def get_user_recipes(
+    user_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Get a user's public recipes."""
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if current user can view this user's recipes
+    can_view = False
+    if current_user and current_user.id == user.id:
+        can_view = True
+    elif user.is_public:
+        can_view = True
+    elif current_user:
+        follow = db.query(UserFollow).filter(
+            UserFollow.follower_id == current_user.id,
+            UserFollow.following_id == user.id,
+            UserFollow.status == 'confirmed'
+        ).first()
+        can_view = follow is not None
+
+    if not can_view:
+        return RecipeListResponse(
+            items=[],
+            total=0,
+            page=page,
+            page_size=page_size,
+            total_pages=1
+        )
+
+    # Build query based on permissions
+    if current_user and current_user.id == user.id:
+        # Viewing own profile - show all recipes including drafts
+        query = db.query(Recipe).filter(
+            Recipe.author_id == user.id,
+            Recipe.deleted_at.is_(None)
+        )
+    else:
+        query = db.query(Recipe).filter(
+            Recipe.author_id == user.id,
+            Recipe.deleted_at.is_(None),
+            Recipe.status == 'published',
+            Recipe.privacy_level == 'public'
+        )
+
+    total = query.count()
+    query = query.options(joinedload(Recipe.author), joinedload(Recipe.tags))
+    query = query.order_by(Recipe.created_at.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+
+    recipes = query.all()
+
+    return RecipeListResponse(
+        items=[RecipeSummary.model_validate(r) for r in recipes],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=math.ceil(total / page_size) if total > 0 else 1
+    )
+
+
+@router.post("/{user_id}/follow", response_model=FollowResponse)
+async def follow_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Follow a user."""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot follow yourself")
+
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    existing = db.query(UserFollow).filter(
+        UserFollow.follower_id == current_user.id,
+        UserFollow.following_id == user_id
+    ).first()
+
+    if existing:
+        if existing.status == 'confirmed':
+            raise HTTPException(status_code=400, detail="Already following this user")
+        elif existing.status == 'pending':
+            raise HTTPException(status_code=400, detail="Follow request already pending")
+        elif existing.status == 'declined':
+            existing.status = 'pending' if not target_user.is_public else 'confirmed'
+            db.commit()
+            return FollowResponse(
+                status=existing.status,
+                message="Follow request sent" if existing.status == 'pending' else "Now following"
+            )
+
+    follow_status = 'confirmed' if target_user.is_public else 'pending'
+
+    follow = UserFollow(
+        follower_id=current_user.id,
+        following_id=user_id,
+        status=follow_status,
+    )
+    db.add(follow)
+
+    if follow_status == 'pending':
+        notify_follow_request(db, current_user, target_user)
+    else:
+        notify_new_follower(db, current_user, target_user)
+
+    db.commit()
+
+    return FollowResponse(
+        status=follow_status,
+        message="Now following" if follow_status == 'confirmed' else "Follow request sent"
+    )
+
+
+@router.delete("/{user_id}/follow", response_model=FollowResponse)
+async def unfollow_user(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Unfollow a user."""
+    follow = db.query(UserFollow).filter(
+        UserFollow.follower_id == current_user.id,
+        UserFollow.following_id == user_id
+    ).first()
+
+    if not follow:
+        raise HTTPException(status_code=400, detail="Not following this user")
+
+    db.delete(follow)
+    db.commit()
+
+    return FollowResponse(
+        status='unfollowed',
+        message="Unfollowed successfully"
     )

@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { authApi } from '@/lib/api';
+import { authApi, getErrorMessage } from '@/lib/api';
 import Link from 'next/link';
 
 function ResetPasswordContent() {
@@ -18,11 +18,11 @@ function ResetPasswordContent() {
 
     if (!token) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-dark-bg px-4">
-                <div className="max-w-md w-full bg-dark-card p-8 rounded-lg border border-gray-800 text-center">
-                    <div className="text-red-500 text-5xl mb-4">✕</div>
-                    <h1 className="text-xl font-bold text-text-primary mb-2">Invalid Link</h1>
-                    <p className="text-gray-400 mb-6">This password reset link is invalid or missing.</p>
+            <div className="min-h-screen flex items-center justify-center bg-cream px-4">
+                <div className="max-w-md w-full bg-white p-8 rounded-lg border border-border text-center">
+                    <div className="text-red-500 text-5xl mb-4">&#x2715;</div>
+                    <h1 className="text-xl font-bold text-charcoal mb-2">Invalid Link</h1>
+                    <p className="text-warm-gray mb-6">This password reset link is invalid or missing.</p>
                     <Link href="/auth/login" className="btn-primary inline-block px-6 py-2">
                         Go to Login
                     </Link>
@@ -50,8 +50,8 @@ function ResetPasswordContent() {
         try {
             await authApi.resetPassword(token, password);
             setSuccess(true);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'Failed to reset password. The link may be expired.');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Failed to reset password. The link may be expired.'));
         } finally {
             setLoading(false);
         }
@@ -59,11 +59,11 @@ function ResetPasswordContent() {
 
     if (success) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-dark-bg px-4">
-                <div className="max-w-md w-full bg-dark-card p-8 rounded-lg border border-gray-800 text-center">
-                    <div className="text-green-500 text-5xl mb-4">✓</div>
-                    <h1 className="text-2xl font-bold text-text-primary mb-2">Password Reset</h1>
-                    <p className="text-gray-400 mb-8">Your password has been successfully reset.</p>
+            <div className="min-h-screen flex items-center justify-center bg-cream px-4">
+                <div className="max-w-md w-full bg-white p-8 rounded-lg border border-border text-center">
+                    <div className="text-green-500 text-5xl mb-4">&#x2713;</div>
+                    <h1 className="text-2xl font-bold text-charcoal mb-2">Password Reset</h1>
+                    <p className="text-warm-gray mb-8">Your password has been successfully reset.</p>
                     <Link href="/auth/login" className="btn-primary w-full block text-center py-2">
                         Login with New Password
                     </Link>
@@ -73,13 +73,13 @@ function ResetPasswordContent() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-dark-bg px-4">
-            <div className="max-w-md w-full bg-dark-card p-8 rounded-lg border border-gray-800">
-                <h1 className="text-2xl font-bold text-text-primary mb-6 text-center">Set New Password</h1>
+        <div className="min-h-screen flex items-center justify-center bg-cream px-4">
+            <div className="max-w-md w-full bg-white p-8 rounded-lg border border-border">
+                <h1 className="text-2xl font-bold text-charcoal mb-6 text-center">Set New Password</h1>
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1">
+                        <label htmlFor="password" className="label mb-1 block">
                             New Password
                         </label>
                         <input
@@ -95,7 +95,7 @@ function ResetPasswordContent() {
                     </div>
 
                     <div>
-                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-1">
+                        <label htmlFor="confirmPassword" className="label mb-1 block">
                             Confirm Password
                         </label>
                         <input
@@ -111,7 +111,7 @@ function ResetPasswordContent() {
                     </div>
 
                     {error && (
-                        <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded text-sm">
+                        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
                             {error}
                         </div>
                     )}
@@ -131,7 +131,7 @@ function ResetPasswordContent() {
 
 export default function ResetPasswordPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen bg-dark-bg"></div>}>
+        <Suspense fallback={<div className="min-h-screen bg-cream"></div>}>
             <ResetPasswordContent />
         </Suspense>
     );

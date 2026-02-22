@@ -18,6 +18,14 @@ function AuthCallbackContent() {
       const legacyToken = searchParams.get('token');
       const legacyRefreshToken = searchParams.get('refresh_token');
 
+      // Remove sensitive tokens from the URL to prevent leaking via
+      // browser history, referrer headers, or shoulder surfing.
+      // Note: This does not affect Next.js searchParams since they were
+      // already read synchronously above.
+      if (code || legacyToken) {
+        window.history.replaceState({}, '', '/auth/callback');
+      }
+
       try {
         let accessToken: string;
         let refreshToken: string;
@@ -58,20 +66,20 @@ function AuthCallbackContent() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-dark-bg">
+      <div className="min-h-screen flex items-center justify-center bg-cream">
         <div className="text-center">
-          <div className="text-red-400 text-xl mb-4">{error}</div>
-          <div className="text-white text-sm">Redirecting to login...</div>
+          <div className="text-red-600 text-xl mb-4">{error}</div>
+          <div className="text-charcoal text-sm">Redirecting to login...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-dark-bg">
+    <div className="min-h-screen flex items-center justify-center bg-cream">
       <div className="text-center">
-        <div className="text-white text-xl mb-4">Completing sign in...</div>
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        <div className="text-charcoal text-xl mb-4">Completing sign in...</div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold mx-auto"></div>
       </div>
     </div>
   );
@@ -80,10 +88,10 @@ function AuthCallbackContent() {
 export default function AuthCallbackPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-dark-bg">
+      <div className="min-h-screen flex items-center justify-center bg-cream">
         <div className="text-center">
-          <div className="text-white text-xl mb-4">Loading...</div>
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <div className="text-charcoal text-xl mb-4">Loading...</div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gold mx-auto"></div>
         </div>
       </div>
     }>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { authApi } from '@/lib/api';
+import { authApi, getErrorMessage } from '@/lib/api';
 import Link from 'next/link';
 
 export default function ForgotPasswordPage() {
@@ -18,34 +18,34 @@ export default function ForgotPasswordPage() {
         try {
             await authApi.forgotPassword(email);
             setSubmitted(true);
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'An error occurred. Please try again.');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'An error occurred. Please try again.'));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-dark-bg px-4">
-            <div className="max-w-md w-full bg-dark-card p-8 rounded-lg border border-gray-800">
-                <h1 className="text-2xl font-bold text-text-primary mb-2 text-center">Reset Password</h1>
-                <p className="text-gray-400 text-center mb-8">
+        <div className="min-h-screen flex items-center justify-center bg-cream px-4">
+            <div className="max-w-md w-full bg-white p-8 rounded-lg border border-border">
+                <h1 className="text-2xl font-bold text-charcoal mb-2 text-center">Reset Password</h1>
+                <p className="text-warm-gray text-center mb-8">
                     Enter your email address and we'll send you a link to reset your password.
                 </p>
 
                 {submitted ? (
                     <div className="text-center">
-                        <div className="bg-green-900/30 border border-green-800 text-green-200 p-4 rounded mb-6">
+                        <div className="bg-green-50 border border-green-200 text-green-800 p-4 rounded mb-6">
                             If an account exists for <strong>{email}</strong>, you will receive a password reset link shortly.
                         </div>
-                        <Link href="/auth/login" className="text-primary hover:underline">
+                        <Link href="/auth/login" className="text-gold hover:underline">
                             Back to Login
                         </Link>
                     </div>
                 ) : (
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">
+                            <label htmlFor="email" className="label mb-1 block">
                                 Email Address
                             </label>
                             <input
@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
                         </div>
 
                         {error && (
-                            <div className="bg-red-900/50 border border-red-700 text-red-200 px-4 py-3 rounded text-sm">
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm">
                                 {error}
                             </div>
                         )}
@@ -74,7 +74,7 @@ export default function ForgotPasswordPage() {
                         </button>
 
                         <div className="text-center">
-                            <Link href="/auth/login" className="text-sm text-gray-400 hover:text-white transition-colors">
+                            <Link href="/auth/login" className="text-sm text-warm-gray hover:text-charcoal transition-colors">
                                 Back to Login
                             </Link>
                         </div>

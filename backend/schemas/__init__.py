@@ -15,6 +15,7 @@ from schemas.user import (
     RefreshTokenRequest,
     UserUpdate,
     PasswordChange,
+    ResetPasswordRequest,
     UserProfileUpdate,
     UserProfile,
     NotificationBase,
@@ -26,7 +27,6 @@ from schemas.user import (
     UserSearchResult,
     UserFollowBase,
     UserFollow,
-    FollowRequest,
     FollowResponse,
     UserProfilePublic,
     UserSettingsBase,
@@ -142,10 +142,11 @@ from schemas.library import (
 __all__ = [
     # user
     "UserBase", "UserCreate", "UserLogin", "User", "Token", "TokenData",
-    "RefreshTokenRequest", "UserUpdate", "PasswordChange", "UserProfileUpdate",
+    "RefreshTokenRequest", "UserUpdate", "PasswordChange", "ResetPasswordRequest",
+    "UserProfileUpdate",
     "UserProfile", "NotificationBase", "NotificationCreate", "Notification",
     "NotificationMarkRead", "PublicUserProfile", "ShareableUser",
-    "UserSearchResult", "UserFollowBase", "UserFollow", "FollowRequest",
+    "UserSearchResult", "UserFollowBase", "UserFollow",
     "FollowResponse", "UserProfilePublic", "UserSettingsBase",
     "UserSettingsUpdate", "UserSettings",
     # recipe

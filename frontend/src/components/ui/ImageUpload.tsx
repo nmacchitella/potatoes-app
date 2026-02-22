@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { recipeApi, getErrorMessage } from '@/lib/api';
 
 interface ImageUploadProps {
@@ -34,6 +34,15 @@ export default function ImageUpload({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Revoke blob URLs on cleanup to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   const validateFile = (file: File): string | null => {
     if (!ALLOWED_TYPES.includes(file.type)) {
       return 'Invalid file type. Use JPEG, PNG, WebP, or GIF.';
@@ -53,6 +62,10 @@ export default function ImageUpload({
       return;
     }
 
+    // Revoke previous blob URL before creating a new one
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
     // Create preview
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
@@ -127,6 +140,9 @@ export default function ImageUpload({
   };
 
   const handleClear = () => {
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl);
+    }
     setPreviewFile(null);
     setPreviewUrl(null);
     setUrlInput('');

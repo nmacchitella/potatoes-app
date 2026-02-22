@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ingredientApi, searchApi, getErrorMessage } from '@/lib/api';
+import { ingredientApi, searchApi, getErrorMessage, isAxiosError } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import type { Ingredient, RecipeSummary } from '@/types';
@@ -66,8 +66,8 @@ export default function IngredientPage() {
     try {
       const data = await ingredientApi.get(ingredientId);
       setIngredient(data);
-    } catch (err: any) {
-      if (err.response?.status === 404) {
+    } catch (err: unknown) {
+      if (isAxiosError(err) && err.response?.status === 404) {
         setError('Ingredient not found');
       } else {
         setError('Failed to load ingredient');

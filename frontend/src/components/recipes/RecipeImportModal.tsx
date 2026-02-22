@@ -115,12 +115,12 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
   if (multipleRecipes && multipleRecipes.recipes.length > 1) {
     return (
       <Modal isOpen={isOpen} onClose={handleDone} size="2xl" blur>
-        <div className="bg-dark-card rounded-lg shadow-xl p-6 max-h-[80vh] overflow-hidden flex flex-col">
+        <div className="bg-white rounded-lg shadow-xl p-6 max-h-[80vh] overflow-hidden flex flex-col">
           <div className="flex items-center gap-3 mb-4">
             {!initialData && (
               <button
                 onClick={handleBackToUrl}
-                className="text-gray-400 hover:text-white"
+                className="text-warm-gray hover:text-charcoal"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -130,7 +130,7 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
             <h2 className="text-xl font-semibold">Select a Recipe</h2>
           </div>
 
-          <p className="text-gray-400 text-sm mb-4">
+          <p className="text-warm-gray text-sm mb-4">
             We found {multipleRecipes.recipes.length} recipes in this {multipleRecipes.source_type === 'youtube' ? 'video' : 'page'}.
             {importedIndices.size > 0
               ? ` ${importedIndices.size} imported. Select another or click Done.`
@@ -147,16 +147,16 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
                   className={`w-full text-left p-4 rounded-lg border transition-colors ${
                     isImported
                       ? 'bg-green-500/10 border-green-500/50'
-                      : 'bg-dark-bg hover:bg-dark-bg/80 border-dark-border hover:border-primary/50'
+                      : 'bg-cream hover:bg-cream-dark border-border hover:border-gold/50'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
-                      <h3 className="font-medium text-white mb-1">{recipe.title}</h3>
+                      <h3 className="font-medium text-charcoal mb-1">{recipe.title}</h3>
                       {recipe.description && (
-                        <p className="text-gray-400 text-sm line-clamp-2 mb-2">{recipe.description}</p>
+                        <p className="text-warm-gray text-sm line-clamp-2 mb-2">{recipe.description}</p>
                       )}
-                      <div className="flex gap-4 text-xs text-gray-500">
+                      <div className="flex gap-4 text-xs text-warm-gray">
                         <span>{recipe.ingredients.length} ingredients</span>
                         <span>{recipe.instructions.length} steps</span>
                         {recipe.prep_time_minutes && <span>{recipe.prep_time_minutes} min prep</span>}
@@ -176,7 +176,7 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
             })}
           </div>
 
-          <div className="flex justify-between gap-3 mt-6 pt-4 border-t border-dark-border">
+          <div className="flex justify-between gap-3 mt-6 pt-4 border-t border-border">
             <button
               type="button"
               onClick={handleImportAll}
@@ -201,10 +201,10 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
   // Default URL input view
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="lg" blur>
-      <div className="bg-dark-card rounded-lg shadow-xl p-6">
+      <div className="bg-white rounded-lg shadow-xl p-6">
         <h2 className="text-xl font-semibold mb-4">Import Recipe from URL</h2>
 
-        <p className="text-gray-400 text-sm mb-4">
+        <p className="text-warm-gray text-sm mb-4">
           Paste a link to a recipe or YouTube video and we'll automatically extract the ingredients,
           instructions, and other details for you to review and save.
         </p>
@@ -228,14 +228,14 @@ export function RecipeImportModal({ isOpen, onClose, onImport, initialData }: Re
           </div>
 
           {error && (
-            <div className="bg-red-500/20 text-red-400 p-3 rounded-lg text-sm">
+            <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">
               {error}
             </div>
           )}
 
           {loading && (
-            <div className="flex items-center gap-3 text-gray-400 text-sm">
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent" />
+            <div className="flex items-center gap-3 text-warm-gray text-sm">
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-gold border-t-transparent" />
               <span>Importing recipe... This may take a few seconds.</span>
             </div>
           )}

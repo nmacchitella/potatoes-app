@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional, Tuple
 import secrets
-import os
+from config import settings
 
 from database import get_db
 from auth import get_current_user, get_current_user_optional
@@ -919,7 +919,7 @@ async def share_via_email(
         db.commit()
         db.refresh(grocery_list)
 
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = settings.frontend_url
     share_link = f"{frontend_url}/grocery/share/{grocery_list.share_token}"
 
     # Check if email belongs to existing user

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { recipeApi, collectionApi, socialApi } from '@/lib/api';
+import { recipeApi, collectionApi, socialApi, getErrorMessage } from '@/lib/api';
 import Navbar from '@/components/layout/Navbar';
 import MainNavigation from '@/components/layout/MainNavigation';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
@@ -292,8 +292,8 @@ function RecipesPageContent() {
       if (selectedCollection === collectionId) {
         setSelectedCollection(null);
       }
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to delete collection');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to delete collection'));
     }
   };
 
@@ -413,8 +413,8 @@ function RecipesPageContent() {
       setShares(prev => [...prev, newShare]);
       setUserSearchQuery('');
       setUserSearchResults([]);
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to share collection');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to share collection'));
     } finally {
       setSharingUser(null);
     }
@@ -485,8 +485,8 @@ function RecipesPageContent() {
       // Fetch the full recipe data to add to display
       const fullRecipe = await recipeApi.get(recipe.id);
       setAllRecipes(prev => [...prev, fullRecipe]);
-    } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to add recipe to collection');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, 'Failed to add recipe to collection'));
       throw error; // Re-throw so the modal knows it failed
     }
   };

@@ -584,7 +584,7 @@ export default function RecipeDetailPage() {
                 </div>
                 <select
                   value={editForm.difficulty}
-                  onChange={e => setEditForm({ ...editForm, difficulty: e.target.value as any })}
+                  onChange={e => setEditForm({ ...editForm, difficulty: e.target.value as typeof editForm.difficulty })}
                   className="bg-transparent border-b border-border focus:border-gold outline-none text-xs"
                 >
                   <option value="">Difficulty</option>

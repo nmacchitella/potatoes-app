@@ -9,12 +9,14 @@ Usage:
 import sys
 import uuid
 from getpass import getpass
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy.orm import Session
 from database import engine
 from models import User
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
 def create_admin(email: str):
@@ -40,15 +42,15 @@ def create_admin(email: str):
                 print("Passwords do not match.")
                 sys.exit(1)
 
-            if len(password) < 6:
-                print("Password must be at least 6 characters.")
+            if len(password) < 8:
+                print("Password must be at least 8 characters.")
                 sys.exit(1)
 
             user = User(
                 id=str(uuid.uuid4()),
                 email=email,
-                hashed_password=pwd_context.hash(password),
-                display_name="Admin",
+                hashed_password=get_password_hash(password),
+                name="Admin",
                 is_admin=True,
                 is_verified=True
             )

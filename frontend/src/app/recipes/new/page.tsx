@@ -225,9 +225,8 @@ function NewRecipeContent() {
       } else {
         setImportError('No recipes found at this URL.');
       }
-    } catch (err: any) {
-      const message = err.response?.data?.detail || 'Failed to import recipe. Please try a different URL.';
-      setImportError(message);
+    } catch (err: unknown) {
+      setImportError(getErrorMessage(err, 'Failed to import recipe. Please try a different URL.'));
     } finally {
       setImporting(false);
     }
@@ -263,9 +262,8 @@ function NewRecipeContent() {
       } else {
         setRecipePasteError('Could not extract a recipe from the text. Please try with more details.');
       }
-    } catch (err: any) {
-      const message = err.response?.data?.detail || 'Failed to parse recipe. Please try again.';
-      setRecipePasteError(message);
+    } catch (err: unknown) {
+      setRecipePasteError(getErrorMessage(err, 'Failed to parse recipe. Please try again.'));
     } finally {
       setRecipeParsing(false);
     }
@@ -594,7 +592,7 @@ function NewRecipeContent() {
                             <label className="label mb-1 block text-xs">Difficulty</label>
                             <select
                               value={currentFormData.difficulty}
-                              onChange={e => updateCurrentForm('difficulty', e.target.value as any)}
+                              onChange={e => updateCurrentForm('difficulty', e.target.value as RecipeFormData['difficulty'])}
                               className="input-field w-full"
                             >
                               <option value="">-</option>
@@ -926,7 +924,7 @@ function NewRecipeContent() {
                     <label className="label mb-2 block">Difficulty</label>
                     <select
                       value={currentFormData.difficulty}
-                      onChange={e => updateCurrentForm('difficulty', e.target.value as any)}
+                      onChange={e => updateCurrentForm('difficulty', e.target.value as RecipeFormData['difficulty'])}
                       className="input-field w-full"
                     >
                       <option value="">-</option>

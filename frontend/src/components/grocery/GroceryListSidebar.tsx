@@ -50,8 +50,7 @@ export function GroceryListSidebar({
   const acceptedShares = sharedWithMe.filter(s => s.status === 'accepted');
   const pendingShares = sharedWithMe.filter(s => s.status === 'pending');
 
-  const handleCreateList = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitNewList = async () => {
     if (!newListName.trim()) return;
     setError(null);
     try {
@@ -62,6 +61,11 @@ export function GroceryListSidebar({
       const message = getErrorMessage(err, 'Failed to create list');
       setError(message);
     }
+  };
+
+  const handleCreateList = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitNewList();
   };
 
   const handleRenameList = async (listId: string) => {
@@ -296,7 +300,7 @@ export function GroceryListSidebar({
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
-                  handleCreateList(e as any);
+                  submitNewList();
                 }
                 if (e.key === 'Escape') {
                   setIsCreating(false);
@@ -308,7 +312,7 @@ export function GroceryListSidebar({
               autoFocus
             />
             <button
-              onClick={(e) => handleCreateList(e as any)}
+              onClick={() => submitNewList()}
               disabled={!newListName.trim()}
               className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
             >

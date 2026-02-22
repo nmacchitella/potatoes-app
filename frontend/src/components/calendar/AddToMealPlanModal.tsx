@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { mealPlanApi, authApi } from '@/lib/api';
-import { formatDateForApi, getStartOfWeek } from '@/lib/calendar-utils';
+import { mealPlanApi, authApi, getErrorMessage } from '@/lib/api';
+import { formatDateForApi, getStartOfWeek, DAYS, MEAL_TYPES as BASE_MEAL_TYPES } from '@/lib/calendar-utils';
+import { Modal } from '@/components/ui';
 import type { MealType, MealPlan, UserSettings, MealPlanCalendar } from '@/types';
 
 interface AddToMealPlanModalProps {
@@ -13,14 +14,11 @@ interface AddToMealPlanModalProps {
   onSuccess?: () => void;
 }
 
+/** Extended meal types including snack for the add-to-plan modal */
 const MEAL_TYPES: { key: MealType; label: string }[] = [
-  { key: 'breakfast', label: 'Breakfast' },
-  { key: 'lunch', label: 'Lunch' },
-  { key: 'dinner', label: 'Dinner' },
+  ...BASE_MEAL_TYPES,
   { key: 'snack', label: 'Snack' },
 ];
-
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export function AddToMealPlanModal({
   isOpen,
@@ -149,9 +147,9 @@ export function AddToMealPlanModal({
       });
       onSuccess?.();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to add to meal plan:', err);
-      setError(err.response?.data?.detail || 'Failed to add to meal plan');
+      setError(getErrorMessage(err, 'Failed to add to meal plan'));
     } finally {
       setIsSubmitting(false);
     }
@@ -181,18 +179,9 @@ export function AddToMealPlanModal({
     return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}`;
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onClose}
-      />
-
-      {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+    <Modal isOpen={isOpen} onClose={onClose} size="2xl" className="!max-w-4xl" ariaLabel="Add to Meal Plan">
+      <div className="bg-white rounded-xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
           <div>
@@ -444,6 +433,6 @@ export function AddToMealPlanModal({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

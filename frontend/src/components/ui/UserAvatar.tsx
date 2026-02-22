@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 interface UserAvatarProps {
   user: {
     name?: string;
@@ -28,13 +30,15 @@ export default function UserAvatar({
 
   return (
     <div
-      className={`rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden flex-shrink-0 ${sizeClass} ${className}`}
+      className={`relative rounded-full bg-cream-dark border border-border flex items-center justify-center overflow-hidden flex-shrink-0 ${sizeClass} ${className}`}
     >
       {user?.profile_image_url ? (
-        <img
+        <Image
           src={user.profile_image_url}
           alt={user.name || 'User'}
-          className="w-full h-full object-cover"
+          fill
+          sizes="(max-width: 768px) 48px, 48px"
+          className="object-cover"
         />
       ) : showFallbackIcon ? (
         <svg className="w-1/2 h-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
