@@ -24,7 +24,10 @@ if settings.database_url.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def _set_sqlite_wal_mode(dbapi_conn, connection_record):
         cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+        except Exception:
+            pass  # DB may be temporarily read-only (e.g. Fly.io volume startup)
         cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
