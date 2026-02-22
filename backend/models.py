@@ -85,6 +85,20 @@ class RefreshToken(Base):
     owner = relationship("User", back_populates="refresh_tokens")
 
 
+class OAuthAuthorizationCode(Base):
+    __tablename__ = "oauth_authorization_codes"
+
+    code = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    client_id = Column(String, nullable=False)
+    redirect_uri = Column(String, nullable=False)
+    code_challenge = Column(String, nullable=False)
+    code_challenge_method = Column(String, nullable=False, default="S256")
+    scope = Column(String, nullable=False, default="")
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class VerificationToken(Base):
     __tablename__ = "verification_tokens"
 

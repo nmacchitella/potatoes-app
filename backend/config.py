@@ -70,8 +70,12 @@ class Settings(BaseSettings):
     admin_email: str = ""
 
     # MCP Server
-    mcp_auth_token: str = ""  # Bearer token clients must send to access /mcp
-    mcp_user_email: str = ""  # User email the MCP acts on behalf of
+    mcp_auth_token: str = ""  # Bearer token clients must send to access /mcp (CLI)
+    mcp_user_email: str = ""  # User email the MCP acts on behalf of (CLI)
+
+    # MCP OAuth 2.1 (for claude.ai custom connectors)
+    mcp_oauth_client_id: str = ""
+    mcp_oauth_client_secret: str = ""
 
     class Config:
         env_file = ".env"
