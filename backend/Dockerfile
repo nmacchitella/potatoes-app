@@ -27,7 +27,8 @@ RUN mkdir -p /data
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser \
     && chown -R appuser:appgroup /app /data
 
-USER appuser
+# NOTE: We don't set USER here because the entrypoint needs root to fix
+# volume ownership, then drops to appuser via su.
 
 # Expose port
 EXPOSE 8000
@@ -35,5 +36,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run migrations and start the application
-CMD ["./start.sh"]
+# Entrypoint: fix volume ownership (runs as root), then drop to appuser
+ENTRYPOINT ["bash", "-c", "chown -R appuser:appgroup /data 2>/dev/null; exec su -s /bin/bash appuser -c './start.sh'"]
