@@ -33,6 +33,7 @@ def _build_google_auth():
         return None
     try:
         from fastmcp.server.auth.providers.google import GoogleProvider
+        from key_value.aio.stores.memory.store import MemoryStore
         return GoogleProvider(
             client_id=settings.google_client_id,
             client_secret=settings.google_client_secret,
@@ -40,6 +41,7 @@ def _build_google_auth():
             required_scopes=["openid", "https://www.googleapis.com/auth/userinfo.email"],
             require_authorization_consent=False,
             jwt_signing_key=settings.secret_key,
+            client_storage=MemoryStore(),
         )
     except Exception as e:
         logger.warning(f"Failed to initialize Google OAuth for MCP: {e}")
