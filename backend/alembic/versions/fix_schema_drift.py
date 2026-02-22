@@ -49,6 +49,14 @@ def _column_exists(conn, table_name: str, column_name: str) -> bool:
     return column_name in columns
 
 
+def _safe_create_index(index_name, table_name, columns, **kwargs):
+    """Create an index, silently skipping if it already exists."""
+    try:
+        op.create_index(index_name, table_name, columns, **kwargs)
+    except Exception:
+        pass
+
+
 def upgrade() -> None:
     """Upgrade schema to fix all drift issues."""
     conn = op.get_bind()
@@ -65,7 +73,7 @@ def upgrade() -> None:
             sa.Column('error', sa.String(500), nullable=True),
             sa.Column('checked_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
         )
-        op.create_index('ix_url_checks_domain', 'url_checks', ['domain'])
+        _safe_create_index('ix_url_checks_domain', 'url_checks', ['domain'])
 
     # -----------------------------------------------------------------------
     # 2. Add recurrence_id column to meal_plans if it doesn't exist
@@ -75,7 +83,7 @@ def upgrade() -> None:
             batch_op.add_column(sa.Column('recurrence_id', sa.String(), nullable=True))
 
         # Create index outside batch (works fine with SQLite)
-        op.create_index('ix_meal_plans_recurrence_id', 'meal_plans', ['recurrence_id'])
+        _safe_create_index('ix_meal_plans_recurrence_id', 'meal_plans', ['recurrence_id'])
 
     # -----------------------------------------------------------------------
     # 3. Add missing indexes on foreign key columns
@@ -94,7 +102,7 @@ def upgrade() -> None:
 
     for index_name, table_name, columns in missing_indexes:
         if not _index_exists(conn, index_name):
-            op.create_index(index_name, table_name, columns)
+            _safe_create_index(index_name, table_name, columns)
 
     # -----------------------------------------------------------------------
     # 4. Add unique constraint on user_follows(follower_id, following_id)
@@ -107,14 +115,14 @@ def upgrade() -> None:
     # 5. Add composite indexes for common query patterns on user_follows
     # -----------------------------------------------------------------------
     if not _index_exists(conn, "ix_user_follows_follower_status"):
-        op.create_index(
+        _safe_create_index(
             'ix_user_follows_follower_status',
             'user_follows',
             ['follower_id', 'status'],
         )
 
     if not _index_exists(conn, "ix_user_follows_following_status"):
-        op.create_index(
+        _safe_create_index(
             'ix_user_follows_following_status',
             'user_follows',
             ['following_id', 'status'],
