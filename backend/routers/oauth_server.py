@@ -197,10 +197,14 @@ async def oauth_google_callback(
         db.commit()
         db.refresh(db_user)
 
-    # Clean up expired authorization codes
-    db.query(models.OAuthAuthorizationCode).filter(
-        models.OAuthAuthorizationCode.expires_at <= datetime.now(timezone.utc)
-    ).delete()
+    # Clean up expired authorization codes (best-effort, don't block the flow)
+    try:
+        db.query(models.OAuthAuthorizationCode).filter(
+            models.OAuthAuthorizationCode.expires_at <= datetime.now(timezone.utc)
+        ).delete()
+        db.commit()
+    except Exception:
+        db.rollback()
 
     # Generate authorization code
     auth_code = secrets.token_urlsafe(40)
