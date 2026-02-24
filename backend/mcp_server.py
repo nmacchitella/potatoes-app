@@ -164,6 +164,10 @@ def _fmt_recipe_summary(r: dict) -> str:
         meta.append(r["privacy_level"])
     if meta:
         parts.append(f"  {' | '.join(meta)}")
+    tags = r.get("tags") or []
+    if tags:
+        tag_names = [t["name"] if isinstance(t, dict) else str(t) for t in tags]
+        parts.append(f"  Tags: {', '.join(tag_names)}")
     return "\n".join(parts)
 
 
@@ -224,6 +228,9 @@ def _fmt_meal(m: dict) -> str:
         line += f"  [recipe:{m['recipe_id']}]"
     if m.get("notes"):
         line += f"\n  Note: {m['notes']}"
+    if m.get("grocery_items"):
+        items = [gi.get("name", "") for gi in m["grocery_items"]]
+        line += f"\n  Grocery: {', '.join(items)}"
     return line
 
 
@@ -236,6 +243,61 @@ def _fmt_grocery_item(item: dict) -> str:
         qty += " "
     checked = "[x]" if item.get("is_checked") else "[ ]"
     return f"{checked} {qty}{item['name']}"
+
+
+# ---------------------------------------------------------------------------
+# Tag tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def list_tags(category: str = "") -> str:
+    """List all available tags (system and custom). Use this to discover tag IDs for filtering recipes.
+
+    Args:
+        category: Optional filter: cuisine, diet, meal_type, technique, season, custom
+    """
+    params: dict = {}
+    if category:
+        params["category"] = category
+    data = await api_get("/tags", params=params)
+    if not data:
+        return "No tags found."
+    lines = [f"Found {len(data)} tags:", ""]
+    current_cat = None
+    for t in data:
+        cat = t.get("category") or "other"
+        if cat != current_cat:
+            lines.append(f"## {cat.replace('_', ' ').title()}")
+            current_cat = cat
+        system = " (system)" if t.get("is_system") else ""
+        lines.append(f"- {t['name']} (ID: {t['id']}){system}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def create_tag(name: str, category: str = "") -> str:
+    """Create a new custom tag for categorizing recipes.
+
+    Args:
+        name: Tag name (e.g., "Italian", "Date Night", "Quick Weeknight")
+        category: Optional category: cuisine, diet, meal_type, technique, season, or custom (default: custom)
+    """
+    body: dict = {"name": name}
+    if category:
+        body["category"] = category
+    data = await api_post("/tags", body)
+    return f"Tag created: **{data['name']}** (ID: {data['id']}, category: {data.get('category', 'custom')})"
+
+
+@mcp.tool()
+async def delete_tag(tag_id: str) -> str:
+    """Delete a custom tag (system tags cannot be deleted).
+
+    Args:
+        tag_id: The tag ID to delete
+    """
+    await api_delete(f"/tags/{tag_id}")
+    return f"Tag {tag_id} deleted."
 
 
 # ---------------------------------------------------------------------------
@@ -254,7 +316,7 @@ async def search_recipes(
     """Search the user's recipes. Returns a paginated list.
 
     Args:
-        query: Text to search in title/description
+        query: Text to search in title, description, and ingredient names
         tag_ids: Comma-separated tag IDs to filter by
         difficulty: Filter by difficulty (easy, medium, hard)
         collection_id: Filter by collection ID
@@ -466,6 +528,49 @@ async def discover_recipes(page: int = 1, page_size: int = 20) -> str:
     return "\n".join(lines)
 
 
+@mcp.tool()
+async def clone_recipe(recipe_id: str) -> str:
+    """Clone a public recipe to your own collection.
+
+    Args:
+        recipe_id: The recipe ID to clone
+    """
+    data = await api_post(f"/recipes/{recipe_id}/clone")
+    return f"Recipe cloned: **{data['title']}** (ID: {data['id']})"
+
+
+# ---------------------------------------------------------------------------
+# Meal plan calendar tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def list_calendars() -> str:
+    """List all meal plan calendars (owned and shared with you)."""
+    data = await api_get("/meal-plan/calendars")
+    if not data:
+        return "No calendars found."
+    lines = [f"Found {len(data)} calendars:", ""]
+    for c in data:
+        owner_info = ""
+        if not c.get("is_owner") and c.get("owner"):
+            owner_info = f" (shared by {c['owner']['name']}, {c.get('permission', 'viewer')})"
+        elif c.get("share_count"):
+            owner_info = f" (shared with {c['share_count']} user(s))"
+        lines.append(f"- **{c['name']}** (ID: {c['id']}){owner_info}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def create_calendar(name: str) -> str:
+    """Create a new meal plan calendar.
+
+    Args:
+        name: Calendar name (e.g., "Family Dinners", "Meal Prep")
+    """
+    data = await api_post("/meal-plan/calendars", {"name": name})
+    return f"Calendar created: **{data['name']}** (ID: {data['id']})"
+
+
 # ---------------------------------------------------------------------------
 # Meal plan tools
 # ---------------------------------------------------------------------------
@@ -508,6 +613,7 @@ async def add_to_meal_plan(
     custom_title: str = "",
     servings: float = 4,
     notes: str = "",
+    grocery_items: str = "",
 ) -> str:
     """Add a recipe or custom meal to a meal plan calendar.
 
@@ -519,6 +625,7 @@ async def add_to_meal_plan(
         custom_title: Custom meal name (if not using a recipe)
         servings: Number of servings
         notes: Optional notes
+        grocery_items: JSON array of grocery items for custom meals, e.g. [{"name":"apples","quantity":4,"unit":"pieces","category":"produce"}]
     """
     body: dict = {
         "calendar_id": calendar_id,
@@ -532,6 +639,8 @@ async def add_to_meal_plan(
         body["custom_title"] = custom_title
     if notes:
         body["notes"] = notes
+    if grocery_items:
+        body["grocery_items"] = json.loads(grocery_items)
     data = await api_post("/meal-plan", body)
     title = data.get("custom_title") or (data.get("recipe") or {}).get("title") or "Meal"
     return f"Added **{title}** on {planned_date} ({meal_type}) — ID: {data['id']}"
@@ -544,6 +653,7 @@ async def update_meal(
     meal_type: str = "",
     servings: float | None = None,
     notes: str = "",
+    grocery_items: str = "",
 ) -> str:
     """Update a meal plan entry.
 
@@ -553,6 +663,7 @@ async def update_meal(
         meal_type: breakfast, lunch, dinner, or snack
         servings: Number of servings
         notes: Updated notes
+        grocery_items: JSON array of grocery items for custom meals, e.g. [{"name":"apples","quantity":4,"unit":"pieces","category":"produce"}]
     """
     body: dict = {}
     if planned_date:
@@ -563,6 +674,8 @@ async def update_meal(
         body["servings"] = servings
     if notes:
         body["notes"] = notes
+    if grocery_items:
+        body["grocery_items"] = json.loads(grocery_items)
     data = await api_patch(f"/meal-plan/{meal_plan_id}", body)
     return f"Meal updated (ID: {data['id']})"
 
@@ -576,6 +689,35 @@ async def remove_from_meal_plan(meal_plan_id: str) -> str:
     """
     await api_delete(f"/meal-plan/{meal_plan_id}")
     return f"Meal {meal_plan_id} removed from plan."
+
+
+@mcp.tool()
+async def move_meal(meal_plan_id: str, planned_date: str, meal_type: str) -> str:
+    """Move a meal to a different date and/or meal slot.
+
+    Args:
+        meal_plan_id: The meal plan entry ID to move
+        planned_date: New date (YYYY-MM-DD)
+        meal_type: New meal slot: breakfast, lunch, dinner, or snack
+    """
+    data = await api_post(f"/meal-plan/{meal_plan_id}/move", {
+        "planned_date": planned_date,
+        "meal_type": meal_type,
+    })
+    title = data.get("custom_title") or (data.get("recipe") or {}).get("title") or "Meal"
+    return f"Moved **{title}** to {planned_date} ({meal_type})"
+
+
+@mcp.tool()
+async def swap_meals(meal_plan_id_1: str, meal_plan_id_2: str) -> str:
+    """Swap two meals (exchange their dates and meal types).
+
+    Args:
+        meal_plan_id_1: First meal plan entry ID
+        meal_plan_id_2: Second meal plan entry ID
+    """
+    await api_post(f"/meal-plan/swap?meal_plan_id_1={meal_plan_id_1}&meal_plan_id_2={meal_plan_id_2}")
+    return f"Swapped meals {meal_plan_id_1} and {meal_plan_id_2}."
 
 
 # ---------------------------------------------------------------------------
@@ -675,6 +817,203 @@ async def add_grocery_item(
         body["category"] = category
     data = await api_post(f"/grocery-list/{list_id}/items", body)
     return f"Added **{data['name']}** to grocery list."
+
+
+@mcp.tool()
+async def delete_grocery_item(item_id: str, list_id: str = "") -> str:
+    """Remove an item from a grocery list.
+
+    Args:
+        item_id: The grocery item ID to delete
+        list_id: Grocery list ID (uses default if empty)
+    """
+    if not list_id:
+        lists = await api_get("/grocery-list")
+        if not lists:
+            return "No grocery lists found."
+        list_id = lists[0]["id"]
+    await api_delete(f"/grocery-list/{list_id}/items/{item_id}")
+    return f"Item {item_id} removed from grocery list."
+
+
+@mcp.tool()
+async def check_grocery_items(item_ids: str, is_checked: bool = True, list_id: str = "") -> str:
+    """Check or uncheck multiple grocery list items at once.
+
+    Args:
+        item_ids: Comma-separated item IDs to check/uncheck
+        is_checked: True to check items off, False to uncheck them
+        list_id: Grocery list ID (uses default if empty)
+    """
+    if not list_id:
+        lists = await api_get("/grocery-list")
+        if not lists:
+            return "No grocery lists found."
+        list_id = lists[0]["id"]
+    id_list = [i.strip() for i in item_ids.split(",")]
+    data = await api_patch(f"/grocery-list/{list_id}/items/bulk-check", {
+        "item_ids": id_list,
+        "is_checked": is_checked,
+    })
+    action = "checked" if is_checked else "unchecked"
+    return f"{data.get('updated', len(id_list))} items {action}."
+
+
+@mcp.tool()
+async def clear_grocery_list(list_id: str = "", checked_only: bool = False) -> str:
+    """Clear all items from a grocery list.
+
+    Args:
+        list_id: Grocery list ID (uses default if empty)
+        checked_only: If True, only clear checked-off items
+    """
+    if not list_id:
+        lists = await api_get("/grocery-list")
+        if not lists:
+            return "No grocery lists found."
+        list_id = lists[0]["id"]
+    data = await api_delete(f"/grocery-list/{list_id}/clear?checked_only={str(checked_only).lower()}")
+    count = data.get("deleted", 0)
+    scope = "checked items" if checked_only else "all items"
+    return f"Cleared {count} {scope} from grocery list."
+
+
+# ---------------------------------------------------------------------------
+# Collection tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def list_collections() -> str:
+    """List all recipe collections (owned and from library partners)."""
+    data = await api_get("/collections")
+    if not data:
+        return "No collections found."
+    lines = [f"Found {len(data)} collections:", ""]
+    for c in data:
+        count = c.get("recipe_count", 0)
+        owner = ""
+        if c.get("owner"):
+            owner = f" (by {c['owner']['name']})"
+        lines.append(f"- **{c['name']}** — {count} recipes (ID: {c['id']}){owner}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def get_collection(collection_id: str) -> str:
+    """Get a collection with its recipes.
+
+    Args:
+        collection_id: The collection ID
+    """
+    data = await api_get(f"/collections/{collection_id}")
+    name = data.get("name", "Collection")
+    recipes = data.get("recipes", [])
+    lines = [f"# {name}"]
+    if data.get("description"):
+        lines.append(data["description"])
+    lines.append(f"\n{len(recipes)} recipes:")
+    lines.append("")
+    for r in recipes:
+        lines.append(_fmt_recipe_summary(r))
+    lines.append(f"\nCollection ID: {collection_id}")
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def create_collection(name: str, description: str = "") -> str:
+    """Create a new recipe collection.
+
+    Args:
+        name: Collection name (e.g., "Weeknight Dinners", "Holiday Baking")
+        description: Optional description
+    """
+    body: dict = {"name": name}
+    if description:
+        body["description"] = description
+    data = await api_post("/collections", body)
+    return f"Collection created: **{data['name']}** (ID: {data['id']})"
+
+
+@mcp.tool()
+async def update_collection(collection_id: str, name: str = "", description: str = "") -> str:
+    """Update a collection's name or description.
+
+    Args:
+        collection_id: The collection ID
+        name: New name
+        description: New description
+    """
+    body: dict = {}
+    if name:
+        body["name"] = name
+    if description:
+        body["description"] = description
+    data = await api_put(f"/collections/{collection_id}", body)
+    return f"Collection updated: **{data['name']}** (ID: {data['id']})"
+
+
+@mcp.tool()
+async def delete_collection(collection_id: str) -> str:
+    """Delete a collection (recipes in it are NOT deleted).
+
+    Args:
+        collection_id: The collection ID to delete
+    """
+    await api_delete(f"/collections/{collection_id}")
+    return f"Collection {collection_id} deleted."
+
+
+@mcp.tool()
+async def add_recipe_to_collection(collection_id: str, recipe_id: str) -> str:
+    """Add a recipe to a collection.
+
+    Args:
+        collection_id: The collection ID
+        recipe_id: The recipe ID to add
+    """
+    await api_post(f"/collections/{collection_id}/recipes/{recipe_id}")
+    return f"Recipe {recipe_id} added to collection {collection_id}."
+
+
+@mcp.tool()
+async def remove_recipe_from_collection(collection_id: str, recipe_id: str) -> str:
+    """Remove a recipe from a collection (does not delete the recipe).
+
+    Args:
+        collection_id: The collection ID
+        recipe_id: The recipe ID to remove
+    """
+    await api_delete(f"/collections/{collection_id}/recipes/{recipe_id}")
+    return f"Recipe {recipe_id} removed from collection {collection_id}."
+
+
+# ---------------------------------------------------------------------------
+# Ingredient tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def search_ingredients(query: str = "", category: str = "", limit: int = 20) -> str:
+    """Search available ingredients for autocomplete when building recipes.
+
+    Args:
+        query: Search text to match ingredient names
+        category: Filter by category (e.g., produce, dairy, meat, spices)
+        limit: Max results (default 20)
+    """
+    params: dict = {"limit": limit}
+    if query:
+        params["search"] = query
+    if category:
+        params["category"] = category
+    data = await api_get("/ingredients", params=params)
+    if not data:
+        return "No ingredients found."
+    lines = [f"Found {len(data)} ingredients:", ""]
+    for ing in data:
+        cat = ing.get("category") or "other"
+        system = " (system)" if ing.get("is_system") else ""
+        lines.append(f"- {ing['name']} [{cat}]{system} (ID: {ing['id']})")
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

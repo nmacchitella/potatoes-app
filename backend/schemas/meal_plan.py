@@ -38,12 +38,21 @@ class MealPlanCalendarSummary(BaseModel):
 # MEAL PLAN SCHEMAS
 # ============================================================================
 
+class CustomMealGroceryItem(BaseModel):
+    """A grocery item attached to a custom meal plan entry."""
+    name: str = Field(..., min_length=1, max_length=255)
+    quantity: Optional[float] = None
+    unit: Optional[str] = None
+    category: Optional[str] = None  # produce, dairy, nuts, etc.
+
+
 class MealPlanCreate(BaseModel):
     """Create a new meal plan entry (recipe-based or custom item)."""
     calendar_id: str
     recipe_id: Optional[str] = None
     custom_title: Optional[str] = Field(None, max_length=255)
     custom_description: Optional[str] = None
+    grocery_items: Optional[List[CustomMealGroceryItem]] = None
     planned_date: date
     meal_type: str = Field(..., pattern="^(breakfast|lunch|dinner|snack)$")
     servings: float = 4
@@ -66,6 +75,7 @@ class MealPlanUpdate(BaseModel):
     notes: Optional[str] = None
     custom_title: Optional[str] = Field(None, max_length=255)
     custom_description: Optional[str] = None
+    grocery_items: Optional[List[CustomMealGroceryItem]] = None
 
 
 class MealPlanMove(BaseModel):
@@ -115,6 +125,7 @@ class MealPlan(BaseModel):
     recipe: Optional[MealPlanRecipe] = None
     custom_title: Optional[str] = None
     custom_description: Optional[str] = None
+    grocery_items: Optional[List[CustomMealGroceryItem]] = None
     created_at: datetime
 
     class Config:

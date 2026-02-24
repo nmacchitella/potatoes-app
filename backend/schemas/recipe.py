@@ -20,6 +20,14 @@ class RecipeIngredientBase(BaseModel):
     ingredient_group: Optional[str] = None
     notes: Optional[str] = None
 
+    @field_validator('unit', 'preparation', 'ingredient_group', 'notes', mode='before')
+    @classmethod
+    def convert_null_string_to_none(cls, v):
+        """Convert the literal string 'null' to None (Gemini sometimes returns this)."""
+        if isinstance(v, str) and v.strip().lower() == 'null':
+            return None
+        return v
+
     @field_validator('quantity', 'quantity_max', mode='before')
     @classmethod
     def convert_zero_to_none(cls, v):
@@ -196,6 +204,7 @@ class RecipeBase(BaseModel):
     source_name: Optional[str] = None
     cover_image_url: Optional[str] = None
     video_start_seconds: Optional[int] = None
+    notes: Optional[str] = None
 
 
 class RecipeCreate(RecipeBase):
@@ -219,6 +228,7 @@ class RecipeUpdate(BaseModel):
     source_url: Optional[str] = None
     source_name: Optional[str] = None
     cover_image_url: Optional[str] = None
+    notes: Optional[str] = None
     status: Optional[str] = None
     ingredients: Optional[List[RecipeIngredientCreate]] = None
     instructions: Optional[List[RecipeInstructionCreate]] = None

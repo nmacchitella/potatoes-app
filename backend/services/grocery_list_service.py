@@ -257,24 +257,58 @@ def generate_from_meal_plan(
 
     # Collect all ingredients with scale factors
     ingredients_to_aggregate: List[Tuple[RecipeIngredient, float, str]] = []
+    # Collect grocery items from custom meals
+    custom_grocery_items: List[Dict] = []
 
     for meal_plan in meal_plans:
         recipe = meal_plan.recipe
-        if not recipe:
-            continue
+        if recipe:
+            # Recipe-based meal: collect structured ingredients
+            scale_factor = 1.0
+            if recipe.yield_quantity and recipe.yield_quantity > 0:
+                scale_factor = meal_plan.servings / recipe.yield_quantity
 
-        # Calculate scale factor based on servings
-        scale_factor = 1.0
-        if recipe.yield_quantity and recipe.yield_quantity > 0:
-            scale_factor = meal_plan.servings / recipe.yield_quantity
+            for ingredient in recipe.ingredients:
+                if not ingredient.is_optional:
+                    ingredients_to_aggregate.append((ingredient, scale_factor, recipe.id))
+        elif meal_plan.custom_title:
+            # Custom meal: use grocery_items if provided, otherwise fall back to title
+            if meal_plan.grocery_items:
+                for gi in meal_plan.grocery_items:
+                    custom_grocery_items.append({
+                        'name': gi.get('name', ''),
+                        'quantity': gi.get('quantity'),
+                        'unit': gi.get('unit'),
+                        'category': (gi.get('category') or 'other').lower(),
+                    })
+            else:
+                custom_grocery_items.append({
+                    'name': meal_plan.custom_title,
+                    'quantity': None,
+                    'unit': None,
+                    'category': 'other',
+                })
 
-        # Collect ingredients with scale factor
-        for ingredient in recipe.ingredients:
-            if not ingredient.is_optional:  # Skip optional ingredients
-                ingredients_to_aggregate.append((ingredient, scale_factor, recipe.id))
-
-    # Aggregate ingredients
+    # Aggregate recipe ingredients
     aggregated = aggregate_ingredients(ingredients_to_aggregate)
+
+    # Deduplicate custom grocery items by normalized name
+    custom_aggregated: Dict[str, Dict] = {}
+    for ci in custom_grocery_items:
+        key = normalize_ingredient_name(ci['name'])
+        if key not in custom_aggregated:
+            custom_aggregated[key] = {
+                'name': ci['name'],
+                'quantity': ci['quantity'],
+                'unit': ci['unit'],
+                'category': ci['category'],
+                'is_staple': False,
+                'source_recipe_ids': [],
+            }
+        elif ci['quantity'] and custom_aggregated[key]['quantity']:
+            if (ci['unit'] or '') == (custom_aggregated[key]['unit'] or ''):
+                custom_aggregated[key]['quantity'] += ci['quantity']
+    aggregated.extend(custom_aggregated.values())
 
     # If merging, we need to combine with existing items
     if merge:

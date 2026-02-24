@@ -32,6 +32,87 @@ from database import SessionLocal
 from models import URLCheck
 
 
+# ---------------------------------------------------------------------------
+# Shared helpers for cleaning Gemini output
+# ---------------------------------------------------------------------------
+
+# Unit values that are placeholders, not real units — should become None
+INVALID_UNITS = {
+    'amount not specified', 'not specified', 'to taste', 'as needed',
+    'amount needed', 'some', 'optional', 'null',
+}
+
+
+def clean_unit(unit) -> Optional[str]:
+    """Clean unit value — return None for invalid/placeholder units."""
+    if not unit:
+        return None
+    unit_lower = unit.lower().strip()
+    if unit_lower in INVALID_UNITS or 'not specified' in unit_lower or 'as needed' in unit_lower:
+        return None
+    if len(unit) > 50:
+        return None
+    return unit
+
+
+def clean_quantity(val) -> Optional[float]:
+    """Convert falsy / zero quantities to None."""
+    if not val:
+        return None
+    try:
+        f = float(val)
+        return f if f > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def clean_str(val) -> Optional[str]:
+    """Return None for falsy or literal 'null' strings (Gemini artefact)."""
+    if not val:
+        return None
+    if isinstance(val, str) and val.strip().lower() == 'null':
+        return None
+    return val
+
+
+def clean_quantity_max(quantity, quantity_max) -> Optional[float]:
+    """Set quantity_max to None if it equals or is less than quantity."""
+    if quantity_max is None or quantity is None:
+        return quantity_max
+    if quantity_max <= quantity:
+        return None
+    return quantity_max
+
+
+# ---------------------------------------------------------------------------
+# Shared Gemini JSON-schema fragment for ingredients
+# ---------------------------------------------------------------------------
+
+INGREDIENT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "quantity": {"type": "number", "nullable": True},
+        "quantity_max": {"type": "number", "nullable": True},
+        "unit": {"type": "string", "nullable": True},
+        "preparation": {"type": "string", "nullable": True},
+        "is_optional": {"type": "boolean"},
+        "notes": {"type": "string", "nullable": True},
+    },
+    "required": ["name"],
+}
+
+INSTRUCTION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "step_number": {"type": "integer"},
+        "instruction_text": {"type": "string"},
+        "duration_minutes": {"type": "integer"},
+    },
+    "required": ["step_number", "instruction_text"],
+}
+
+
 @dataclass
 class ImportedIngredient:
     name: str
@@ -739,42 +820,18 @@ async def transcribe_audio_with_gemini(
             "properties": {
                 "title": {"type": "string"},
                 "description": {"type": "string"},
-                "ingredients": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "quantity": {"type": "number"},
-                            "unit": {"type": "string"},
-                            "preparation": {"type": "string"},
-                            "is_optional": {"type": "boolean"}
-                        },
-                        "required": ["name"]
-                    }
-                },
-                "instructions": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "step_number": {"type": "integer"},
-                            "instruction_text": {"type": "string"},
-                            "duration_minutes": {"type": "integer"}
-                        },
-                        "required": ["step_number", "instruction_text"]
-                    }
-                },
-                "yield_quantity": {"type": "number"},
-                "yield_unit": {"type": "string"},
-                "prep_time_minutes": {"type": "integer"},
-                "cook_time_minutes": {"type": "integer"},
+                "ingredients": {"type": "array", "items": INGREDIENT_SCHEMA},
+                "instructions": {"type": "array", "items": INSTRUCTION_SCHEMA},
+                "yield_quantity": {"type": "number", "nullable": True},
+                "yield_unit": {"type": "string", "nullable": True},
+                "prep_time_minutes": {"type": "integer", "nullable": True},
+                "cook_time_minutes": {"type": "integer", "nullable": True},
                 "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"]},
                 "tags": {"type": "array", "items": {"type": "string"}},
-                "video_start_seconds": {"type": "integer"}
+                "video_start_seconds": {"type": "integer"},
             },
-            "required": ["title", "description", "ingredients", "instructions", "tags", "difficulty", "video_start_seconds"]
-        }
+            "required": ["title", "description", "ingredients", "instructions", "tags", "difficulty", "video_start_seconds"],
+        },
     }
 
     # Upload the audio file to Gemini
@@ -782,7 +839,7 @@ async def transcribe_audio_with_gemini(
     audio_file = genai.upload_file(audio_path)
 
     # Use Gemini to transcribe and extract recipe
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = genai.GenerativeModel('gemini-3-flash')
 
     # Build prompt with all available data sources
     sources_intro = "You have access to the following data sources:\n\n"
@@ -833,7 +890,7 @@ The attached audio file. Use this as the PRIMARY source for:
 For EACH recipe found, provide a JSON object with:
 - title: Recipe name
 - description: Brief description (1-2 sentences)
-- ingredients: Array of {{name, quantity (number or null), unit (string or null), preparation (string or null), is_optional (boolean)}}
+- ingredients: Array of {{name, quantity (number or null), quantity_max (number or null, only for ranges like "1-2 cups"), unit (string or null), preparation (string or null), is_optional (boolean), notes (string or null)}}
 - instructions: Array of {{step_number, instruction_text, duration_minutes (estimated minutes for this step, based on the action described)}}
 - yield_quantity: Number of servings (number or null if not mentioned)
 - yield_unit: Usually "servings" or "portions" (or null if not mentioned)
@@ -903,35 +960,22 @@ Respond with a JSON array of recipe objects."""
         if isinstance(recipes_data, dict):
             recipes_data = [recipes_data]
 
-        # Invalid unit values that should be converted to None
-        invalid_units = {
-            'amount not specified', 'not specified', 'to taste', 'as needed',
-            'amount needed', 'some', 'optional', 'pinch', None
-        }
-
-        def clean_unit(unit):
-            """Clean unit value - return None for invalid/placeholder units."""
-            if not unit:
-                return None
-            unit_lower = unit.lower().strip()
-            if unit_lower in invalid_units or 'not specified' in unit_lower or 'as needed' in unit_lower:
-                return None
-            if len(unit) > 50:
-                return None
-            return unit
-
         # Convert to ImportedRecipe objects
         recipes = []
         for data in recipes_data:
-            # Debug: log each recipe's key fields
             logger.debug(f"Recipe data: title={data.get('title')}, yield_quantity={data.get('yield_quantity')}")
             ingredients = [
                 ImportedIngredient(
                     name=ing.get('name', ''),
-                    quantity=ing.get('quantity') or None,  # Convert 0 to None (schema requires gt=0)
+                    quantity=clean_quantity(ing.get('quantity')),
+                    quantity_max=clean_quantity_max(
+                        clean_quantity(ing.get('quantity')),
+                        clean_quantity(ing.get('quantity_max')),
+                    ),
                     unit=clean_unit(ing.get('unit')),
                     preparation=ing.get('preparation'),
-                    is_optional=ing.get('is_optional', False)
+                    is_optional=ing.get('is_optional', False),
+                    notes=ing.get('notes'),
                 )
                 for ing in data.get('ingredients', [])
             ]
@@ -993,7 +1037,7 @@ async def parse_with_gemini(text: str, url: str, allow_multiple: bool = False) -
     genai.configure(api_key=settings.gemini_api_key)
 
     # Use Gemini with structured output
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    model = genai.GenerativeModel('gemini-3-flash')
 
     # Define JSON schema for structured output
     recipe_schema = {
@@ -1006,47 +1050,21 @@ async def parse_with_gemini(text: str, url: str, allow_multiple: bool = False) -
                     "properties": {
                         "title": {"type": "string"},
                         "description": {"type": "string"},
-                        "ingredients": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "name": {"type": "string"},
-                                    "quantity": {"type": "number"},
-                                    "quantity_max": {"type": "number"},
-                                    "unit": {"type": "string"},
-                                    "preparation": {"type": "string"},
-                                    "is_optional": {"type": "boolean"},
-                                    "notes": {"type": "string"}
-                                },
-                                "required": ["name"]
-                            }
-                        },
-                        "instructions": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "step_number": {"type": "integer"},
-                                    "instruction_text": {"type": "string"},
-                                    "duration_minutes": {"type": "integer"}
-                                },
-                                "required": ["step_number", "instruction_text"]
-                            }
-                        },
-                        "yield_quantity": {"type": "number"},
-                        "yield_unit": {"type": "string"},
-                        "prep_time_minutes": {"type": "integer"},
-                        "cook_time_minutes": {"type": "integer"},
+                        "ingredients": {"type": "array", "items": INGREDIENT_SCHEMA},
+                        "instructions": {"type": "array", "items": INSTRUCTION_SCHEMA},
+                        "yield_quantity": {"type": "number", "nullable": True},
+                        "yield_unit": {"type": "string", "nullable": True},
+                        "prep_time_minutes": {"type": "integer", "nullable": True},
+                        "cook_time_minutes": {"type": "integer", "nullable": True},
                         "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"]},
                         "tags": {"type": "array", "items": {"type": "string"}},
-                        "video_start_seconds": {"type": "integer"}
+                        "video_start_seconds": {"type": "integer"},
                     },
-                    "required": ["title", "description", "ingredients", "instructions", "tags", "difficulty", "video_start_seconds"]
-                }
-            }
+                    "required": ["title", "description", "ingredients", "instructions", "tags", "difficulty", "video_start_seconds"],
+                },
+            },
         },
-        "required": ["recipes"]
+        "required": ["recipes"],
     }
 
     if allow_multiple:
@@ -1193,47 +1211,20 @@ Return ONLY the JSON, no other text."""
     # Handle both old format (single recipe) and new format (recipes array)
     recipes_data = data.get('recipes', [data] if 'title' in data else [])
 
-    # Invalid unit values that should be converted to None
-    invalid_units = {
-        'amount not specified', 'not specified', 'to taste', 'as needed',
-        'amount needed', 'some', 'optional', 'pinch', None
-    }
-
-    def clean_unit(unit):
-        """Clean unit value - return None for invalid/placeholder units."""
-        if not unit:
-            return None
-        unit_lower = unit.lower().strip()
-        # Check for invalid patterns
-        if unit_lower in invalid_units or 'not specified' in unit_lower or 'as needed' in unit_lower:
-            return None
-        # If unit is too long (probably a description), truncate or nullify
-        if len(unit) > 50:
-            return None
-        return unit
-
-    def clean_quantity_max(quantity, quantity_max):
-        """Set quantity_max to None if it equals quantity (not a real range)."""
-        if quantity_max is None or quantity is None:
-            return quantity_max
-        if quantity_max <= quantity:
-            return None
-        return quantity_max
-
     recipes = []
     for recipe_data in recipes_data:
         ingredients = []
         for ing in recipe_data.get('ingredients', []):
-            qty = ing.get('quantity') or None
-            qty_max = ing.get('quantity_max') or None
+            qty = clean_quantity(ing.get('quantity'))
+            qty_max = clean_quantity(ing.get('quantity_max'))
             ingredients.append(ImportedIngredient(
                 name=ing.get('name', ''),
                 quantity=qty,
                 quantity_max=clean_quantity_max(qty, qty_max),
                 unit=clean_unit(ing.get('unit')),
-                preparation=ing.get('preparation'),
+                preparation=clean_str(ing.get('preparation')),
                 is_optional=ing.get('is_optional', False),
-                notes=ing.get('notes'),
+                notes=clean_str(ing.get('notes')),
             ))
 
         def safe_int(val):

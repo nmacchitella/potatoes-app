@@ -26,7 +26,7 @@ const formatIngredientWithUnit = (ing: RecipeIngredient, unitSystem?: UnitSystem
   // Apply scaling first
   let displayQty = ing.quantity ? ing.quantity * scale : undefined;
   let displayQtyMax = ing.quantity_max ? ing.quantity_max * scale : undefined;
-  let displayUnit = ing.unit;
+  let displayUnit = ing.unit === 'null' ? undefined : ing.unit;
 
   if (unitSystem && ing.unit && displayQty) {
     const converted = convertIngredient(
@@ -66,7 +66,7 @@ const formatIngredientWithUnit = (ing: RecipeIngredient, unitSystem?: UnitSystem
 
   // Add name and preparation
   parts.push(ing.name);
-  if (ing.preparation) {
+  if (ing.preparation && ing.preparation !== 'null') {
     parts[parts.length - 1] += `, ${ing.preparation}`;
   }
 
@@ -926,23 +926,23 @@ export default function RecipeDetailPage() {
             </div>
 
             {/* Notes */}
-            {(isEditing || recipe.notes) && (
-              <div className="bg-white rounded-lg border border-border p-5">
-                <h2 className="font-serif text-xl text-charcoal mb-4">Notes</h2>
+            <div className="bg-white rounded-lg border border-border p-5">
+              <h2 className="font-serif text-xl text-charcoal mb-4">Notes</h2>
 
-                {isEditing ? (
-                  <textarea
-                    value={editForm.notes}
-                    onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
-                    placeholder="Add any additional notes, tips, or variations..."
-                    rows={4}
-                    className="w-full text-sm bg-cream rounded px-3 py-2 focus:ring-1 focus:ring-gold outline-none resize-none"
-                  />
-                ) : (
-                  <p className="text-charcoal text-sm leading-relaxed whitespace-pre-wrap">{recipe.notes}</p>
-                )}
-              </div>
-            )}
+              {isEditing ? (
+                <textarea
+                  value={editForm.notes}
+                  onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                  placeholder="Add any additional notes, tips, or variations..."
+                  rows={4}
+                  className="w-full text-sm bg-cream rounded px-3 py-2 focus:ring-1 focus:ring-gold outline-none resize-none"
+                />
+              ) : recipe.notes ? (
+                <p className="text-charcoal text-sm leading-relaxed whitespace-pre-wrap">{recipe.notes}</p>
+              ) : (
+                <p className="text-warm-gray text-sm italic">No notes yet.</p>
+              )}
+            </div>
           </div>
         </div>
       </main>

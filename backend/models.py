@@ -173,6 +173,7 @@ class Recipe(Base):
     source_name = Column(String(200), nullable=True)
     cover_image_url = Column(String(500), nullable=True)
     video_start_seconds = Column(Integer, nullable=True)  # For YouTube: when this recipe starts in the video
+    notes = Column(Text, nullable=True)
     status = Column(String(20), default="published")  # draft, published
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -376,6 +377,8 @@ class MealPlan(Base):
     # Custom item fields (for non-recipe items like "Pizza Night", "Takeout", etc.)
     custom_title = Column(String(255), nullable=True)
     custom_description = Column(Text, nullable=True)
+    # Optional grocery items for custom meals, e.g. [{"name":"apples","quantity":4,"unit":"pieces","category":"produce"}]
+    grocery_items = Column(JSON, nullable=True)
 
     # For recurring meals - groups instances created from same recurrence rule
     recurrence_id = Column(String, nullable=True, index=True)

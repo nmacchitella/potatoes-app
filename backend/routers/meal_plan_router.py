@@ -516,6 +516,7 @@ async def create_meal_plan(
         recipe_id=data.recipe_id,
         custom_title=data.custom_title,
         custom_description=data.custom_description,
+        grocery_items=[gi.model_dump() for gi in data.grocery_items] if data.grocery_items else None,
         planned_date=data.planned_date,
         meal_type=data.meal_type,
         servings=data.servings,
@@ -645,6 +646,11 @@ async def update_meal_plan(
     require_calendar_access(db, meal_plan.calendar_id, current_user, edit_required=True)
 
     update_data = data.model_dump(exclude_unset=True)
+    if 'grocery_items' in update_data and update_data['grocery_items'] is not None:
+        update_data['grocery_items'] = [
+            gi if isinstance(gi, dict) else gi.model_dump()
+            for gi in update_data['grocery_items']
+        ]
     for field, value in update_data.items():
         setattr(meal_plan, field, value)
 
@@ -750,6 +756,7 @@ async def copy_meal_plans(
             recipe_id=source.recipe_id,
             custom_title=source.custom_title,
             custom_description=source.custom_description,
+            grocery_items=source.grocery_items,
             planned_date=new_date,
             meal_type=source.meal_type,
             servings=source.servings,

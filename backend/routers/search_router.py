@@ -153,13 +153,14 @@ async def search_autocomplete(
 
     search_term = f"%{q.lower()}%"
 
-    # Search user's own recipes
+    # Search user's own recipes (title, description, and ingredient names)
     my_recipes_query = db.query(Recipe).filter(
         Recipe.author_id == current_user.id,
         Recipe.deleted_at.is_(None),
         or_(
             func.lower(Recipe.title).like(search_term),
-            func.lower(Recipe.description).like(search_term)
+            func.lower(Recipe.description).like(search_term),
+            Recipe.ingredients.any(func.lower(RecipeIngredient.name).like(search_term))
         )
     ).options(joinedload(Recipe.author)).limit(limit).all()
 
@@ -183,7 +184,8 @@ async def search_autocomplete(
         Recipe.deleted_at.is_(None),
         or_(
             func.lower(Recipe.title).like(search_term),
-            func.lower(Recipe.description).like(search_term)
+            func.lower(Recipe.description).like(search_term),
+            Recipe.ingredients.any(func.lower(RecipeIngredient.name).like(search_term))
         )
     ).options(joinedload(Recipe.author)).limit(limit).all()
 
@@ -323,7 +325,7 @@ async def search_full(
     # Default limits for mixed results
     cat_limit = page_size if category else 10
 
-    # Search recipes (both own and public)
+    # Search recipes (both own and public — title, description, and ingredient names)
     recipes = []
     recipes_total = 0
     if not category or category == "recipes":
@@ -338,7 +340,8 @@ async def search_full(
             ),
             or_(
                 func.lower(Recipe.title).like(search_term),
-                func.lower(Recipe.description).like(search_term)
+                func.lower(Recipe.description).like(search_term),
+                Recipe.ingredients.any(func.lower(RecipeIngredient.name).like(search_term))
             )
         ).options(joinedload(Recipe.author))
 

@@ -16,7 +16,7 @@ import math
 
 from database import get_db
 from auth import get_current_user, get_current_user_optional
-from models import User, Recipe, Tag, Collection, recipe_sub_recipes
+from models import User, Recipe, Tag, Collection, RecipeIngredient, recipe_sub_recipes
 from routers.library_router import get_library_partners
 from schemas import (
     RecipeCreate, RecipeUpdate, Recipe as RecipeSchema,
@@ -68,13 +68,14 @@ async def list_recipes(
         Recipe.deleted_at.is_(None)
     )
 
-    # Apply search filter
+    # Apply search filter (title, description, and ingredient names)
     if search:
         search_term = f"%{search}%"
         query = query.filter(
             or_(
                 Recipe.title.ilike(search_term),
-                Recipe.description.ilike(search_term)
+                Recipe.description.ilike(search_term),
+                Recipe.ingredients.any(RecipeIngredient.name.ilike(search_term))
             )
         )
 
