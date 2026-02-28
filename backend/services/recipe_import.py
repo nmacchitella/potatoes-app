@@ -495,38 +495,65 @@ def get_youtube_transcript(video_id: str) -> Tuple[str, str]:
         raise ValueError(f"TRANSCRIPT_UNAVAILABLE: {str(e)}")
 
 
-def get_youtube_video_info(video_id: str) -> dict:
+async def get_youtube_video_info(video_id: str) -> dict:
     """
-    Get video metadata including title and description using yt-dlp.
+    Get video metadata including title and description by scraping the YouTube page.
     Returns dict with 'title', 'description', and 'uploader' fields.
     """
     try:
-        cmd = [
-            'yt-dlp',
-            '--dump-json',
-            '--no-download',
-            '--no-playlist',
-            f'https://www.youtube.com/watch?v={video_id}'
-        ]
+        url = f'https://www.youtube.com/watch?v={video_id}'
+        async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
+            resp = await client.get(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+            })
+            resp.raise_for_status()
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        html = resp.text
+        info = {}
 
-        if result.returncode != 0:
-            logger.warning(f"yt-dlp failed to get video info: {result.stderr}")
-            return {}
+        # Extract title from meta tags
+        soup = BeautifulSoup(html, 'lxml')
+        og_title = soup.find('meta', property='og:title')
+        if og_title:
+            info['title'] = og_title.get('content', '')
 
-        data = json.loads(result.stdout)
-        return {
-            'title': data.get('title', ''),
-            'description': data.get('description', ''),
-            'uploader': data.get('uploader', ''),
-            'channel': data.get('channel', ''),
-        }
-    except subprocess.TimeoutExpired:
-        logger.warning("yt-dlp timed out getting video info")
-        return {}
-    except (json.JSONDecodeError, FileNotFoundError) as e:
-        logger.warning(f"Failed to get video info: {e}")
+        # Extract description from meta tags
+        og_desc = soup.find('meta', property='og:description')
+        if og_desc:
+            info['description'] = og_desc.get('content', '')
+
+        # Try to get full description from ytInitialData JSON
+        match = re.search(r'var ytInitialData\s*=\s*({.*?});\s*</script>', html, re.DOTALL)
+        if match:
+            try:
+                yt_data = json.loads(match.group(1))
+                # Navigate to video description
+                contents = (yt_data.get('contents', {})
+                    .get('twoColumnWatchNextResults', {})
+                    .get('results', {})
+                    .get('results', {})
+                    .get('contents', []))
+                for item in contents:
+                    vp = item.get('videoPrimaryInfoRenderer', {})
+                    # Get channel name
+                    vs = item.get('videoSecondaryInfoRenderer', {})
+                    owner = vs.get('owner', {}).get('videoOwnerRenderer', {})
+                    if owner:
+                        title_runs = owner.get('title', {}).get('runs', [])
+                        if title_runs:
+                            info['uploader'] = title_runs[0].get('text', '')
+                            info['channel'] = info['uploader']
+                    # Get full description
+                    desc_obj = vs.get('attributedDescription', {})
+                    if desc_obj.get('content'):
+                        info['description'] = desc_obj['content']
+            except (json.JSONDecodeError, KeyError, IndexError):
+                pass
+
+        return info
+    except Exception as e:
+        logger.warning(f"Failed to get video info via page scrape: {e}")
         return {}
 
 
@@ -1396,7 +1423,7 @@ async def import_recipe_from_url(url: str, use_audio_fallback: bool = True) -> L
 
         # Fetch video metadata (title, description) for better extraction
         logger.info(f"Fetching video metadata for {video_id}...")
-        video_info = get_youtube_video_info(video_id)
+        video_info = await get_youtube_video_info(video_id)
         video_description = video_info.get('description', '')
         video_title = video_info.get('title', '')
         video_uploader = video_info.get('uploader') or video_info.get('channel', '')
@@ -1446,21 +1473,38 @@ async def import_recipe_from_url(url: str, use_audio_fallback: bool = True) -> L
 
         # Fall back to audio transcription if transcript failed
         if recipes is None and use_audio_fallback:
-            logger.info(f"Downloading audio for {video_id}...")
-            audio_path = download_youtube_audio(video_id)
-            logger.info(f"Transcribing audio with Gemini...")
-            recipes = await transcribe_audio_with_gemini(
-                audio_path,
-                url,
-                video_description=video_description,
-                video_title=video_title,
-                linked_recipe_json_ld=linked_json_ld,
-                linked_recipe_url=linked_recipe_url
-            )
-            logger.info(f"Extracted {len(recipes)} recipes from audio")
+            try:
+                logger.info(f"Downloading audio for {video_id}...")
+                audio_path = download_youtube_audio(video_id)
+                logger.info(f"Transcribing audio with Gemini...")
+                recipes = await transcribe_audio_with_gemini(
+                    audio_path,
+                    url,
+                    video_description=video_description,
+                    video_title=video_title,
+                    linked_recipe_json_ld=linked_json_ld,
+                    linked_recipe_url=linked_recipe_url
+                )
+                logger.info(f"Extracted {len(recipes)} recipes from audio")
+            except ValueError as e:
+                logger.warning(f"Audio fallback failed: {e}")
+                # If we have description or linked recipe data, try parsing that instead
+                if video_description or linked_json_ld:
+                    logger.info("Attempting extraction from description/linked data only...")
+                    parts = []
+                    if linked_json_ld:
+                        linked_text = json_ld_to_text(linked_json_ld)
+                        parts.append(f"LINKED RECIPE PAGE (from {linked_recipe_url}):\n{linked_text}")
+                    if video_description:
+                        parts.append(f"VIDEO DESCRIPTION:\n{video_description}")
+                    if video_title:
+                        parts.append(f"VIDEO TITLE: {video_title}")
+                    combined_text = "\n\n".join(parts)
+                    recipes = await parse_with_gemini(combined_text, url, allow_multiple=True)
+                    logger.info(f"Extracted {len(recipes)} recipes from description/linked data")
 
         if recipes is None:
-            raise ValueError("Could not extract recipes from this video")
+            raise ValueError("Could not extract recipes from this video. No transcript, audio, or description data available.")
 
         # Add YouTube thumbnail and source info to all recipes
         for recipe in recipes:
