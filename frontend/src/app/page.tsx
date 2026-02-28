@@ -10,6 +10,7 @@ import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import RecipeSearchModal from '@/components/search/RecipeSearchModal';
 import { ShareModal } from '@/components/sharing';
 import { CollectionSidebar } from '@/components/collections';
+import InSeasonWidget from '@/components/layout/InSeasonWidget';
 import { RecipeFilterSection, RecipeGrid } from '@/components/recipes';
 import type { RecipeSummary, Collection, Tag, CollectionShare, UserSearchResult, SearchRecipeResult } from '@/types';
 
@@ -502,6 +503,8 @@ function RecipesPageContent() {
           <aside className="hidden lg:block w-56 flex-shrink-0">
             <div className="sticky top-24">
               <MainNavigation currentPage="recipes" />
+
+              <InSeasonWidget />
 
               {/* Collection Sidebar */}
               <CollectionSidebar

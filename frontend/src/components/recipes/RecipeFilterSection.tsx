@@ -1,6 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import type { Tag } from '@/types';
+
+const COLLAPSED_TAG_COUNT = 4;
 
 interface RecipeFilterSectionProps {
   searchQuery: string;
@@ -27,6 +30,20 @@ export default function RecipeFilterSection({
   viewMode,
   onViewModeChange,
 }: RecipeFilterSectionProps) {
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+
+  // On mobile (handled via CSS), show limited tags unless expanded.
+  // Selected tags always appear so the user can deselect them.
+  const visibleTags = tagsExpanded
+    ? availableTags
+    : (() => {
+        const selected = availableTags.filter(t => selectedTags.includes(t.id));
+        const unselected = availableTags.filter(t => !selectedTags.includes(t.id));
+        const slotsLeft = Math.max(0, COLLAPSED_TAG_COUNT - selected.length);
+        return [...selected, ...unselected.slice(0, slotsLeft)];
+      })();
+  const hiddenCount = availableTags.length - visibleTags.length;
+
   return (
     <div className="mb-6 space-y-3">
       <div className="flex items-center justify-between">
@@ -93,11 +110,12 @@ export default function RecipeFilterSection({
       {/* Tag Pills with AND/OR Toggle */}
       {availableTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
+          {/* Desktop: always show all tags */}
           {availableTags.map(tag => (
             <button
               key={tag.id}
               onClick={() => onToggleTag(tag.id)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+              className={`hidden md:inline-flex px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                 selectedTags.includes(tag.id)
                   ? 'bg-gold text-white'
                   : 'bg-cream-dark text-charcoal hover:bg-gold/20'
@@ -106,6 +124,36 @@ export default function RecipeFilterSection({
               {tag.name}
             </button>
           ))}
+          {/* Mobile: show collapsed tags with expand toggle */}
+          {visibleTags.map(tag => (
+            <button
+              key={tag.id}
+              onClick={() => onToggleTag(tag.id)}
+              className={`md:hidden px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                selectedTags.includes(tag.id)
+                  ? 'bg-gold text-white'
+                  : 'bg-cream-dark text-charcoal hover:bg-gold/20'
+              }`}
+            >
+              {tag.name}
+            </button>
+          ))}
+          {hiddenCount > 0 && (
+            <button
+              onClick={() => setTagsExpanded(true)}
+              className="md:hidden px-3 py-1 rounded-full text-xs font-medium bg-cream-dark text-warm-gray hover:text-charcoal transition-colors"
+            >
+              +{hiddenCount} more
+            </button>
+          )}
+          {tagsExpanded && availableTags.length > COLLAPSED_TAG_COUNT && (
+            <button
+              onClick={() => setTagsExpanded(false)}
+              className="md:hidden px-3 py-1 rounded-full text-xs font-medium text-warm-gray hover:text-charcoal transition-colors"
+            >
+              Show less
+            </button>
+          )}
           {selectedTags.length > 1 && (
             <div className="flex items-center gap-1 ml-2 pl-2 border-l border-border">
               <span className="text-xs text-warm-gray">Match:</span>
