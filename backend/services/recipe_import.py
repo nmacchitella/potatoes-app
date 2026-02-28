@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Optional, List, Tuple
 from dataclasses import dataclass, asdict
 from bs4 import BeautifulSoup
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 
@@ -810,7 +811,7 @@ async def transcribe_audio_with_gemini(
     if not settings.gemini_api_key:
         raise ValueError("Gemini API key not configured")
 
-    genai.configure(api_key=settings.gemini_api_key)
+    client = genai.Client(api_key=settings.gemini_api_key)
 
     # Define JSON schema for structured output
     recipe_schema = {
@@ -836,10 +837,7 @@ async def transcribe_audio_with_gemini(
 
     # Upload the audio file to Gemini
     logger.info(f"Uploading audio file for transcription: {audio_path}")
-    audio_file = genai.upload_file(audio_path)
-
-    # Use Gemini to transcribe and extract recipe
-    model = genai.GenerativeModel('gemini-3-flash-preview')
+    audio_file = client.files.upload(file=audio_path)
 
     # Build prompt with all available data sources
     sources_intro = "You have access to the following data sources:\n\n"
@@ -920,9 +918,10 @@ Respond with a JSON array of recipe objects."""
     try:
         for attempt in range(max_retries):
             try:
-                response = model.generate_content(
-                    [audio_file, prompt],
-                    generation_config=genai.GenerationConfig(
+                response = client.models.generate_content(
+                    model='gemini-3-flash-preview',
+                    contents=[audio_file, prompt],
+                    config=types.GenerateContentConfig(
                         response_mime_type="application/json",
                         response_schema=recipe_schema,
                         temperature=0.1,
@@ -1034,10 +1033,7 @@ async def parse_with_gemini(text: str, url: str, allow_multiple: bool = False) -
     if not settings.gemini_api_key:
         raise ValueError("Gemini API key not configured")
 
-    genai.configure(api_key=settings.gemini_api_key)
-
-    # Use Gemini with structured output
-    model = genai.GenerativeModel('gemini-3-flash-preview')
+    client = genai.Client(api_key=settings.gemini_api_key)
 
     # Define JSON schema for structured output
     recipe_schema = {
@@ -1187,9 +1183,10 @@ Return ONLY the JSON, no other text."""
 
     for attempt in range(max_retries):
         try:
-            response = model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
+            response = client.models.generate_content(
+                model='gemini-3-flash-preview',
+                contents=prompt,
+                config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=recipe_schema,
                     temperature=0.1,
