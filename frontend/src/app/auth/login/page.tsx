@@ -41,6 +41,10 @@ function LoginContent() {
     setGoogleLoading(true);
 
     try {
+      // Persist returnUrl so the callback page can redirect after OAuth
+      if (returnUrl && returnUrl !== '/recipes') {
+        sessionStorage.setItem('authReturnUrl', returnUrl);
+      }
       const response = await authApi.googleLogin();
       window.location.href = response.authorization_url;
     } catch (err) {

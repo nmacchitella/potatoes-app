@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { groceryListApi } from '@/lib/api';
 import type { GroceryListSummary, SharedGroceryListAccess } from '@/types';
 
@@ -21,10 +22,13 @@ interface UseGroceryListsReturn {
  * Pair with useGroceryListData for the selected list's content.
  */
 export function useGroceryLists(): UseGroceryListsReturn {
+  const searchParams = useSearchParams();
+  const listParam = searchParams.get('list');
+
   const [myLists, setMyLists] = useState<GroceryListSummary[]>([]);
   const [sharedWithMe, setSharedWithMe] = useState<SharedGroceryListAccess[]>([]);
   const [loadingLists, setLoadingLists] = useState(true);
-  const [selectedListId, setSelectedListId] = useState<string | null>(null);
+  const [selectedListId, setSelectedListId] = useState<string | null>(listParam);
 
   const loadLists = useCallback(async () => {
     setLoadingLists(true);
@@ -36,6 +40,12 @@ export function useGroceryLists(): UseGroceryListsReturn {
       setMyLists(lists);
       setSharedWithMe(shared);
       setSelectedListId(current => {
+        // If a list param was provided (e.g. from a share link redirect), use it
+        if (listParam) {
+          const isOwned = lists.some(l => l.id === listParam);
+          const isShared = shared.some(s => s.grocery_list_id === listParam && s.status === 'accepted');
+          if (isOwned || isShared) return listParam;
+        }
         if (!current && lists.length > 0) return lists[0].id;
         return current;
       });
@@ -44,7 +54,7 @@ export function useGroceryLists(): UseGroceryListsReturn {
     } finally {
       setLoadingLists(false);
     }
-  }, []);
+  }, [listParam]);
 
   useEffect(() => {
     loadLists();

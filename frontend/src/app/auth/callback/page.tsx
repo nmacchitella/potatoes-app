@@ -52,8 +52,10 @@ function AuthCallbackContent() {
         const user = await authApi.getCurrentUser();
         setUser(user);
 
-        // Redirect to home page
-        router.push('/');
+        // Redirect to the originally requested page, or home
+        const returnUrl = sessionStorage.getItem('authReturnUrl') || '/';
+        sessionStorage.removeItem('authReturnUrl');
+        router.push(returnUrl);
       } catch (err) {
         console.error('Error during OAuth callback:', err);
         setError('Authentication failed. Please try again.');

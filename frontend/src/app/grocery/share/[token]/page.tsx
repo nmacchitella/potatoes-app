@@ -41,6 +41,7 @@ export default function PublicGroceryListPage() {
   const router = useRouter();
   const token = params.token as string;
   const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoAcceptAttempted = useRef(false);
 
   const { user } = useStore();
   const isLoggedIn = !!user;
@@ -60,7 +61,28 @@ export default function PublicGroceryListPage() {
     };
   }, []);
 
+  // Auto-accept and redirect for logged-in users
   useEffect(() => {
+    if (!isLoggedIn || !token || autoAcceptAttempted.current) return;
+    autoAcceptAttempted.current = true;
+
+    const autoAccept = async () => {
+      try {
+        const result = await groceryListApi.acceptPublicShare(token);
+        router.replace(`/grocery?list=${result.grocery_list_id}`);
+      } catch {
+        // If auto-accept fails, fall through to show the read-only view
+        setLoading(false);
+      }
+    };
+
+    autoAccept();
+  }, [isLoggedIn, token, router]);
+
+  useEffect(() => {
+    // Skip fetching for logged-in users — they'll be redirected
+    if (isLoggedIn) return;
+
     const fetchGroceryList = async () => {
       try {
         const list = await groceryListApi.getPublicGroceryList(token);
@@ -75,7 +97,7 @@ export default function PublicGroceryListPage() {
     if (token) {
       fetchGroceryList();
     }
-  }, [token]);
+  }, [token, isLoggedIn]);
 
   const handleAddToMyLists = async () => {
     if (!token || isAdding) return;
@@ -84,15 +106,7 @@ export default function PublicGroceryListPage() {
     setAddResult(null);
     try {
       const result = await groceryListApi.acceptPublicShare(token);
-      if (result.already_had_access) {
-        setAddResult({ success: true, message: 'You already have access to this list!' });
-      } else {
-        setAddResult({ success: true, message: 'List added to your account! Redirecting...' });
-        // Redirect to the grocery page after a brief delay
-        redirectTimerRef.current = setTimeout(() => {
-          router.push('/grocery');
-        }, 1500);
-      }
+      router.replace(`/grocery?list=${result.grocery_list_id}`);
     } catch (err) {
       const message = getErrorMessage(err, 'Failed to add list to your account');
       setAddResult({ success: false, message });
@@ -191,7 +205,7 @@ export default function PublicGroceryListPage() {
                 <p className="text-sm text-warm-gray">Create a free account to edit this list and create your own</p>
               </div>
               <Link
-                href={`/auth/login?redirect=/grocery/share/${token}`}
+                href={`/auth/login?returnUrl=/grocery/share/${token}`}
                 className="px-4 py-2 bg-gold text-white rounded-lg hover:bg-gold/90 transition-colors whitespace-nowrap text-center"
               >
                 Sign up or log in
