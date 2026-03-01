@@ -17,6 +17,7 @@ interface DayViewProps {
   isPast: (date: Date) => boolean;
   onRepeat: (meal: MealPlan, e: React.MouseEvent) => void;
   onDelete: (mealId: string, e: React.MouseEvent) => void;
+  onEdit: (meal: MealPlan, e: React.MouseEvent) => void;
   onSlotClick: (date: Date, mealType: MealType) => void;
 }
 
@@ -28,6 +29,7 @@ export default function DayView({
   isPast,
   onRepeat,
   onDelete,
+  onEdit,
   onSlotClick,
 }: DayViewProps) {
   const today = isToday(date);
@@ -84,6 +86,11 @@ export default function DayView({
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
+                          <button onClick={(e) => onEdit(meal, e)} className="text-warm-gray hover:text-charcoal" title="Edit servings">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
                           {!isCustom && (
                             <button onClick={(e) => onRepeat(meal, e)} className="text-warm-gray hover:text-blue-500" title="Repeat weekly">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

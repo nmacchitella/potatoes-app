@@ -2,18 +2,18 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { searchApi, mealPlanApi, authApi, getErrorMessage } from '@/lib/api';
+import { searchApi, mealPlanApi, authApi, ingredientApi, getErrorMessage } from '@/lib/api';
 import { useDebouncedSearch } from '@/hooks';
 import { formatDateForApi } from '@/lib/calendar-utils';
 import { RecipeImage, Modal } from '@/components/ui';
-import type { SearchRecipeResult, MealType, MealPlan } from '@/types';
+import type { SearchRecipeResult, MealType, MealPlan, Ingredient } from '@/types';
 
 type TabType = 'recipe' | 'custom';
 
 interface AddMealModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectRecipe: (recipe: SearchRecipeResult) => void;
+  onSelectRecipe: (recipe: SearchRecipeResult, servings: number) => void;
   onCustomMealSuccess: (meal: MealPlan) => void;
   selectedDate?: Date;
   selectedMealType?: MealType;
@@ -50,6 +50,12 @@ export function AddMealModal({
   const [error, setError] = useState<string | null>(null);
   const customInputRef = useRef<HTMLInputElement>(null);
 
+  // Ingredient autocomplete state
+  const [ingredientSuggestions, setIngredientSuggestions] = useState<Ingredient[]>([]);
+  const [showIngredients, setShowIngredients] = useState(false);
+  const [ingredientIndex, setIngredientIndex] = useState(-1);
+  const ingredientDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
   // Use shared debounced search hook
   const { results, loading } = useDebouncedSearch(query, { limit: 10 });
 
@@ -73,6 +79,54 @@ export function AddMealModal({
     }
   }, [isOpen]);
 
+  // Ingredient autocomplete handlers
+  const handleCustomTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCustomTitle(value);
+    setIngredientIndex(-1);
+
+    if (ingredientDebounceRef.current) clearTimeout(ingredientDebounceRef.current);
+
+    if (value.length < 2) {
+      setIngredientSuggestions([]);
+      setShowIngredients(false);
+      return;
+    }
+
+    ingredientDebounceRef.current = setTimeout(async () => {
+      try {
+        const results = await ingredientApi.list(value, undefined, 6);
+        setIngredientSuggestions(results);
+        setShowIngredients(results.length > 0);
+      } catch {
+        // silently ignore
+      }
+    }, 250);
+  }, []);
+
+  const handleSelectIngredient = useCallback((ingredient: Ingredient) => {
+    setCustomTitle(ingredient.name);
+    setShowIngredients(false);
+    setIngredientSuggestions([]);
+    setIngredientIndex(-1);
+  }, []);
+
+  const handleTitleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showIngredients || ingredientSuggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIngredientIndex(i => Math.min(i + 1, ingredientSuggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setIngredientIndex(i => Math.max(i - 1, -1));
+    } else if (e.key === 'Enter' && ingredientIndex >= 0) {
+      e.preventDefault();
+      handleSelectIngredient(ingredientSuggestions[ingredientIndex]);
+    } else if (e.key === 'Escape') {
+      setShowIngredients(false);
+    }
+  }, [showIngredients, ingredientSuggestions, ingredientIndex, handleSelectIngredient]);
+
   // Handlers
   const handleClose = useCallback(() => {
     setQuery('');
@@ -81,19 +135,22 @@ export function AddMealModal({
     setCustomDescription('');
     setError(null);
     setActiveTab('recipe');
+    setIngredientSuggestions([]);
+    setShowIngredients(false);
+    if (ingredientDebounceRef.current) clearTimeout(ingredientDebounceRef.current);
     onClose();
   }, [onClose]);
 
   const handleSelectRecipe = useCallback((recipe: SearchRecipeResult) => {
     setAddingRecipe(recipe.id);
     try {
-      onSelectRecipe(recipe);
+      onSelectRecipe(recipe, servings);
       setQuery('');
       setSelectedIndex(-1);
     } finally {
       setAddingRecipe(null);
     }
-  }, [onSelectRecipe]);
+  }, [onSelectRecipe, servings]);
 
   const handleCreateRecipe = useCallback(() => {
     const url = query.trim()
@@ -289,6 +346,21 @@ export function AddMealModal({
         {/* Recipe Tab Content */}
         {activeTab === 'recipe' && (
           <>
+            {/* Servings + Search row */}
+            <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-cream/40">
+              <span className="text-xs text-warm-gray">Servings:</span>
+              <button
+                type="button"
+                onClick={() => setServings(s => Math.max(1, s - 1))}
+                className="w-6 h-6 rounded bg-white border border-border text-charcoal text-sm flex items-center justify-center hover:bg-cream-dark transition-colors"
+              >-</button>
+              <span className="w-5 text-center text-sm font-medium text-charcoal">{servings}</span>
+              <button
+                type="button"
+                onClick={() => setServings(s => s + 1)}
+                className="w-6 h-6 rounded bg-white border border-border text-charcoal text-sm flex items-center justify-center hover:bg-cream-dark transition-colors"
+              >+</button>
+            </div>
             {/* Search Input */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
               <svg className="w-5 h-5 text-warm-gray flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -478,8 +550,8 @@ export function AddMealModal({
         {/* Custom Tab Content */}
         {activeTab === 'custom' && (
           <form onSubmit={handleSubmitCustom} className="p-4 space-y-4">
-            {/* Title input */}
-            <div>
+            {/* Title input with ingredient autocomplete */}
+            <div className="relative">
               <label className="block text-sm font-medium text-charcoal mb-1">
                 What's on the menu? <span className="text-red-500">*</span>
               </label>
@@ -487,11 +559,34 @@ export function AddMealModal({
                 ref={customInputRef}
                 type="text"
                 value={customTitle}
-                onChange={(e) => setCustomTitle(e.target.value)}
-                placeholder="e.g., Pizza Night, Sushi Takeout, Leftovers..."
+                onChange={handleCustomTitleChange}
+                onKeyDown={handleTitleKeyDown}
+                onBlur={() => setTimeout(() => setShowIngredients(false), 150)}
+                placeholder="e.g., Yogurt, Pear, Pizza Night, Sushi Takeout..."
                 className="w-full px-3 py-2 border border-border rounded-lg focus:ring-1 focus:ring-sage focus:border-sage outline-none text-sm"
                 maxLength={255}
+                autoComplete="off"
               />
+              {showIngredients && ingredientSuggestions.length > 0 && (
+                <ul className="absolute z-10 left-0 right-0 mt-1 bg-white border border-border rounded-lg shadow-lg overflow-hidden">
+                  {ingredientSuggestions.map((ingredient, i) => (
+                    <li key={ingredient.id}>
+                      <button
+                        type="button"
+                        onMouseDown={() => handleSelectIngredient(ingredient)}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-sm text-left hover:bg-cream transition-colors ${
+                          i === ingredientIndex ? 'bg-cream' : ''
+                        }`}
+                      >
+                        <span className="text-charcoal">{ingredient.name}</span>
+                        {ingredient.category && (
+                          <span className="text-xs text-warm-gray ml-2">{ingredient.category}</span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Description input */}

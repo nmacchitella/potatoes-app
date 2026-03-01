@@ -60,6 +60,7 @@ export default function CalendarView({ isActive = true, onOpenShareModal, calend
           onCut={calendar.handleCut}
           onRepeat={calendar.handleOpenRepeatModal}
           onDelete={calendar.handleDeleteMeal}
+          onEdit={calendar.handleOpenEditModal}
           onSlotClick={calendar.handleSlotClick}
         />
       )}
@@ -83,6 +84,7 @@ export default function CalendarView({ isActive = true, onOpenShareModal, calend
           onMove={calendar.handleOpenMoveModal}
           onRepeat={calendar.handleOpenRepeatModal}
           onDelete={calendar.handleDeleteMeal}
+          onEdit={calendar.handleOpenEditModal}
           onSlotClick={calendar.handleSlotClick}
         />
       )}
@@ -97,6 +99,7 @@ export default function CalendarView({ isActive = true, onOpenShareModal, calend
           isPast={calendar.isPast}
           onRepeat={calendar.handleOpenRepeatModal}
           onDelete={calendar.handleDeleteMeal}
+          onEdit={calendar.handleOpenEditModal}
           onSlotClick={calendar.handleSlotClick}
         />
       )}
@@ -121,6 +124,7 @@ export default function CalendarView({ isActive = true, onOpenShareModal, calend
           onMove={calendar.handleOpenMoveModal}
           onRepeat={calendar.handleOpenRepeatModal}
           onDelete={calendar.handleDeleteMeal}
+          onEdit={calendar.handleOpenEditModal}
         />
       )}
 
@@ -179,16 +183,77 @@ export default function CalendarView({ isActive = true, onOpenShareModal, calend
         </div>
       </Modal>
 
+      {/* Edit Servings Modal */}
+      {calendar.editingMeal && (
+        <Modal isOpen={calendar.showEditModal} onClose={calendar.closeEditModal} size="sm">
+          <div className="bg-white rounded-xl shadow-2xl p-6">
+            <h2 className="font-serif text-xl text-charcoal mb-1">Edit Servings</h2>
+            <p className="text-warm-gray text-sm mb-5 truncate">
+              {calendar.editingMeal.recipe?.title || calendar.editingMeal.custom_title}
+            </p>
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <button
+                onClick={() => calendar.setEditServings(Math.max(1, calendar.editServings - 1))}
+                className="w-10 h-10 rounded-lg bg-cream hover:bg-cream-dark text-charcoal text-xl flex items-center justify-center transition-colors"
+              >−</button>
+              <span className="w-12 text-center text-2xl font-serif text-charcoal">{calendar.editServings}</span>
+              <button
+                onClick={() => calendar.setEditServings(calendar.editServings + 1)}
+                className="w-10 h-10 rounded-lg bg-cream hover:bg-cream-dark text-charcoal text-xl flex items-center justify-center transition-colors"
+              >+</button>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={calendar.closeEditModal} className="flex-1 px-4 py-2 border border-border rounded-lg text-charcoal hover:bg-cream transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={calendar.handleSaveServings}
+                disabled={calendar.savingServings}
+                className="flex-1 px-4 py-2 bg-gold text-white rounded-lg hover:bg-gold-dark transition-colors disabled:opacity-50"
+              >
+                {calendar.savingServings ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Repeat Weekly Modal */}
       {calendar.repeatMeal && calendar.repeatMeal.recipe && (
         <Modal isOpen={calendar.showRepeatModal} onClose={calendar.closeRepeatModal} size="md">
           <div className="bg-white rounded-xl shadow-2xl p-6">
-            <h2 className="font-serif text-xl text-charcoal mb-4">Repeat Weekly</h2>
-            <p className="text-warm-gray text-sm mb-2">
+            <h2 className="font-serif text-xl text-charcoal mb-1">Repeat Weekly</h2>
+            <p className="text-warm-gray text-sm mb-4">
               Add <strong>{calendar.repeatMeal.recipe.title}</strong> for{' '}
-              <span className="capitalize">{calendar.repeatMeal.meal_type}</span> on{' '}
-              {new Date(calendar.repeatMeal.planned_date).toLocaleDateString('en-US', { weekday: 'long' })}s.
+              <span className="capitalize">{calendar.repeatMeal.meal_type}</span>.
             </p>
+
+            {/* Day of week selector */}
+            <div className="mb-4">
+              <label className="block text-sm text-charcoal mb-2">On these days</label>
+              <div className="flex gap-1.5">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => {
+                  const selected = calendar.repeatDaysOfWeek.includes(i);
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => {
+                        const days = calendar.repeatDaysOfWeek;
+                        calendar.setRepeatDaysOfWeek(
+                          selected ? days.filter(d => d !== i) : [...days, i].sort()
+                        );
+                      }}
+                      className={`flex-1 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                        selected ? 'bg-gold text-white' : 'border border-border text-warm-gray hover:bg-cream'
+                      }`}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex items-center gap-3 mb-6">
               <label className="text-sm text-charcoal">For the next</label>
               <select
@@ -210,10 +275,10 @@ export default function CalendarView({ isActive = true, onOpenShareModal, calend
               </button>
               <button
                 onClick={calendar.handleCreateRecurring}
-                disabled={calendar.creatingRecurring}
+                disabled={calendar.creatingRecurring || calendar.repeatDaysOfWeek.length === 0}
                 className="flex-1 px-4 py-2 bg-gold text-white rounded-lg hover:bg-gold-dark transition-colors disabled:opacity-50"
               >
-                {calendar.creatingRecurring ? 'Creating...' : 'Create Recurring'}
+                {calendar.creatingRecurring ? 'Creating...' : `Create${calendar.repeatDaysOfWeek.length > 1 ? ` (${calendar.repeatDaysOfWeek.length} days/wk)` : ''}`}
               </button>
             </div>
           </div>

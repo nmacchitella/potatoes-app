@@ -27,6 +27,7 @@ interface MobileWeekViewProps {
   onMove: (meal: MealPlan) => void;
   onRepeat: (meal: MealPlan, e: React.MouseEvent) => void;
   onDelete: (mealId: string, e: React.MouseEvent) => void;
+  onEdit: (meal: MealPlan, e: React.MouseEvent) => void;
   onSlotClick: (date: Date, mealType: MealType) => void;
 }
 
@@ -47,6 +48,7 @@ export default function MobileWeekView({
   onMove,
   onRepeat,
   onDelete,
+  onEdit,
   onSlotClick,
 }: MobileWeekViewProps) {
   return (
@@ -169,6 +171,15 @@ export default function MobileWeekView({
                                       View
                                     </Link>
                                   )}
+                                  <button
+                                    onClick={(e) => onEdit(meal, e)}
+                                    className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                    Edit
+                                  </button>
                                   <button
                                     onClick={() => onMove(meal)}
                                     className="flex items-center justify-center gap-1.5 py-2 text-xs text-white hover:text-gold transition-colors"

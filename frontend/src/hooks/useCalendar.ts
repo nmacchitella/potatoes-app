@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { mealPlanApi, authApi, getErrorMessage } from '@/lib/api';
+import { mealPlanApi, authApi } from '@/lib/api';
 import {
   CalendarViewMode,
   DAYS,
@@ -85,7 +85,7 @@ interface UseCalendarReturn {
   selectedSlot: CalendarSlot | null;
   isAddModalOpen: boolean;
   handleSlotClick: (date: Date, mealType: MealType) => void;
-  handleSelectRecipe: (recipe: SearchRecipeResult) => Promise<void>;
+  handleSelectRecipe: (recipe: SearchRecipeResult, servings: number) => Promise<void>;
   handleCustomMealSuccess: (meal: MealPlan) => void;
   closeAddModal: () => void;
 
@@ -107,6 +107,16 @@ interface UseCalendarReturn {
   handleDragOver: (date: Date, mealType: MealType, e: React.DragEvent) => void;
   handleDragLeave: () => void;
   handleDrop: (date: Date, mealType: MealType, e: React.DragEvent) => Promise<void>;
+
+  // Edit servings
+  showEditModal: boolean;
+  editingMeal: MealPlan | null;
+  editServings: number;
+  setEditServings: (n: number) => void;
+  handleOpenEditModal: (meal: MealPlan, e: React.MouseEvent) => void;
+  handleSaveServings: () => Promise<void>;
+  closeEditModal: () => void;
+  savingServings: boolean;
 
   // Move meal (mobile)
   showMoveModal: boolean;
@@ -136,6 +146,8 @@ interface UseCalendarReturn {
   repeatMeal: MealPlan | null;
   repeatWeeksCount: number;
   setRepeatWeeksCount: (count: number) => void;
+  repeatDaysOfWeek: number[];
+  setRepeatDaysOfWeek: (days: number[]) => void;
   handleOpenRepeatModal: (meal: MealPlan, e: React.MouseEvent) => void;
   handleCreateRecurring: () => Promise<void>;
   closeRepeatModal: () => void;
@@ -193,10 +205,17 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
   const [copyWeeksCount, setCopyWeeksCount] = useState(1);
   const [copyingWeeks, setCopyingWeeks] = useState(false);
 
+  // Edit servings modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingMeal, setEditingMeal] = useState<MealPlan | null>(null);
+  const [editServings, setEditServings] = useState(4);
+  const [savingServings, setSavingServings] = useState(false);
+
   // Repeat modal
   const [showRepeatModal, setShowRepeatModal] = useState(false);
   const [repeatMeal, setRepeatMeal] = useState<MealPlan | null>(null);
   const [repeatWeeksCount, setRepeatWeeksCount] = useState(4);
+  const [repeatDaysOfWeek, setRepeatDaysOfWeek] = useState<number[]>([]);
   const [creatingRecurring, setCreatingRecurring] = useState(false);
 
   // Mobile state
@@ -432,7 +451,7 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
   }, [closeAddModal]);
 
   // Select recipe handler
-  const handleSelectRecipe = useCallback(async (recipe: SearchRecipeResult) => {
+  const handleSelectRecipe = useCallback(async (recipe: SearchRecipeResult, servings: number) => {
     if (!selectedSlot) return;
     const calendarId = getDefaultCalendarId();
     if (!calendarId) throw new Error('No calendar available');
@@ -442,7 +461,7 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
         recipe_id: recipe.id,
         planned_date: formatDateForApi(selectedSlot.date),
         meal_type: selectedSlot.mealType,
-        servings: userSettings?.default_servings ?? 4,
+        servings,
       });
       setMealPlans(prev => [...prev, newMeal]);
       closeAddModal();
@@ -485,8 +504,6 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     if (!clipboard) return;
     try {
       if (clipboard.action === 'copy') {
-        // Handle both recipe-based and custom items
-        // Use the same calendar as the original meal
         const calendarId = clipboard.meal.calendar_id;
         const isCustom = !clipboard.meal.recipe;
         const newMeal = await mealPlanApi.create({
@@ -499,6 +516,8 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
           servings: clipboard.meal.servings,
         });
         setMealPlans(prev => [...prev, newMeal]);
+        // Keep clipboard active so user can paste to multiple days
+        return;
       } else {
         const movedMeal = await mealPlanApi.move(clipboard.meal.id, {
           planned_date: formatDateForApi(date),
@@ -625,12 +644,47 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     }
   }, [currentDate, copyWeeksCount, closeCopyWeeksModal, fetchMealPlans]);
 
+  // Edit servings
+  const handleOpenEditModal = useCallback((meal: MealPlan, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setEditingMeal(meal);
+    setEditServings(meal.servings);
+    setShowEditModal(true);
+    setSelectedMealForActions(null);
+  }, []);
+
+  const closeEditModal = useCallback(() => {
+    setShowEditModal(false);
+    setEditingMeal(null);
+  }, []);
+
+  const handleSaveServings = useCallback(async () => {
+    if (!editingMeal) return;
+    setSavingServings(true);
+    try {
+      const updated = await mealPlanApi.update(editingMeal.id, { servings: editServings });
+      setMealPlans(prev => prev.map(mp => mp.id === editingMeal.id ? updated : mp));
+      closeEditModal();
+    } catch (err) {
+      console.error('Failed to update servings:', err);
+    } finally {
+      setSavingServings(false);
+    }
+  }, [editingMeal, editServings, closeEditModal]);
+
   // Recurring meals
+  // day-of-week: 0=Mon, 1=Tue, ..., 6=Sun (matches DAYS array)
   const handleOpenRepeatModal = useCallback((meal: MealPlan, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     setRepeatMeal(meal);
     setRepeatWeeksCount(4);
+    // Default to the meal's day of week (JS: 0=Sun, so offset: (jsDay + 6) % 7 = Mon-based)
+    const mealDate = new Date(meal.planned_date + 'T00:00:00');
+    const jsDay = mealDate.getDay(); // 0=Sun
+    const monBasedDay = (jsDay + 6) % 7;
+    setRepeatDaysOfWeek([monBasedDay]);
     setShowRepeatModal(true);
     setSelectedMealForActions(null);
   }, []);
@@ -641,25 +695,30 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
   }, []);
 
   const handleCreateRecurring = useCallback(async () => {
-    // Only recipe-based meals can be repeated
-    if (!repeatMeal || !repeatMeal.recipe) return;
+    if (!repeatMeal || !repeatMeal.recipe || repeatDaysOfWeek.length === 0) return;
     setCreatingRecurring(true);
     try {
-      const mealDate = repeatMeal.planned_date;
-      const startDate = new Date(mealDate + 'T00:00:00');
+      const mealDate = new Date(repeatMeal.planned_date + 'T00:00:00');
+      // Get Monday of the meal's week
+      const jsDay = mealDate.getDay();
+      const mondayOfMealWeek = new Date(mealDate);
+      mondayOfMealWeek.setDate(mealDate.getDate() - ((jsDay + 6) % 7));
+
       const calendarId = repeatMeal.calendar_id;
       const newMeals: MealPlan[] = [];
       for (let i = 1; i <= repeatWeeksCount; i++) {
-        const targetDate = new Date(startDate);
-        targetDate.setDate(targetDate.getDate() + (7 * i));
-        const newMeal = await mealPlanApi.create({
-          calendar_id: calendarId,
-          recipe_id: repeatMeal.recipe.id,
-          planned_date: formatDateForApi(targetDate),
-          meal_type: repeatMeal.meal_type,
-          servings: repeatMeal.servings,
-        });
-        newMeals.push(newMeal);
+        for (const dayOffset of repeatDaysOfWeek) {
+          const targetDate = new Date(mondayOfMealWeek);
+          targetDate.setDate(mondayOfMealWeek.getDate() + 7 * i + dayOffset);
+          const newMeal = await mealPlanApi.create({
+            calendar_id: calendarId,
+            recipe_id: repeatMeal.recipe.id,
+            planned_date: formatDateForApi(targetDate),
+            meal_type: repeatMeal.meal_type,
+            servings: repeatMeal.servings,
+          });
+          newMeals.push(newMeal);
+        }
       }
       setMealPlans(prev => [...prev, ...newMeals]);
       closeRepeatModal();
@@ -668,7 +727,7 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     } finally {
       setCreatingRecurring(false);
     }
-  }, [repeatMeal, repeatWeeksCount, closeRepeatModal]);
+  }, [repeatMeal, repeatWeeksCount, repeatDaysOfWeek, closeRepeatModal]);
 
   return {
     viewMode,
@@ -727,6 +786,14 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     handleDragOver,
     handleDragLeave,
     handleDrop,
+    showEditModal,
+    editingMeal,
+    editServings,
+    setEditServings,
+    handleOpenEditModal,
+    handleSaveServings,
+    closeEditModal,
+    savingServings,
     showMoveModal,
     mealToMove,
     moveDestination,
@@ -748,6 +815,8 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     repeatMeal,
     repeatWeeksCount,
     setRepeatWeeksCount,
+    repeatDaysOfWeek,
+    setRepeatDaysOfWeek,
     handleOpenRepeatModal,
     handleCreateRecurring,
     closeRepeatModal,

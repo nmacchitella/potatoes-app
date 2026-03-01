@@ -35,6 +35,7 @@ interface WeekViewProps {
   onCut: (meal: MealPlan, e: React.MouseEvent) => void;
   onRepeat: (meal: MealPlan, e: React.MouseEvent) => void;
   onDelete: (mealId: string, e: React.MouseEvent) => void;
+  onEdit: (meal: MealPlan, e: React.MouseEvent) => void;
   onSlotClick: (date: Date, mealType: MealType) => void;
 }
 
@@ -57,6 +58,7 @@ export default function WeekView({
   onCut,
   onRepeat,
   onDelete,
+  onEdit,
   onSlotClick,
 }: WeekViewProps) {
   return (
@@ -125,6 +127,7 @@ export default function WeekView({
                         onCut={onCut}
                         onRepeat={onRepeat}
                         onDelete={onDelete}
+                        onEdit={onEdit}
                       />
                     ))}
                     <button

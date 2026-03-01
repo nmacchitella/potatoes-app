@@ -20,6 +20,7 @@ interface MealCardProps {
   onToggleActions?: (mealId: string, e: React.MouseEvent) => void;
   isActionsOpen?: boolean;
   onMove?: (meal: MealPlan) => void;
+  onEdit?: (meal: MealPlan, e: React.MouseEvent) => void;
 }
 
 // Custom item icon (takeout/external)
@@ -46,6 +47,7 @@ export default function MealCard({
   onToggleActions,
   isActionsOpen = false,
   onMove,
+  onEdit,
 }: MealCardProps) {
   // Check if this is a custom item (no recipe)
   const isCustom = !meal.recipe;
@@ -108,6 +110,17 @@ export default function MealCard({
                 </svg>
                 View Recipe
               </Link>
+            )}
+            {onEdit && (
+              <button
+                onClick={(e) => onEdit(meal, e)}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-charcoal hover:bg-cream w-full text-left"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20H5a2 2 0 01-2-2v-1a1 1 0 011-1h1V9a4 4 0 014-4h4a4 4 0 014 4v7h1a1 1 0 011 1v1a2 2 0 01-2 2zm-5-12a2 2 0 100 4 2 2 0 000-4z" />
+                </svg>
+                Edit Servings
+              </button>
             )}
             {onMove && (
               <button
@@ -217,6 +230,17 @@ export default function MealCard({
       {/* Action buttons */}
       {showActions && (
         <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {onEdit && (
+            <button
+              onClick={(e) => onEdit(meal, e)}
+              className="p-1 rounded bg-white/80 text-warm-gray hover:text-charcoal"
+              title="Edit servings"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          )}
           {onCopy && (
             <button
               onClick={(e) => onCopy(meal, e)}
