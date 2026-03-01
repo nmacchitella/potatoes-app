@@ -6,7 +6,6 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useStore } from '@/store/useStore';
 import { collectionApi, getErrorMessage } from '@/lib/api';
 import { UserAvatar } from '@/components/ui';
-import InSeasonWidget from './InSeasonWidget';
 import type { Collection } from '@/types';
 
 type CalendarMode = 'day' | 'week' | 'month';
@@ -322,11 +321,6 @@ export default function MobileSidebar({
                 </svg>
                 <span>Grocery List</span>
               </button>
-            </div>
-
-            {/* In Season */}
-            <div className="px-4 pt-3 pb-1 border-b border-border">
-              <InSeasonWidget />
             </div>
 
             {/* Grocery List Management - Only show when on grocery page */}

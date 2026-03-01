@@ -504,8 +504,6 @@ function RecipesPageContent() {
             <div className="sticky top-24">
               <MainNavigation currentPage="recipes" />
 
-              <InSeasonWidget />
-
               {/* Collection Sidebar */}
               <CollectionSidebar
                 collections={collections}
@@ -537,87 +535,148 @@ function RecipesPageContent() {
                 onTogglePrivacy={toggleCollectionPrivacy}
                 onManageRecipes={setManagingCollectionId}
               />
+
+              {/* Tags filter - desktop only */}
+              {availableTags.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <p className="text-xs font-sans font-semibold uppercase tracking-wider text-warm-gray px-1 mb-2">Tags</p>
+                  <RecipeFilterSection
+                    availableTags={availableTags}
+                    selectedTags={selectedTags}
+                    onToggleTag={toggleTag}
+                    onClearTags={() => setSelectedTags([])}
+                    tagFilterMode={tagFilterMode}
+                    onToggleTagFilterMode={() => setTagFilterMode(tagFilterMode === 'all' ? 'any' : 'all')}
+                  />
+                </div>
+              )}
             </div>
           </aside>
 
           {/* Main Content */}
           <main className="flex-1 min-w-0">
+            {/* In Season - top of main content */}
+            <InSeasonWidget />
+
             {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-4 mt-5">
+              {/* Title + count */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 flex-wrap">
                   <h1 className="font-serif text-2xl text-charcoal">
                     {selectedCollectionName || 'All Recipes'}
                   </h1>
-                  {/* Shared badge for partner collections */}
                   {isPartnerCollection && (
                     <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
                       Shared by {selectedCollectionData?.owner?.name}
                     </span>
                   )}
+                  {!loading && (
+                    <span className="text-sm text-warm-gray">
+                      {filteredRecipes.length} recipe{filteredRecipes.length !== 1 ? 's' : ''}
+                      {(searchQuery || selectedTags.length > 0) && ' filtered'}
+                    </span>
+                  )}
                 </div>
-                {!loading && (
-                  <p className="text-sm text-warm-gray mt-1">
-                    {filteredRecipes.length} recipe{filteredRecipes.length !== 1 ? 's' : ''}
-                    {(searchQuery || selectedTags.length > 0) && ' filtered'}
-                  </p>
-                )}
               </div>
-              <div className="flex items-center gap-3">
-                {/* Collection action buttons */}
-                {selectedCollection && (
-                  <>
-                    {canEditCollection && (
-                      <button
-                        onClick={() => setIsAddRecipesModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg text-charcoal hover:border-gold transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        Add Recipes
-                      </button>
-                    )}
-                    {canShare && (
-                      <button
-                        onClick={openShareModal}
-                        className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg text-charcoal hover:border-gold transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                        </svg>
-                        Share
-                      </button>
-                    )}
-                    {isPartnerCollection && (
-                      <button
-                        onClick={handleLeaveCollection}
-                        className="flex items-center gap-2 px-3 py-2 text-sm border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
-                        Leave
-                      </button>
-                    )}
-                  </>
+
+              {/* Search input */}
+              <div className="relative inline-flex items-center">
+                <svg className="w-4 h-4 text-warm-gray/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Filter by name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-transparent border-none outline-none text-sm text-charcoal placeholder:text-warm-gray/50 pl-2 pr-6 py-1 w-32 focus:w-48 transition-all duration-200"
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery('')} className="absolute right-0 text-warm-gray/60 hover:text-charcoal">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 )}
+                <div className="absolute bottom-0 left-0 right-0 h-px bg-border" />
               </div>
+
+              {/* View Mode Toggle */}
+              <div className="hidden md:flex items-center gap-1 bg-cream-dark rounded-lg p-1 flex-shrink-0">
+                <button
+                  onClick={() => setRecipeViewMode('grid')}
+                  className={`p-1.5 rounded transition-colors ${recipeViewMode === 'grid' ? 'bg-white text-charcoal shadow-sm' : 'text-warm-gray hover:text-charcoal'}`}
+                  title="Grid view"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setRecipeViewMode('table')}
+                  className={`p-1.5 rounded transition-colors ${recipeViewMode === 'table' ? 'bg-white text-charcoal shadow-sm' : 'text-warm-gray hover:text-charcoal'}`}
+                  title="Table view"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Collection action buttons */}
+              {selectedCollection && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {canEditCollection && (
+                    <button
+                      onClick={() => setIsAddRecipesModalOpen(true)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg text-charcoal hover:border-gold transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Add Recipes
+                    </button>
+                  )}
+                  {canShare && (
+                    <button
+                      onClick={openShareModal}
+                      className="flex items-center gap-2 px-3 py-2 text-sm border border-border rounded-lg text-charcoal hover:border-gold transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                      </svg>
+                      Share
+                    </button>
+                  )}
+                  {isPartnerCollection && (
+                    <button
+                      onClick={handleLeaveCollection}
+                      className="flex items-center gap-2 px-3 py-2 text-sm border border-red-200 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Leave
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Spotlight Filter */}
-            <RecipeFilterSection
-              searchQuery={searchQuery}
-              onSearchQueryChange={setSearchQuery}
-              availableTags={availableTags}
-              selectedTags={selectedTags}
-              onToggleTag={toggleTag}
-              onClearTags={() => setSelectedTags([])}
-              tagFilterMode={tagFilterMode}
-              onToggleTagFilterMode={() => setTagFilterMode(tagFilterMode === 'all' ? 'any' : 'all')}
-              viewMode={recipeViewMode}
-              onViewModeChange={setRecipeViewMode}
-            />
+            {/* Tags - mobile only (desktop tags are in the sidebar) */}
+            {availableTags.length > 0 && (
+              <div className="lg:hidden mb-4">
+                <RecipeFilterSection
+                  availableTags={availableTags}
+                  selectedTags={selectedTags}
+                  onToggleTag={toggleTag}
+                  onClearTags={() => setSelectedTags([])}
+                  tagFilterMode={tagFilterMode}
+                  onToggleTagFilterMode={() => setTagFilterMode(tagFilterMode === 'all' ? 'any' : 'all')}
+                />
+              </div>
+            )}
 
             {/* Recipe Grid */}
             <RecipeGrid
