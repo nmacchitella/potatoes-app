@@ -153,6 +153,13 @@ interface UseCalendarReturn {
   closeRepeatModal: () => void;
   creatingRecurring: boolean;
 
+  // Keyboard-friendly handlers (no event required)
+  handleKeyboardCopy: (meal: MealPlan) => void;
+  handleKeyboardCut: (meal: MealPlan) => void;
+  handleKeyboardDelete: (mealId: string) => Promise<void>;
+  handleKeyboardEdit: (meal: MealPlan) => void;
+  handleInlineMealCreated: (meal: MealPlan) => void;
+
   // Refresh
   refresh: () => Promise<void>;
 }
@@ -729,6 +736,37 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     }
   }, [repeatMeal, repeatWeeksCount, repeatDaysOfWeek, closeRepeatModal]);
 
+  // Keyboard-friendly handlers (no MouseEvent required)
+  const handleKeyboardCopy = useCallback((meal: MealPlan) => {
+    setClipboard({ meal, action: 'copy' });
+  }, []);
+
+  const handleKeyboardCut = useCallback((meal: MealPlan) => {
+    setClipboard({ meal, action: 'cut' });
+  }, []);
+
+  const handleKeyboardDelete = useCallback(async (mealId: string) => {
+    if (!confirm('Remove this meal from the plan?')) return;
+    try {
+      await mealPlanApi.delete(mealId);
+      setMealPlans(prev => prev.filter(mp => mp.id !== mealId));
+      if (clipboard?.meal.id === mealId) setClipboard(null);
+    } catch (err) {
+      console.error('Failed to delete meal:', err);
+    }
+  }, [clipboard]);
+
+  const handleKeyboardEdit = useCallback((meal: MealPlan) => {
+    setEditingMeal(meal);
+    setEditServings(meal.servings);
+    setShowEditModal(true);
+    setSelectedMealForActions(null);
+  }, []);
+
+  const handleInlineMealCreated = useCallback((meal: MealPlan) => {
+    setMealPlans(prev => [...prev, meal]);
+  }, []);
+
   return {
     viewMode,
     setViewMode,
@@ -821,6 +859,12 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
     handleCreateRecurring,
     closeRepeatModal,
     creatingRecurring,
+    // Keyboard-friendly handlers
+    handleKeyboardCopy,
+    handleKeyboardCut,
+    handleKeyboardDelete,
+    handleKeyboardEdit,
+    handleInlineMealCreated,
     refresh: fetchMealPlans,
   };
 }
