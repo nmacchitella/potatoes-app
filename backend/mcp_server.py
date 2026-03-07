@@ -1016,6 +1016,22 @@ async def search_ingredients(query: str = "", category: str = "", limit: int = 2
     return "\n".join(lines)
 
 
+@mcp.tool()
+async def create_ingredient(name: str, category: str = "") -> str:
+    """Create a new ingredient in the master database.
+
+    Args:
+        name: Ingredient name (e.g., "Crackers", "Hummus", "Brie")
+        category: Optional category (e.g., "Pantry/Staples", "Grains", "Dairy", "Produce")
+    """
+    body: dict = {"name": name}
+    if category:
+        body["category"] = category
+    data = await api_post("/ingredients", body)
+    cat = data.get("category") or "other"
+    return f"Ingredient created: **{data['name']}** (Category: {cat}, ID: {data['id']})"
+
+
 # ---------------------------------------------------------------------------
 # Search
 # ---------------------------------------------------------------------------
