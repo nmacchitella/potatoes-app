@@ -193,7 +193,7 @@ class UserProfilePublic(BaseModel):
 
 class UserSettingsBase(BaseModel):
     preferred_unit_system: str = "metric"  # imperial, metric
-    default_servings: int = 4
+    default_servings: int = 2
     email_new_follower: bool = True
     email_follow_request: bool = True
     email_recipe_saved: bool = False

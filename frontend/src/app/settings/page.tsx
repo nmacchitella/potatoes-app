@@ -24,7 +24,7 @@ export default function SettingsPage() {
   // Preferences form
   const [prefsForm, setPrefsForm] = useState({
     preferred_unit_system: 'metric' as 'metric' | 'imperial',
-    default_servings: 4,
+    default_servings: 2,
   });
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsMessage, setPrefsMessage] = useState('');

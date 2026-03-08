@@ -332,7 +332,7 @@ class UserSettings(Base):
 
     user_id = Column(String, ForeignKey("users.id", ondelete='CASCADE'), primary_key=True)
     preferred_unit_system = Column(String(20), default="metric")  # imperial, metric
-    default_servings = Column(Integer, default=4)
+    default_servings = Column(Integer, default=2)
     email_new_follower = Column(Boolean, default=True)
     email_follow_request = Column(Boolean, default=True)
     email_recipe_saved = Column(Boolean, default=False)
@@ -371,7 +371,7 @@ class MealPlan(Base):
     recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=True)  # Nullable for custom items
     planned_date = Column(Date, nullable=False)
     meal_type = Column(String(20), nullable=False)  # breakfast, lunch, dinner, snack
-    servings = Column(Float, default=4)
+    servings = Column(Float, default=2)
     notes = Column(Text, nullable=True)
 
     # Custom item fields (for non-recipe items like "Pizza Night", "Takeout", etc.)

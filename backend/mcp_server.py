@@ -611,7 +611,7 @@ async def add_to_meal_plan(
     calendar_id: str,
     recipe_id: str = "",
     custom_title: str = "",
-    servings: float = 4,
+    servings: float = 2,
     notes: str = "",
     grocery_items: str = "",
 ) -> str:

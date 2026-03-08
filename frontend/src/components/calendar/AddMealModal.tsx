@@ -45,7 +45,7 @@ export function AddMealModal({
   // Custom meal state
   const [customTitle, setCustomTitle] = useState('');
   const [customDescription, setCustomDescription] = useState('');
-  const [servings, setServings] = useState(4);
+  const [servings, setServings] = useState(2);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const customInputRef = useRef<HTMLInputElement>(null);

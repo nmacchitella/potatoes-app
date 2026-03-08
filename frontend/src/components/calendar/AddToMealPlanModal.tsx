@@ -14,11 +14,7 @@ interface AddToMealPlanModalProps {
   onSuccess?: () => void;
 }
 
-/** Extended meal types including snack for the add-to-plan modal */
-const MEAL_TYPES: { key: MealType; label: string }[] = [
-  ...BASE_MEAL_TYPES,
-  { key: 'snack', label: 'Snack' },
-];
+const MEAL_TYPES = BASE_MEAL_TYPES;
 
 export function AddToMealPlanModal({
   isOpen,
@@ -29,7 +25,7 @@ export function AddToMealPlanModal({
 }: AddToMealPlanModalProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null);
-  const [servings, setServings] = useState(4);
+  const [servings, setServings] = useState(2);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null);

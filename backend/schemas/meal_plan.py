@@ -55,7 +55,7 @@ class MealPlanCreate(BaseModel):
     grocery_items: Optional[List[CustomMealGroceryItem]] = None
     planned_date: date
     meal_type: str = Field(..., pattern="^(breakfast|lunch|dinner|snack)$")
-    servings: float = 4
+    servings: float = 2
     notes: Optional[str] = None
 
     @model_validator(mode='after')
@@ -98,7 +98,7 @@ class MealPlanRecurring(BaseModel):
     day_of_week: int = Field(..., ge=0, le=6)  # 0=Monday, 6=Sunday
     start_date: date
     end_date: date
-    servings: float = 4
+    servings: float = 2
 
 
 class MealPlanRecipe(BaseModel):
