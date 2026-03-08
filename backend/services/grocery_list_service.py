@@ -12,9 +12,11 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
 
+from sqlalchemy import select
+
 from models import (
     GroceryList, GroceryListItem, MealPlan, MealPlanCalendar, MealPlanShare,
-    Recipe, RecipeIngredient, Ingredient, User
+    Recipe, RecipeIngredient, Ingredient, User, recipe_sub_recipes
 )
 
 
@@ -171,21 +173,52 @@ def aggregate_ingredients(
             # Sort by quantity descending to show largest first
             sorted_qtys = sorted(quantities.items(), key=lambda x: x[1], reverse=True)
             parts = []
-            total_qty = 0.0
             for unit, qty in sorted_qtys:
                 rounded_qty = round(qty, 2)
-                total_qty += rounded_qty
                 if unit:
                     parts.append(f"{rounded_qty} {unit}")
                 else:
                     parts.append(str(rounded_qty))
-            # Store total as quantity, combined string as unit
-            item['quantity'] = round(total_qty, 2)
+            # Units are incompatible (e.g. grams + stalks), so don't store a
+            # meaningless numeric total — put the full breakdown in unit only
+            item['quantity'] = None
             item['unit'] = ' + '.join(parts)
 
         result.append(item)
 
     return result
+
+
+def _collect_recipe_ingredients(
+    db: Session,
+    recipe: Recipe,
+    scale_factor: float,
+    ingredients_list: List,
+    visited_ids: set,
+) -> None:
+    """
+    Recursively collect ingredients from a recipe and its sub-recipes.
+    Prevents infinite loops via visited_ids.
+    """
+    if recipe.id in visited_ids:
+        return
+    visited_ids.add(recipe.id)
+
+    # Direct ingredients of this recipe
+    for ingredient in recipe.ingredients:
+        if not ingredient.is_optional:
+            ingredients_list.append((ingredient, scale_factor, recipe.id))
+
+    # Recurse into sub-recipes, applying their scale_factor from the junction table
+    for sub_recipe in recipe.sub_recipes:
+        row = db.execute(
+            select(recipe_sub_recipes).where(
+                (recipe_sub_recipes.c.parent_recipe_id == recipe.id) &
+                (recipe_sub_recipes.c.sub_recipe_id == sub_recipe.id)
+            )
+        ).first()
+        sub_scale = (row.scale_factor if row and row.scale_factor else 1.0) * scale_factor
+        _collect_recipe_ingredients(db, sub_recipe, sub_scale, ingredients_list, visited_ids)
 
 
 def generate_from_meal_plan(
@@ -244,9 +277,17 @@ def generate_from_meal_plan(
         # No accessible calendars, return empty list
         return grocery_list
 
-    # Fetch meal plans with recipes and ingredients
+    # Fetch meal plans with recipes, ingredients, and sub-recipes (2 levels deep)
     meal_plans = db.query(MealPlan).options(
-        joinedload(MealPlan.recipe).joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient)
+        joinedload(MealPlan.recipe).options(
+            joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
+            joinedload(Recipe.sub_recipes).options(
+                joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
+                joinedload(Recipe.sub_recipes).options(
+                    joinedload(Recipe.ingredients).joinedload(RecipeIngredient.ingredient),
+                )
+            )
+        )
     ).filter(
         and_(
             MealPlan.calendar_id.in_(accessible_calendar_ids),
@@ -263,14 +304,12 @@ def generate_from_meal_plan(
     for meal_plan in meal_plans:
         recipe = meal_plan.recipe
         if recipe:
-            # Recipe-based meal: collect structured ingredients
+            # Recipe-based meal: collect structured ingredients (recursing into sub-recipes)
             scale_factor = 1.0
             if recipe.yield_quantity and recipe.yield_quantity > 0:
                 scale_factor = meal_plan.servings / recipe.yield_quantity
 
-            for ingredient in recipe.ingredients:
-                if not ingredient.is_optional:
-                    ingredients_to_aggregate.append((ingredient, scale_factor, recipe.id))
+            _collect_recipe_ingredients(db, recipe, scale_factor, ingredients_to_aggregate, set())
         elif meal_plan.custom_title:
             # Custom meal: use grocery_items if provided, otherwise fall back to title
             if meal_plan.grocery_items:
