@@ -66,9 +66,6 @@ export default function CalendarView({ isActive = true, onOpenShareModal, calend
           onKeyboardCut={calendar.handleKeyboardCut}
           onKeyboardDelete={calendar.handleKeyboardDelete}
           onKeyboardEdit={calendar.handleKeyboardEdit}
-          onInlineMealCreated={calendar.handleInlineMealCreated}
-          defaultCalendarId={calendar.getDefaultCalendarId()}
-          defaultServings={calendar.userSettings?.default_servings ?? 4}
         />
       )}
 
