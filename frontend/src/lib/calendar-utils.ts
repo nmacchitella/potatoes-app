@@ -8,6 +8,7 @@ export const MEAL_TYPES: { key: MealType; label: string }[] = [
   { key: 'breakfast', label: 'Breakfast' },
   { key: 'lunch', label: 'Lunch' },
   { key: 'dinner', label: 'Dinner' },
+  { key: 'snack', label: 'Snacks' },
 ];
 
 /**
