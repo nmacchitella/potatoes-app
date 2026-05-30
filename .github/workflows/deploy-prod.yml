@@ -1,44 +1,46 @@
-name: Deploy to Production
+name: Deploy to Beelink
+
+# Production for potatoes is now the self-hosted Beelink (giaggi.tail66af38.ts.net),
+# the same Docker host that runs eilish-ops. Same pattern as
+# eilish-ops/.github/workflows/deploy.yml: join the tailnet, SSH in, and let
+# auto-pull.sh fast-forward ~/apps/potatoes and rebuild the potatoes-* services.
+#
+# Requires repo secrets: TS_AUTHKEY (tailnet auth key) and BEELINK_SSH_KEY
+# (private half of the potatoes deploy key trusted in ~/.ssh/authorized_keys).
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
-  deploy-backend-prod:
-    name: Deploy Backend to Production
+  deploy:
+    name: Pull + redeploy on Beelink
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
+    timeout-minutes: 20
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Join tailnet
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          hostname: gha-potatoes-${{ github.run_id }}
 
-      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.BEELINK_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H giaggi.tail66af38.ts.net >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Deploy Backend to Production
-        run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-  deploy-frontend-prod:
-    name: Deploy Frontend to Production
-    runs-on: ubuntu-latest
-    needs: deploy-backend-prod
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: superfly/flyctl-actions/setup-flyctl@fc53c09e1bc3be6f54706524e3b82c4f462f77be # v1.5
-
-      - name: Deploy Frontend to Production
-        run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Run auto-pull on Beelink
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+              -o StrictHostKeyChecking=accept-new \
+              -o ServerAliveInterval=15 \
+              nicola@giaggi.tail66af38.ts.net \
+              'bash /home/nicola/server/scripts/auto-pull.sh'
