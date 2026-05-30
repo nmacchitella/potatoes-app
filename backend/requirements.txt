@@ -21,3 +21,8 @@ yt-dlp>=2024.0.0
 cloudinary>=1.44.0
 itsdangerous>=2.1.0
 fastmcp>=2.0.0
+# Postgres driver (sync) — used on the Beelink self-host. SQLAlchemy here is
+# synchronous (create_engine), so this is psycopg2, NOT asyncpg. database.py
+# only passes check_same_thread for sqlite URLs, so postgresql+psycopg2:// works
+# with no code change. Unused (harmless) when DATABASE_URL is sqlite.
+psycopg2-binary>=2.9.9

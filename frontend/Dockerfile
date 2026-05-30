@@ -46,8 +46,16 @@ USER appuser
 # Expose port
 EXPOSE 3000
 
+# Next.js standalone server.js binds to process.env.HOSTNAME. Docker sets
+# HOSTNAME to the container ID, which makes it bind to only the container's
+# network IP (so the healthcheck's loopback connect is refused). Pin it to
+# 0.0.0.0 so it listens on all interfaces.
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+
+# Use 127.0.0.1 (not localhost → ::1) since the server binds IPv4 0.0.0.0.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1
 
 # Run the application
 CMD ["node", "server.js"]
