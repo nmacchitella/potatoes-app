@@ -20,7 +20,7 @@ interface AppState {
   setUser: (user: User | null) => void;
   setToken: (token: string | null) => void;
   setRefreshToken: (refreshToken: string | null) => void;
-  setTokens: (accessToken: string, refreshToken: string) => void;
+  setTokens: (accessToken: string, refreshToken: string, expiresIn?: number) => void;
   logout: () => Promise<void>;
 
   // Data Actions
@@ -52,8 +52,8 @@ export const useStore = create<AppState>((set, get) => ({
     set({ refreshToken });
   },
 
-  setTokens: (accessToken, refreshToken) => {
-    saveAccessToken(accessToken);
+  setTokens: (accessToken, refreshToken, expiresIn) => {
+    saveAccessToken(accessToken, expiresIn);
     saveRefreshToken(refreshToken);
     set({ token: accessToken, refreshToken });
   },

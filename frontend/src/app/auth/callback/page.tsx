@@ -29,12 +29,14 @@ function AuthCallbackContent() {
       try {
         let accessToken: string;
         let refreshToken: string;
+        let expiresIn: number | undefined;
 
         if (code) {
           // New secure flow: exchange code for tokens via POST
           const tokens = await authApi.exchangeOAuthCode(code);
           accessToken = tokens.access_token;
           refreshToken = tokens.refresh_token;
+          expiresIn = tokens.expires_in;
         } else if (legacyToken && legacyRefreshToken) {
           // Legacy flow (for backwards compatibility during transition)
           accessToken = legacyToken;
@@ -46,7 +48,7 @@ function AuthCallbackContent() {
         }
 
         // Set both tokens
-        setTokens(accessToken, refreshToken);
+        setTokens(accessToken, refreshToken, expiresIn);
 
         // Get user info
         const user = await authApi.getCurrentUser();

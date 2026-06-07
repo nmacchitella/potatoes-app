@@ -135,31 +135,55 @@ const processQueue = (error: unknown, token: string | null = null) => {
  * @returns New access token or null if refresh failed
  */
 async function performTokenRefresh(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
+  const initialRefreshToken = getRefreshToken();
 
-  if (!refreshToken) {
+  if (!initialRefreshToken) {
     return null;
   }
 
-  try {
-    const response = await axios.post(`${API_URL}/auth/refresh`, {
-      refresh_token: refreshToken
-    });
+  const refresh = async (): Promise<string | null> => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) {
+      return null;
+    }
 
-    const { access_token, refresh_token: new_refresh_token, expires_in } = response.data;
+    // Another tab may have refreshed while this tab waited for the lock.
+    if (refreshToken !== initialRefreshToken) {
+      const accessToken = getAccessToken();
+      if (accessToken) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+        scheduleProactiveRefresh();
+        return accessToken;
+      }
+    }
 
-    setAccessToken(access_token, expires_in);
-    setRefreshToken(new_refresh_token);
+    try {
+      const response = await axios.post(`${API_URL}/auth/refresh`, {
+        refresh_token: refreshToken
+      });
 
-    api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+      const { access_token, refresh_token: new_refresh_token, expires_in } = response.data;
 
-    // Schedule next proactive refresh
-    scheduleProactiveRefresh(expires_in);
+      setAccessToken(access_token, expires_in);
+      setRefreshToken(new_refresh_token);
 
-    return access_token;
-  } catch {
-    return null;
+      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+
+      // Schedule next proactive refresh
+      scheduleProactiveRefresh(expires_in);
+
+      return access_token;
+    } catch {
+      return null;
+    }
+  };
+
+  // Refresh token rotation must be serialized across tabs sharing localStorage.
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request('potatoes-auth-refresh', refresh);
   }
+
+  return refresh();
 }
 
 /**
@@ -252,8 +276,11 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const requestUrl = originalRequest?.url || '';
+    const isAuthLifecycleRequest =
+      requestUrl.includes('/auth/refresh') || requestUrl.includes('/auth/logout');
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry && !isAuthLifecycleRequest) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
