@@ -901,6 +901,13 @@ export const groceryListApi = {
     return response.data;
   },
 
+  addRecipe: async (listId: string, recipeId: string, servings: number = 2): Promise<GroceryList> => {
+    const response = await api.post<GroceryList>(`/grocery-list/${listId}/recipes/${recipeId}`, null, {
+      params: { servings }
+    });
+    return response.data;
+  },
+
   updateItem: async (listId: string, itemId: string, data: GroceryListItemUpdateInput): Promise<GroceryListItem> => {
     const response = await api.patch<GroceryListItem>(`/grocery-list/${listId}/items/${itemId}`, data);
     return response.data;

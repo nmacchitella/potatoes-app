@@ -215,7 +215,7 @@ export function useCalendar(isActive: boolean = true): UseCalendarReturn {
   // Edit servings modal
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingMeal, setEditingMeal] = useState<MealPlan | null>(null);
-  const [editServings, setEditServings] = useState(4);
+  const [editServings, setEditServings] = useState(2);
   const [savingServings, setSavingServings] = useState(false);
 
   // Repeat modal

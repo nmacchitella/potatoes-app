@@ -351,48 +351,7 @@ def generate_from_meal_plan(
 
     # If merging, we need to combine with existing items
     if merge:
-        existing_items = {
-            normalize_ingredient_name(item.name): item
-            for item in grocery_list.items
-            if not item.is_checked  # Only merge with unchecked items
-        }
-
-        for agg_item in aggregated:
-            key = agg_item['normalized_name']
-
-            if key in existing_items:
-                # Update existing item
-                existing = existing_items[key]
-
-                # Handle quantity merging
-                if agg_item['quantity'] and existing.quantity:
-                    # If units are different, combine them in unit string
-                    existing_unit = (existing.unit or '').strip()
-                    new_unit = (agg_item['unit'] or '').strip()
-                    if existing_unit == new_unit or not new_unit:
-                        existing.quantity += agg_item['quantity']
-                    else:
-                        # Combine different units
-                        existing.quantity += agg_item['quantity']
-                        if existing_unit and new_unit:
-                            # Both have units - combine them
-                            if ' + ' in existing_unit:
-                                existing.unit = f"{existing_unit} + {agg_item['quantity']} {new_unit}"
-                            else:
-                                existing.unit = f"{existing.quantity - agg_item['quantity']} {existing_unit} + {agg_item['quantity']} {new_unit}"
-                        elif new_unit:
-                            existing.unit = new_unit
-                elif agg_item['quantity']:
-                    existing.quantity = agg_item['quantity']
-                    existing.unit = agg_item['unit']
-
-                # Merge source recipe IDs
-                existing_sources = existing.source_recipe_ids or []
-                new_sources = set(existing_sources) | set(agg_item['source_recipe_ids'])
-                existing.source_recipe_ids = list(new_sources)
-            else:
-                # Add new item
-                _create_grocery_item(db, grocery_list, agg_item)
+        _merge_aggregated_items(db, grocery_list, aggregated)
     else:
         # Create all new items
         for sort_order, agg_item in enumerate(aggregated):
@@ -402,6 +361,65 @@ def generate_from_meal_plan(
     db.refresh(grocery_list)
 
     return grocery_list
+
+
+def add_recipe_to_grocery_list(
+    db: Session,
+    grocery_list: GroceryList,
+    recipe: Recipe,
+    servings: float = 2,
+) -> GroceryList:
+    """Add a recipe's ingredients to an existing grocery list."""
+    scale_factor = servings / recipe.yield_quantity if recipe.yield_quantity else 1.0
+    ingredients: List[Tuple[RecipeIngredient, float, str]] = []
+    _collect_recipe_ingredients(db, recipe, scale_factor, ingredients, set())
+    _merge_aggregated_items(db, grocery_list, aggregate_ingredients(ingredients))
+    db.commit()
+    db.refresh(grocery_list)
+    return grocery_list
+
+
+def _merge_aggregated_items(
+    db: Session,
+    grocery_list: GroceryList,
+    aggregated: List[Dict],
+) -> None:
+    """Merge aggregated ingredients into unchecked grocery-list items."""
+    existing_items = {
+        normalize_ingredient_name(item.name): item
+        for item in grocery_list.items
+        if not item.is_checked
+    }
+
+    for agg_item in aggregated:
+        key = agg_item.get('normalized_name') or normalize_ingredient_name(agg_item['name'])
+        if key not in existing_items:
+            new_item = _create_grocery_item(db, grocery_list, agg_item)
+            existing_items[key] = new_item
+            continue
+
+        existing = existing_items[key]
+        if agg_item['quantity'] and existing.quantity:
+            existing_unit = (existing.unit or '').strip()
+            new_unit = (agg_item['unit'] or '').strip()
+            if existing_unit == new_unit or not new_unit:
+                existing.quantity += agg_item['quantity']
+            else:
+                original_quantity = existing.quantity
+                existing.quantity += agg_item['quantity']
+                if existing_unit and new_unit:
+                    if ' + ' in existing_unit:
+                        existing.unit = f"{existing_unit} + {agg_item['quantity']} {new_unit}"
+                    else:
+                        existing.unit = f"{original_quantity} {existing_unit} + {agg_item['quantity']} {new_unit}"
+                elif new_unit:
+                    existing.unit = new_unit
+        elif agg_item['quantity']:
+            existing.quantity = agg_item['quantity']
+            existing.unit = agg_item['unit']
+
+        existing_sources = existing.source_recipe_ids or []
+        existing.source_recipe_ids = list(set(existing_sources) | set(agg_item['source_recipe_ids']))
 
 
 def _create_grocery_item(

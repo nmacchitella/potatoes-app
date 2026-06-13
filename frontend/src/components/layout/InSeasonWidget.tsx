@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { getSeasonalProduce, getMonthName } from '@/data/seasonalProduce';
 
 export default function InSeasonWidget() {
@@ -41,13 +42,14 @@ export default function InSeasonWidget() {
             <p className="text-[11px] font-sans font-semibold uppercase tracking-wider text-warm-gray mb-2">Fruits</p>
             <div className="flex flex-wrap gap-1">
               {produce.fruits.map((item) => (
-                <span
+                <Link
                   key={item.name}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-xs text-charcoal rounded-full border border-amber-100 whitespace-nowrap"
+                  href={`/search?q=${encodeURIComponent(item.name)}&category=ingredients`}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-xs text-charcoal rounded-full border border-amber-100 whitespace-nowrap hover:border-amber-300 hover:text-gold-dark transition-colors"
                 >
                   <span>{item.emoji}</span>
                   <span>{item.name}</span>
-                </span>
+                </Link>
               ))}
             </div>
           </div>
@@ -57,13 +59,14 @@ export default function InSeasonWidget() {
             <p className="text-[11px] font-sans font-semibold uppercase tracking-wider text-warm-gray mb-2">Vegetables</p>
             <div className="flex flex-wrap gap-1">
               {produce.vegetables.map((item) => (
-                <span
+                <Link
                   key={item.name}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-xs text-charcoal rounded-full border border-green-100 whitespace-nowrap"
+                  href={`/search?q=${encodeURIComponent(item.name)}&category=ingredients`}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-xs text-charcoal rounded-full border border-green-100 whitespace-nowrap hover:border-green-300 hover:text-gold-dark transition-colors"
                 >
                   <span>{item.emoji}</span>
                   <span>{item.name}</span>
-                </span>
+                </Link>
               ))}
             </div>
           </div>

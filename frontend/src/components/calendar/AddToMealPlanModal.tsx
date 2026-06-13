@@ -15,6 +15,12 @@ interface AddToMealPlanModalProps {
 }
 
 const MEAL_TYPES = BASE_MEAL_TYPES;
+interface SelectedSlot {
+  date: string;
+  mealType: MealType;
+}
+
+const getSlotKey = (date: string, mealType: MealType) => `${date}:${mealType}`;
 
 export function AddToMealPlanModal({
   isOpen,
@@ -23,8 +29,7 @@ export function AddToMealPlanModal({
   recipeTitle,
   onSuccess,
 }: AddToMealPlanModalProps) {
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
   const [servings, setServings] = useState(2);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,8 +71,7 @@ export function AddToMealPlanModal({
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen) {
-      setSelectedDate(null);
-      setSelectedMealType(null);
+      setSelectedSlots([]);
       setWeekOffset(0);
       setError(null);
     }
@@ -95,7 +99,11 @@ export function AddToMealPlanModal({
       try {
         const start = formatDateForApi(weekDates[0]);
         const end = formatDateForApi(weekDates[6]);
-        const response = await mealPlanApi.list(start, end);
+        const response = await mealPlanApi.list(
+          start,
+          end,
+          selectedCalendarId ? [selectedCalendarId] : undefined
+        );
         setExistingMeals(response.items || []);
       } catch (err) {
         console.error('Failed to fetch meal plans:', err);
@@ -106,7 +114,7 @@ export function AddToMealPlanModal({
     };
 
     fetchMeals();
-  }, [isOpen, weekDates]);
+  }, [isOpen, weekDates, selectedCalendarId]);
 
   const today = useMemo(() => {
     const t = new Date();
@@ -123,24 +131,29 @@ export function AddToMealPlanModal({
 
   const handleSlotClick = (date: Date, mealType: MealType) => {
     const dateStr = formatDateForApi(date);
-    setSelectedDate(dateStr);
-    setSelectedMealType(mealType);
+    const key = getSlotKey(dateStr, mealType);
+    setSelectedSlots(current => (
+      current.some(slot => getSlotKey(slot.date, slot.mealType) === key)
+        ? current.filter(slot => getSlotKey(slot.date, slot.mealType) !== key)
+        : [...current, { date: dateStr, mealType }]
+    ));
   };
 
   const handleSubmit = async () => {
-    if (!selectedDate || !selectedMealType || !selectedCalendarId) return;
+    if (selectedSlots.length === 0 || !selectedCalendarId) return;
 
     setIsSubmitting(true);
     setError(null);
 
     try {
-      await mealPlanApi.create({
-        calendar_id: selectedCalendarId,
-        recipe_id: recipeId,
-        planned_date: selectedDate,
-        meal_type: selectedMealType,
-        servings: servings,
-      });
+      await Promise.all(selectedSlots.map(slot => mealPlanApi.create({
+          calendar_id: selectedCalendarId,
+          recipe_id: recipeId,
+          planned_date: slot.date,
+          meal_type: slot.mealType,
+          servings,
+        })
+      ));
       onSuccess?.();
       onClose();
     } catch (err: unknown) {
@@ -160,7 +173,8 @@ export function AddToMealPlanModal({
   };
 
   const isSelected = (date: Date, mealType: MealType) => {
-    return selectedDate === formatDateForApi(date) && selectedMealType === mealType;
+    const key = getSlotKey(formatDateForApi(date), mealType);
+    return selectedSlots.some(slot => getSlotKey(slot.date, slot.mealType) === key);
   };
 
   const getWeekRangeLabel = () => {
@@ -394,13 +408,9 @@ export function AddToMealPlanModal({
             </div>
 
             {/* Selected slot display */}
-            {selectedDate && selectedMealType && (
+            {selectedSlots.length > 0 && (
               <div className="text-sm text-warm-gray">
-                {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric'
-                })} - {MEAL_TYPES.find(m => m.key === selectedMealType)?.label}
+                {selectedSlots.length} meal{selectedSlots.length !== 1 ? 's' : ''} selected
               </div>
             )}
 
@@ -415,10 +425,14 @@ export function AddToMealPlanModal({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting || !selectedDate || !selectedMealType || !selectedCalendarId}
+                disabled={isSubmitting || selectedSlots.length === 0 || !selectedCalendarId}
                 className="px-5 py-2 bg-gold hover:bg-gold-dark text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? 'Adding...' : 'Add to Plan'}
+                {isSubmitting
+                  ? 'Adding...'
+                  : selectedSlots.length > 0
+                    ? `Add ${selectedSlots.length} to Plan`
+                    : 'Add to Plan'}
               </button>
             </div>
           </div>

@@ -26,7 +26,7 @@ from schemas import (
     GroceryListAcceptPublicShareResponse,
 )
 from services.grocery_list_service import (
-    clear_grocery_list, generate_from_meal_plan, group_items_by_category,
+    add_recipe_to_grocery_list, clear_grocery_list, generate_from_meal_plan, group_items_by_category,
     DEFAULT_CATEGORY, normalize_ingredient_name
 )
 from services.email_service import EmailService
@@ -405,6 +405,31 @@ async def clear_list(
 # ============================================================================
 # ITEM ENDPOINTS
 # ============================================================================
+
+@router.post("/{list_id}/recipes/{recipe_id}", response_model=GroceryListResponse)
+async def add_recipe(
+    list_id: str,
+    recipe_id: str,
+    servings: float = Query(2, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Add all non-optional ingredients from a recipe to a grocery list."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "editor")
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    if recipe.author_id != current_user.id and recipe.privacy_level != "public":
+        raise HTTPException(status_code=403, detail="Cannot add this recipe to grocery list")
+
+    add_recipe_to_grocery_list(db, grocery_list, recipe, servings)
+
+    grocery_list = db.query(GroceryList).options(
+        joinedload(GroceryList.items),
+        joinedload(GroceryList.shares).joinedload(GroceryListShare.user)
+    ).filter(GroceryList.id == grocery_list.id).first()
+    return build_grocery_list_response(grocery_list, db)
+
 
 @router.post("/{list_id}/items", response_model=GroceryListItemResponse, status_code=201)
 async def add_item(
