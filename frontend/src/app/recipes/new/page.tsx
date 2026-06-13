@@ -386,7 +386,7 @@ function NewRecipeContent() {
   }
 
   return (
-    <div className="min-h-screen bg-cream py-8 px-4 md:px-8 has-bottom-nav">
+    <div className="min-h-screen bg-cream has-bottom-nav">
       <MobileNavWrapper />
       {importMessage && (
         <div className="fixed top-4 right-4 z-50 bg-gold text-white px-4 py-3 rounded-full shadow-lg flex items-center gap-2">
@@ -397,7 +397,7 @@ function NewRecipeContent() {
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto overflow-hidden">
+      <div className="max-w-2xl mx-auto overflow-hidden px-4 md:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
           <Link href="/" className="text-warm-gray hover:text-gold text-sm uppercase tracking-wider mb-4 inline-block">

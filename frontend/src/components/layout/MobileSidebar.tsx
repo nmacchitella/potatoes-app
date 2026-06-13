@@ -236,7 +236,7 @@ export default function MobileSidebar({
 
       {/* Sidebar */}
       <aside
-        className={`fixed top-0 left-0 bottom-0 w-72 bg-cream z-50 md:hidden transform transition-transform duration-300 ease-out ${
+        className={`mobile-sidebar fixed left-0 w-[min(18rem,calc(100vw-2rem))] bg-cream z-50 md:hidden transform transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

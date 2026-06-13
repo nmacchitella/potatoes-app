@@ -12,6 +12,17 @@
   --gold-dark: #B8954D;
   --warm-gray: #6B6560;
   --border: #E5E0D5;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --mobile-bottom-nav-content-height: 3.5rem;
+  --mobile-bottom-nav-padding: 0.75rem;
+  --mobile-bottom-nav-height: calc(
+    var(--mobile-bottom-nav-content-height) +
+    var(--mobile-bottom-nav-padding) +
+    var(--safe-area-bottom)
+  );
 }
 
 * {
@@ -22,7 +33,8 @@
 
 html,
 body {
-  max-width: 100vw;
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
   background-color: var(--cream);
   color: var(--charcoal);
@@ -113,23 +125,63 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Safe area padding for notched phones */
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: var(--safe-area-bottom);
 }
 
 .pt-safe {
-  padding-top: env(safe-area-inset-top, 0);
+  padding-top: var(--safe-area-top);
 }
 
 .mb-safe {
-  margin-bottom: env(safe-area-inset-bottom, 0);
+  margin-bottom: var(--safe-area-bottom);
 }
 
-/* Bottom nav spacing - accounts for bottom nav height */
+/* Mobile app shell */
+.mobile-top-nav {
+  padding-top: var(--safe-area-top);
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+}
+
+.mobile-bottom-nav {
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
+  padding-bottom: calc(var(--mobile-bottom-nav-padding) + var(--safe-area-bottom));
+}
+
+.mobile-bottom-nav-content {
+  height: var(--mobile-bottom-nav-content-height);
+}
+
+.mobile-sidebar {
+  top: 0;
+  bottom: 0;
+  height: 100vh;
+  height: 100dvh;
+  padding-top: var(--safe-area-top);
+  padding-bottom: var(--safe-area-bottom);
+  padding-left: var(--safe-area-left);
+}
+
+.mobile-viewport-overlay {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.mobile-fixed-action-bar {
+  padding-bottom: var(--safe-area-bottom);
+}
+
+/* Keep the last page content comfortably above the fixed bottom nav. */
 .has-bottom-nav {
-  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0));
+  padding-bottom: calc(var(--mobile-bottom-nav-height) + 1rem);
 }
 
 @media (min-width: 768px) {
+  .mobile-fixed-action-bar {
+    padding-bottom: 0;
+  }
+
   .has-bottom-nav {
     padding-bottom: 0;
   }

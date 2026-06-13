@@ -110,7 +110,7 @@ export default function Modal({
   };
 
   return (
-    <div className={`fixed inset-0 z-50 flex ${getPositionClasses()}`}>
+    <div className={`mobile-viewport-overlay fixed inset-0 z-50 flex ${getPositionClasses()}`}>
       {/* Backdrop */}
       <div
         className={`fixed inset-0 bg-black/50 ${blur ? 'backdrop-blur-sm' : ''}`}

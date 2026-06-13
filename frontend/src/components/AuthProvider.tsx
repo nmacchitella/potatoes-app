@@ -9,6 +9,13 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
+const isPublicPath = (pathname: string) => (
+  pathname === '/' ||
+  pathname === '/auth/login' ||
+  pathname.startsWith('/r/') ||
+  pathname.startsWith('/grocery/share/')
+);
+
 /**
  * AuthProvider - Initializes auth state on app load
  *
@@ -55,7 +62,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           // Token was removed - log out this tab too
           logout();
           // Redirect to login if not already there
-          if (typeof window !== 'undefined' && window.location.pathname !== '/auth/login' && window.location.pathname !== '/') {
+          if (typeof window !== 'undefined' && !isPublicPath(window.location.pathname)) {
             window.location.href = '/auth/login';
           }
         } else if (event.newValue !== null && event.oldValue === null) {
@@ -78,7 +85,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // If we have a user in state but no token, logout
       if (user && !token) {
         logout();
-        if (window.location.pathname !== '/auth/login' && window.location.pathname !== '/') {
+        if (!isPublicPath(window.location.pathname)) {
           window.location.href = '/auth/login';
         }
       }

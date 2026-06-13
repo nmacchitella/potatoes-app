@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
+import MobileKeyboardDismiss from '@/components/layout/MobileKeyboardDismiss';
 
 export const metadata: Metadata = {
   title: 'Potatoes - Recipe Collection',
@@ -22,6 +23,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
+  viewportFit: 'cover',
   themeColor: '#000000',
 };
 
@@ -32,10 +34,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-      </head>
       <body className="bg-cream text-charcoal">
+        <MobileKeyboardDismiss />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

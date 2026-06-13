@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { AddToMealPlanModal } from '@/components/calendar';
-import { getErrorMessage, groceryListApi } from '@/lib/api';
+import { AddToGroceryListModal } from '@/components/grocery';
 import type { RecipeSummary } from '@/types';
 
 type SortColumn = 'name' | 'time' | 'servings' | 'collections';
@@ -37,26 +37,15 @@ export default function RecipeGrid({
 }: RecipeGridProps) {
   // All hooks must be at the top, before any early returns
   const [mealPlanRecipe, setMealPlanRecipe] = useState<{ id: string; title: string } | null>(null);
+  const [groceryRecipe, setGroceryRecipe] = useState<RecipeSummary | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>('name');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [expandedCollections, setExpandedCollections] = useState<Set<string>>(new Set());
-  const [groceryRecipeId, setGroceryRecipeId] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  const addRecipeToGroceryList = async (recipe: RecipeSummary) => {
-    setGroceryRecipeId(recipe.id);
-    setActionMessage(null);
-    try {
-      const lists = await groceryListApi.list();
-      const list = lists[0] || await groceryListApi.create();
-      await groceryListApi.addRecipe(list.id, recipe.id);
-      setActionMessage(`Added ${recipe.title} to ${list.name}`);
-    } catch (error) {
-      setActionMessage(getErrorMessage(error, 'Failed to add recipe to grocery list'));
-    } finally {
-      setGroceryRecipeId(null);
-      window.setTimeout(() => setActionMessage(null), 3000);
-    }
+  const handleGrocerySuccess = (listName: string, servings: number) => {
+    setActionMessage(`Added ${servings} serving${servings === 1 ? '' : 's'} to ${listName}`);
+    window.setTimeout(() => setActionMessage(null), 3000);
   };
 
   const handleSort = (column: SortColumn) => {
@@ -307,18 +296,13 @@ export default function RecipeGrid({
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => addRecipeToGroceryList(recipe)}
-                          disabled={groceryRecipeId === recipe.id}
-                          className="p-1.5 text-warm-gray hover:text-gold hover:bg-cream rounded transition-colors disabled:opacity-50"
+                          onClick={() => setGroceryRecipe(recipe)}
+                          className="p-1.5 text-warm-gray hover:text-gold hover:bg-cream rounded transition-colors"
                           title="Add to grocery list"
                         >
-                          {groceryRecipeId === recipe.id ? (
-                            <div className="w-4 h-4 border-2 border-gold border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l2.4 10.4a2 2 0 002 1.6h7.8a2 2 0 002-1.6L21 7H6m4 12a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
-                            </svg>
-                          )}
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l2.4 10.4a2 2 0 002 1.6h7.8a2 2 0 002-1.6L21 7H6m4 12a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                          </svg>
                         </button>
                         <button
                           onClick={() => setMealPlanRecipe({ id: recipe.id, title: recipe.title })}
@@ -347,8 +331,18 @@ export default function RecipeGrid({
             recipeTitle={mealPlanRecipe.title}
           />
         )}
+        {groceryRecipe && (
+          <AddToGroceryListModal
+            isOpen={!!groceryRecipe}
+            onClose={() => setGroceryRecipe(null)}
+            recipeId={groceryRecipe.id}
+            recipeTitle={groceryRecipe.title}
+            recipeYield={groceryRecipe.yield_quantity}
+            onSuccess={handleGrocerySuccess}
+          />
+        )}
         {actionMessage && (
-          <div className="fixed bottom-6 right-6 z-50 rounded-lg bg-charcoal px-4 py-3 text-sm text-white shadow-lg">
+          <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+1rem)] md:bottom-6 right-4 md:right-6 z-50 rounded-lg bg-charcoal px-4 py-3 text-sm text-white shadow-lg">
             {actionMessage}
           </div>
         )}
@@ -434,19 +428,14 @@ export default function RecipeGrid({
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    addRecipeToGroceryList(recipe);
+                    setGroceryRecipe(recipe);
                   }}
-                  disabled={groceryRecipeId === recipe.id}
-                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/90 hover:bg-gold text-charcoal hover:text-white flex items-center justify-center shadow-md disabled:opacity-50"
+                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/90 hover:bg-gold text-charcoal hover:text-white flex items-center justify-center shadow-md"
                   title="Add to grocery list"
                 >
-                  {groceryRecipeId === recipe.id ? (
-                    <div className="w-3 h-3 border-2 border-gold border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l2.4 10.4a2 2 0 002 1.6h7.8a2 2 0 002-1.6L21 7H6m4 12a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
-                    </svg>
-                  )}
+                  <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l2.4 10.4a2 2 0 002 1.6h7.8a2 2 0 002-1.6L21 7H6m4 12a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
+                  </svg>
                 </button>
                 <button
                   onClick={(e) => {
@@ -493,8 +482,18 @@ export default function RecipeGrid({
         recipeTitle={mealPlanRecipe.title}
       />
     )}
+    {groceryRecipe && (
+      <AddToGroceryListModal
+        isOpen={!!groceryRecipe}
+        onClose={() => setGroceryRecipe(null)}
+        recipeId={groceryRecipe.id}
+        recipeTitle={groceryRecipe.title}
+        recipeYield={groceryRecipe.yield_quantity}
+        onSuccess={handleGrocerySuccess}
+      />
+    )}
     {actionMessage && (
-      <div className="fixed bottom-6 right-6 z-50 rounded-lg bg-charcoal px-4 py-3 text-sm text-white shadow-lg">
+      <div className="fixed bottom-[calc(var(--mobile-bottom-nav-height)+1rem)] md:bottom-6 right-4 md:right-6 z-50 rounded-lg bg-charcoal px-4 py-3 text-sm text-white shadow-lg">
         {actionMessage}
       </div>
     )}

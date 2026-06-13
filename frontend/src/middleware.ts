@@ -15,6 +15,7 @@ const publicRoutes = [
 // Route prefixes that are public (share pages, etc.)
 const publicPrefixes = [
   '/r/',                    // Public recipe share links (/r/[id])
+  '/grocery/share/',        // Public grocery list share links (/grocery/share/[token])
 ];
 
 export function middleware(request: NextRequest) {

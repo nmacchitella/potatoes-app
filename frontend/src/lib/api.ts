@@ -310,7 +310,13 @@ api.interceptors.response.use(
       clearTokens();
       stopProactiveRefresh();
 
-      if (typeof window !== 'undefined' && window.location.pathname !== '/auth/login') {
+      const isPublicPage = typeof window !== 'undefined' && (
+        window.location.pathname === '/' ||
+        window.location.pathname === '/auth/login' ||
+        window.location.pathname.startsWith('/r/') ||
+        window.location.pathname.startsWith('/grocery/share/')
+      );
+      if (typeof window !== 'undefined' && !isPublicPage) {
         window.location.href = '/auth/login';
       }
       return Promise.reject(error);

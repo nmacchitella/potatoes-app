@@ -131,7 +131,7 @@ export function ShareModal({
               Share Link
             </h3>
             <p className="text-sm text-warm-gray mb-3">
-              Anyone with this link can view and edit your grocery list
+              Anyone with this link can view your grocery list. They can sign in to edit.
             </p>
             {isGeneratingLink ? (
               <div className="flex items-center justify-center py-3">

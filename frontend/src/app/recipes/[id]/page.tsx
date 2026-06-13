@@ -949,7 +949,7 @@ export default function RecipeDetailPage() {
 
       {/* Floating Save/Cancel Bar */}
       {isEditing && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border shadow-lg z-50">
+        <div className="mobile-fixed-action-bar fixed bottom-0 left-0 right-0 bg-white border-t border-border shadow-lg z-50">
           <div className="max-w-6xl mx-auto px-4 md:px-8 py-3 flex items-center justify-between">
             <button onClick={handleCancel} className="text-sm text-warm-gray hover:text-charcoal transition-colors">
               Cancel

@@ -3,5 +3,6 @@ export { GroceryListSidebar } from './GroceryListSidebar';
 export { GroceryCategorySection } from './GroceryCategorySection';
 export { GroceryItem } from './GroceryItem';
 export { AddItemForm } from './AddItemForm';
+export { AddToGroceryListModal } from './AddToGroceryListModal';
 export { GenerateModal } from './GenerateModal';
 export { ShareModal } from './ShareModal';

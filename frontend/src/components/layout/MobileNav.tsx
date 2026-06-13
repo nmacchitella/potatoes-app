@@ -39,7 +39,7 @@ export default function MobileNav({ onMenuClick }: MobileNavProps) {
   };
 
   return (
-    <nav className="bg-cream border-b border-border sticky top-0 z-40 md:hidden">
+    <nav className="mobile-top-nav bg-cream border-b border-border sticky top-0 z-40 md:hidden">
       <div className="px-4">
         <div className="flex items-center justify-between h-14">
           {/* Hamburger Menu */}
