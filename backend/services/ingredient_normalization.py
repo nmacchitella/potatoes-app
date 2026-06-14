@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 import re
 from typing import Optional
 
-from services.ingredient_parser import UNIT_LOOKUP, UNIT_MAPPINGS
+from services.ingredient_parser import PREP_WORDS, UNIT_LOOKUP, UNIT_MAPPINGS
 
 
 INVALID_UNIT_VALUES = {
@@ -49,6 +49,8 @@ LEADING_SIZE_DESCRIPTORS = {
     "medium",
     "small",
 }
+
+PREPARATION_CUES = set(PREP_WORDS) | {"cut"}
 
 PORTION_UNITS = {
     "bottle",
@@ -168,6 +170,17 @@ def normalize_recipe_ingredient_fields(
     changes: list[str] = []
     issues: list[str] = []
 
+    if "," in name:
+        base_name, possible_preparation = [part.strip() for part in name.split(",", 1)]
+        if base_name and possible_preparation and any(
+            re.search(rf"\b{re.escape(cue)}\b", possible_preparation, re.IGNORECASE)
+            for cue in PREPARATION_CUES
+        ):
+            name = base_name
+            preparation = _append_text(preparation, possible_preparation)
+            changes.append(f"name:{original_name!r}->{name!r} (comma preparation)")
+            changes.append(f"preparation:{original_preparation!r}->{preparation!r}")
+
     raw_unit = _clean_optional_text(unit)
     raw_unit_lower = raw_unit.lower().rstrip(".") if raw_unit else None
     if unit_issue == "placeholder_unit":
@@ -196,7 +209,7 @@ def normalize_recipe_ingredient_fields(
         canonical_unit = None
         issues = [issue for issue in issues if not issue.startswith("unknown_unit:")]
         changes.append(f"unit:{original_unit!r}->None (duplicates ingredient)")
-    elif canonical_unit in PORTION_UNITS:
+    elif canonical_unit in PORTION_UNITS and "," not in name:
         suffix = re.compile(rf"\s+{re.escape(canonical_unit)}s?$", re.IGNORECASE)
         stripped = suffix.sub("", name).strip()
         if stripped and stripped != name:

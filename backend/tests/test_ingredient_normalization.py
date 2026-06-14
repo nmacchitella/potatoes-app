@@ -23,6 +23,18 @@ class IngredientNormalizationTests(unittest.TestCase):
         self.assertEqual(normalized.name, "Garlic")
         self.assertEqual(normalized.unit, "clove")
 
+        preparation = normalize_recipe_ingredient_fields(
+            "avocado, cut into small pieces",
+            "piece",
+        )
+        self.assertEqual(preparation.name, "avocado")
+        self.assertEqual(preparation.unit, "piece")
+        self.assertEqual(preparation.preparation, "cut into small pieces")
+
+        sliced = normalize_recipe_ingredient_fields("large strawberries, sliced", "piece")
+        self.assertEqual(sliced.name, "strawberries")
+        self.assertEqual(sliced.preparation, "sliced, large")
+
     def test_moves_size_and_to_taste_out_of_unit(self):
         size = normalize_recipe_ingredient_fields("Eggs", "large")
         self.assertIsNone(size.unit)
