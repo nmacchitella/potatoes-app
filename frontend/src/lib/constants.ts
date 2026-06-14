@@ -89,6 +89,36 @@ export function abbreviateUnit(unit: string | null | undefined): string {
   return UNIT_ABBREVIATIONS[lower] || unit;
 }
 
+const PORTION_UNITS = new Set([
+  'bottle', 'box', 'bunch', 'can', 'clove', 'head', 'jar', 'package',
+  'piece', 'slice', 'sprig', 'stalk', 'stick',
+]);
+
+function singularDisplayWord(value: string): string {
+  const lower = value.toLowerCase().trim();
+  if (lower === 'potatoes') return 'potato';
+  if (lower === 'tomatoes') return 'tomato';
+  if (lower === 'cloves') return 'clove';
+  return lower.endsWith('s') && !lower.endsWith('ss') ? lower.slice(0, -1) : lower;
+}
+
+export function normalizeIngredientForDisplay(name: string, unit?: string | null): {
+  name: string;
+  unit?: string;
+} {
+  if (!unit) return { name };
+  const normalizedUnit = singularDisplayWord(unit);
+  const nameWords = name.trim().split(/\s+/);
+  const normalizedName = singularDisplayWord(name);
+  const lastWord = singularDisplayWord(nameWords[nameWords.length - 1] || '');
+
+  if (normalizedName === normalizedUnit) return { name };
+  if (PORTION_UNITS.has(normalizedUnit) && lastWord === normalizedUnit && nameWords.length > 1) {
+    return { name: nameWords.slice(0, -1).join(' '), unit };
+  }
+  return { name, unit };
+}
+
 /**
  * Format ingredient quantity for display
  * Handles whole numbers, fractions, and ranges
@@ -143,6 +173,7 @@ interface Ingredient {
  */
 export function formatIngredient(ing: Ingredient): string {
   const parts: string[] = [];
+  const display = normalizeIngredientForDisplay(ing.name, ing.unit);
 
   // Format quantity (and range if applicable)
   if (ing.quantity) {
@@ -156,8 +187,8 @@ export function formatIngredient(ing: Ingredient): string {
   }
 
   // Format unit
-  if (ing.unit) {
-    const abbr = abbreviateUnit(ing.unit);
+  if (display.unit) {
+    const abbr = abbreviateUnit(display.unit);
     if (abbr) {
       // Metric units attach directly to quantity (e.g., "100g" not "100 g")
       const metricUnits = ['g', 'kg', 'mg', 'ml', 'L'];
@@ -170,7 +201,7 @@ export function formatIngredient(ing: Ingredient): string {
   }
 
   // Add ingredient name
-  parts.push(ing.name);
+  parts.push(display.name);
 
   // Add preparation if present
   if (ing.preparation) {

@@ -31,6 +31,11 @@ from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFoun
 from config import settings, logger
 from database import SessionLocal
 from models import URLCheck, Recipe
+from services.ingredient_normalization import (
+    CANONICAL_UNITS,
+    canonicalize_unit,
+    normalize_recipe_ingredient_fields,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -45,15 +50,16 @@ INVALID_UNITS = {
 
 
 def clean_unit(unit) -> Optional[str]:
-    """Clean unit value — return None for invalid/placeholder units."""
+    """Clean and canonicalize a unit while preserving unknown values for review."""
     if not unit:
         return None
-    unit_lower = unit.lower().strip()
+    unit_lower = str(unit).lower().strip()
     if unit_lower in INVALID_UNITS or 'not specified' in unit_lower or 'as needed' in unit_lower:
         return None
-    if len(unit) > 50:
+    if len(str(unit)) > 50:
         return None
-    return unit
+    canonical, _ = canonicalize_unit(str(unit))
+    return canonical
 
 
 def clean_quantity(val) -> Optional[float]:
@@ -93,16 +99,31 @@ INGREDIENT_SCHEMA = {
     "type": "object",
     "properties": {
         "key": {"type": "string"},
-        "name": {"type": "string"},
+        "name": {"type": "string", "description": "Food ingredient name only; never include quantity, unit, size, or preparation"},
         "quantity": {"type": "number", "nullable": True},
         "quantity_max": {"type": "number", "nullable": True},
-        "unit": {"type": "string", "nullable": True},
+        "unit": {"type": "string", "nullable": True, "description": "Measurement or portion unit only; never the ingredient itself"},
         "preparation": {"type": "string", "nullable": True},
         "is_optional": {"type": "boolean"},
         "notes": {"type": "string", "nullable": True},
     },
     "required": ["key", "name"],
 }
+
+INGREDIENT_EXTRACTION_RULES = f"""
+Ingredient field rules:
+- `name` is only the food ingredient. Do not include quantity, measurement unit, size, or preparation.
+- `unit` is only a measurement, portion, or container unit. It must never be the ingredient itself.
+- Use a canonical lowercase singular unit when one is explicit. Preferred units: {", ".join(CANONICAL_UNITS)}.
+- For countable whole ingredients such as eggs, potatoes, onions, or lemons, put the count in `quantity` and set `unit` to null.
+- Portion/container units are valid when they add meaning: "2 cloves garlic" => name "garlic", unit "clove"; "1 can tomatoes" => name "tomatoes", unit "can".
+- Put size words such as large, medium, small, or whole in `preparation`, not `unit`.
+- Put wording such as "to taste", "as needed", or "for garnish" in `notes`; set unknown quantity and unit to null.
+- Good: {{"quantity": 2, "unit": null, "name": "potatoes"}}.
+- Good: {{"quantity": 0.5, "unit": "clove", "name": "garlic"}}.
+- Bad: {{"quantity": 2, "unit": "potato", "name": "potatoes"}}.
+- Bad: {{"quantity": 1, "unit": "egg", "name": "egg"}}.
+""".strip()
 
 INSTRUCTION_USAGE_SCHEMA = {
     "type": "object",
@@ -193,6 +214,26 @@ class ImportedRecipe:
             self.instructions = []
         if self.tags is None:
             self.tags = []
+
+
+def _parse_imported_ingredient(data: dict) -> ImportedIngredient:
+    quantity = clean_quantity(data.get('quantity'))
+    normalized = normalize_recipe_ingredient_fields(
+        data.get('name', ''),
+        clean_unit(data.get('unit')),
+        clean_str(data.get('preparation')),
+        clean_str(data.get('notes')),
+    )
+    return ImportedIngredient(
+        key=data.get('key'),
+        name=normalized.name,
+        quantity=quantity,
+        quantity_max=clean_quantity_max(quantity, clean_quantity(data.get('quantity_max'))),
+        unit=normalized.unit,
+        preparation=normalized.preparation,
+        is_optional=data.get('is_optional', False),
+        notes=normalized.notes,
+    )
 
 
 def _parse_instruction_usage(data: dict, index: int) -> ImportedInstructionUsage:
@@ -1123,6 +1164,8 @@ IMPORTANT - How to combine sources:
 - CRITICAL for ingredients: If a quantity or unit is unknown, unspecified, or "to taste", set quantity to null and unit to null. Do NOT use placeholder text like "amount needed", "as needed", "to taste", or similar phrases as the unit value.
 - CRITICAL for instruction usages: ingredient_key must match one of the recipe ingredient keys, every usage marker must appear exactly once, and rendering the base amounts into instruction_template must reproduce instruction_text without changing any other prose.
 
+{INGREDIENT_EXTRACTION_RULES}
+
 Respond with a JSON array of recipe objects."""
 
     max_retries = 3
@@ -1176,22 +1219,7 @@ Respond with a JSON array of recipe objects."""
         recipes = []
         for data in recipes_data:
             logger.debug(f"Recipe data: title={data.get('title')}, yield_quantity={data.get('yield_quantity')}")
-            ingredients = [
-                ImportedIngredient(
-                    key=ing.get('key'),
-                    name=ing.get('name', ''),
-                    quantity=clean_quantity(ing.get('quantity')),
-                    quantity_max=clean_quantity_max(
-                        clean_quantity(ing.get('quantity')),
-                        clean_quantity(ing.get('quantity_max')),
-                    ),
-                    unit=clean_unit(ing.get('unit')),
-                    preparation=ing.get('preparation'),
-                    is_optional=ing.get('is_optional', False),
-                    notes=ing.get('notes'),
-                )
-                for ing in data.get('ingredients', [])
-            ]
+            ingredients = [_parse_imported_ingredient(ing) for ing in data.get('ingredients', [])]
 
             instructions = [
                 _parse_imported_instruction(inst, idx)
@@ -1334,6 +1362,8 @@ Rules:
 - Even if there's only one recipe, still return it in the recipes array
 - CRITICAL: If a quantity or unit is unknown, unspecified, or "to taste", set quantity to null and unit to null. Do NOT use placeholder text like "amount needed", "as needed", "to taste", or similar phrases as unit values.
 
+{INGREDIENT_EXTRACTION_RULES}
+
 Content:
 {text[:20000]}
 
@@ -1392,6 +1422,8 @@ Rules:
 - Give every ingredient and instruction a stable unique key. Tokenize only explicit ingredient amounts in instruction_template and ingredient_usages; never tokenize times, temperatures, pan sizes, servings, or relative wording. Set instruction_template to null and ingredient_usages to [] when there is no explicit ingredient amount.
 - CRITICAL: If a quantity or unit is unknown, unspecified, or "to taste", set quantity to null and unit to null. Do NOT use placeholder text like "amount needed", "as needed", "to taste", or similar phrases as unit values.
 
+{INGREDIENT_EXTRACTION_RULES}
+
 Webpage content:
 {text[:15000]}
 
@@ -1430,20 +1462,7 @@ Return ONLY the JSON, no other text."""
 
     recipes = []
     for recipe_data in recipes_data:
-        ingredients = []
-        for ing in recipe_data.get('ingredients', []):
-            qty = clean_quantity(ing.get('quantity'))
-            qty_max = clean_quantity(ing.get('quantity_max'))
-            ingredients.append(ImportedIngredient(
-                key=ing.get('key'),
-                name=ing.get('name', ''),
-                quantity=qty,
-                quantity_max=clean_quantity_max(qty, qty_max),
-                unit=clean_unit(ing.get('unit')),
-                preparation=clean_str(ing.get('preparation')),
-                is_optional=ing.get('is_optional', False),
-                notes=clean_str(ing.get('notes')),
-            ))
+        ingredients = [_parse_imported_ingredient(ing) for ing in recipe_data.get('ingredients', [])]
 
         def safe_int(val):
             """Convert to int, rounding floats if necessary."""

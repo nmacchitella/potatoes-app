@@ -146,6 +146,36 @@ class RecipeInstructionUsagePersistenceTests(unittest.TestCase):
         self.assertIsNone(recipe.instructions[0].instruction_template)
         self.assertEqual(recipe.instructions[0].ingredient_usages, [])
 
+    def test_recipe_ingredients_are_normalized_and_share_plural_master(self):
+        recipe = Recipe(author_id=self.user.id, title="Gnocchi")
+        self.db.add(recipe)
+        self.db.flush()
+        create_recipe_ingredients(
+            self.db,
+            recipe.id,
+            [
+                RecipeIngredientCreate(name="Potatoes", quantity=2, unit="potato"),
+                RecipeIngredientCreate(name="Garlic clove", quantity=0.5, unit="clove"),
+            ],
+            self.user.id,
+        )
+        second_recipe = Recipe(author_id=self.user.id, title="Mash")
+        self.db.add(second_recipe)
+        self.db.flush()
+        create_recipe_ingredients(
+            self.db,
+            second_recipe.id,
+            [RecipeIngredientCreate(name="Potato", quantity=1)],
+            self.user.id,
+        )
+        self.db.commit()
+
+        self.assertEqual(recipe.ingredients[0].name, "Potatoes")
+        self.assertIsNone(recipe.ingredients[0].unit)
+        self.assertEqual(recipe.ingredients[1].name, "Garlic")
+        self.assertEqual(recipe.ingredients[1].unit, "clove")
+        self.assertEqual(recipe.ingredients[0].ingredient_id, second_recipe.ingredients[0].ingredient_id)
+
 
 if __name__ == "__main__":
     unittest.main()

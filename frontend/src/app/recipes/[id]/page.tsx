@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi, collectionApi, getErrorMessage } from '@/lib/api';
 import { useStore } from '@/store/useStore';
-import { abbreviateUnit, formatQuantity } from '@/lib/constants';
+import { abbreviateUnit, formatQuantity, normalizeIngredientForDisplay } from '@/lib/constants';
 import { convertIngredient, type UnitSystem } from '@/lib/unitConversion';
 import { renderInstruction } from '@/lib/instructionUsage';
 import Navbar from '@/components/layout/Navbar';
@@ -40,6 +40,8 @@ const formatIngredientWithUnit = (ing: RecipeIngredient, unitSystem?: UnitSystem
     displayQtyMax = converted.quantityMax;
     displayUnit = converted.unit;
   }
+  const display = normalizeIngredientForDisplay(ing.name, displayUnit);
+  displayUnit = display.unit;
 
   // Format quantity (with optional range)
   if (displayQty) {
@@ -66,7 +68,7 @@ const formatIngredientWithUnit = (ing: RecipeIngredient, unitSystem?: UnitSystem
   }
 
   // Add name and preparation
-  parts.push(ing.name);
+  parts.push(display.name);
   if (ing.preparation && ing.preparation !== 'null') {
     parts[parts.length - 1] += `, ${ing.preparation}`;
   }

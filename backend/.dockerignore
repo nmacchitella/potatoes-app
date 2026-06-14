@@ -45,4 +45,6 @@ docs/
 
 # Test data
 seed_data/
-scripts/
+scripts/*
+!scripts/audit_recipe_ingredients.py
+!scripts/backfill_instruction_usages.py

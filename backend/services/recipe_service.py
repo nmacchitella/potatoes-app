@@ -21,6 +21,7 @@ from services.instruction_usage_service import (
     format_usage_amount,
     validate_and_render_instruction,
 )
+from services.ingredient_normalization import ingredient_match_key, normalize_recipe_ingredient_fields
 
 logger = logging.getLogger("potatoes.recipe_service")
 
@@ -49,10 +50,16 @@ def create_recipe_ingredients(
         raise ValueError("Recipe ingredient keys must be unique")
 
     for idx, ing_data in enumerate(ingredients_data):
+        normalized = normalize_recipe_ingredient_fields(
+            ing_data.name,
+            ing_data.unit,
+            ing_data.preparation,
+            ing_data.notes,
+        )
         # Find or create the master ingredient entity
         master_ingredient = find_or_create_ingredient(
             db=db,
-            name=ing_data.name,
+            name=normalized.name,
             user_id=user_id
         )
 
@@ -63,13 +70,13 @@ def create_recipe_ingredients(
             sort_order=ing_data.sort_order if ing_data.sort_order else idx,
             quantity=ing_data.quantity,
             quantity_max=ing_data.quantity_max,
-            unit=ing_data.unit,
-            name=ing_data.name,
-            preparation=ing_data.preparation,
+            unit=normalized.unit,
+            name=normalized.name,
+            preparation=normalized.preparation,
             is_optional=ing_data.is_optional,
             is_staple=ing_data.is_staple,
             ingredient_group=ing_data.ingredient_group,
-            notes=ing_data.notes,
+            notes=normalized.notes,
         )
         db.add(ingredient)
         created_ingredients.append(ingredient)
@@ -162,17 +169,23 @@ def update_recipe_ingredients(
     unused_existing = set(existing) - set(provided_keys)
 
     for idx, ing_data in enumerate(ingredients_data):
+        normalized = normalize_recipe_ingredient_fields(
+            ing_data.name,
+            ing_data.unit,
+            ing_data.preparation,
+            ing_data.notes,
+        )
         key = ing_data.key
         if not key:
             match = next((
                 existing_key for existing_key in unused_existing
                 if existing[existing_key].sort_order == idx
-                and existing[existing_key].name.strip().lower() == ing_data.name.strip().lower()
+                and ingredient_match_key(existing[existing_key].name) == ingredient_match_key(normalized.name)
             ), None)
             key = match or generate_uuid()
         unused_existing.discard(key)
         kept_keys.add(key)
-        master_ingredient = find_or_create_ingredient(db=db, name=ing_data.name, user_id=user_id)
+        master_ingredient = find_or_create_ingredient(db=db, name=normalized.name, user_id=user_id)
         ingredient = existing.get(key)
         if not ingredient:
             ingredient = RecipeIngredient(recipe_id=recipe_id, key=key)
@@ -181,13 +194,13 @@ def update_recipe_ingredients(
         ingredient.sort_order = ing_data.sort_order if ing_data.sort_order else idx
         ingredient.quantity = ing_data.quantity
         ingredient.quantity_max = ing_data.quantity_max
-        ingredient.unit = ing_data.unit
-        ingredient.name = ing_data.name
-        ingredient.preparation = ing_data.preparation
+        ingredient.unit = normalized.unit
+        ingredient.name = normalized.name
+        ingredient.preparation = normalized.preparation
         ingredient.is_optional = ing_data.is_optional
         ingredient.is_staple = ing_data.is_staple
         ingredient.ingredient_group = ing_data.ingredient_group
-        ingredient.notes = ing_data.notes
+        ingredient.notes = normalized.notes
         result.append(ingredient)
 
     for key, ingredient in existing.items():
@@ -312,9 +325,15 @@ def clone_recipe_content(
     # Clone ingredients
     ingredient_id_map = {}
     for ing in original.ingredients:
+        normalized = normalize_recipe_ingredient_fields(
+            ing.name,
+            ing.unit,
+            ing.preparation,
+            ing.notes,
+        )
         master_ingredient = find_or_create_ingredient(
             db=db,
-            name=ing.name,
+            name=normalized.name,
             user_id=user_id
         )
 
@@ -325,13 +344,13 @@ def clone_recipe_content(
             sort_order=ing.sort_order,
             quantity=ing.quantity,
             quantity_max=ing.quantity_max,
-            unit=ing.unit,
-            name=ing.name,
-            preparation=ing.preparation,
+            unit=normalized.unit,
+            name=normalized.name,
+            preparation=normalized.preparation,
             is_optional=ing.is_optional,
             is_staple=ing.is_staple,
             ingredient_group=ing.ingredient_group,
-            notes=ing.notes,
+            notes=normalized.notes,
         )
         db.add(new_ing)
         db.flush()

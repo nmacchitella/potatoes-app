@@ -18,6 +18,7 @@ from schemas import (
     Ingredient as IngredientSchema,
     MeasurementUnit as MeasurementUnitSchema,
 )
+from services.ingredient_normalization import ingredient_match_key
 
 router = APIRouter(prefix="/ingredients", tags=["ingredients"])
 
@@ -44,24 +45,27 @@ def find_or_create_ingredient(
     Returns the Ingredient entity.
     """
     normalized = normalize_ingredient_name(name)
-
-    # Check for system ingredient first
-    existing_system = db.query(Ingredient).filter(
-        Ingredient.is_system == True,
-        Ingredient.normalized_name == normalized
-    ).first()
-
-    if existing_system:
-        return existing_system
-
-    # Check for user's custom ingredient
-    existing_user = db.query(Ingredient).filter(
-        Ingredient.user_id == user_id,
-        Ingredient.normalized_name == normalized
-    ).first()
-
-    if existing_user:
-        return existing_user
+    match_key = ingredient_match_key(name)
+    candidates = db.query(Ingredient).filter(
+        or_(
+            Ingredient.is_system == True,
+            Ingredient.user_id == user_id,
+        )
+    ).all()
+    matching = [
+        ingredient
+        for ingredient in candidates
+        if ingredient_match_key(ingredient.name) == match_key
+    ]
+    if matching:
+        return sorted(
+            matching,
+            key=lambda ingredient: (
+                not ingredient.is_system,
+                ingredient.normalized_name != normalized,
+                ingredient.name.lower(),
+            ),
+        )[0]
 
     # Create new user-specific ingredient
     ingredient = Ingredient(
@@ -99,7 +103,11 @@ async def list_ingredients(
     # Search by normalized name if provided
     if search:
         normalized_search = normalize_ingredient_name(search)
-        query = query.filter(Ingredient.normalized_name.ilike(f"%{normalized_search}%"))
+        match_search = ingredient_match_key(search)
+        query = query.filter(or_(
+            Ingredient.normalized_name.ilike(f"%{normalized_search}%"),
+            Ingredient.normalized_name.ilike(f"%{match_search}%"),
+        ))
 
     # Filter by category if provided
     if category:
@@ -108,9 +116,11 @@ async def list_ingredients(
     # Order: exact matches first, then alphabetically
     if search:
         normalized_search = normalize_ingredient_name(search)
+        match_search = ingredient_match_key(search)
         # Prioritize exact starts
         query = query.order_by(
             Ingredient.normalized_name.ilike(f"{normalized_search}%").desc(),
+            Ingredient.normalized_name.ilike(f"{match_search}%").desc(),
             Ingredient.is_system.desc(),
             Ingredient.name
         )
