@@ -16,7 +16,10 @@ import math
 
 from database import get_db
 from auth import get_current_user, get_current_user_optional
-from models import User, Recipe, Tag, Collection, RecipeIngredient, recipe_sub_recipes
+from models import (
+    User, Recipe, Tag, Collection, RecipeIngredient, RecipeInstruction,
+    InstructionIngredientUsage, recipe_sub_recipes,
+)
 from routers.library_router import get_library_partners
 from schemas import (
     RecipeCreate, RecipeUpdate, Recipe as RecipeSchema,
@@ -152,8 +155,11 @@ async def create_recipe(
     db.flush()  # Get recipe ID
 
     # Add ingredients and instructions using service
-    create_recipe_ingredients(db, recipe.id, recipe_data.ingredients, current_user.id)
-    create_recipe_instructions(db, recipe.id, recipe_data.instructions)
+    try:
+        create_recipe_ingredients(db, recipe.id, recipe_data.ingredients, current_user.id)
+        create_recipe_instructions(db, recipe.id, recipe_data.instructions)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     # Add tags
     if recipe_data.tag_ids:
@@ -192,7 +198,9 @@ async def get_recipe(
     recipe = db.query(Recipe).options(
         joinedload(Recipe.author),
         joinedload(Recipe.ingredients),
-        joinedload(Recipe.instructions),
+        joinedload(Recipe.instructions)
+            .joinedload(RecipeInstruction.ingredient_usages)
+            .joinedload(InstructionIngredientUsage.ingredient),
         joinedload(Recipe.tags),
         joinedload(Recipe.forked_from_user),
         joinedload(Recipe.sub_recipes).joinedload(Recipe.ingredients),
@@ -348,12 +356,18 @@ async def update_recipe(
 
     # Handle ingredients separately
     if "ingredients" in update_data:
-        update_recipe_ingredients(db, recipe.id, recipe_data.ingredients, current_user.id)
+        try:
+            update_recipe_ingredients(db, recipe.id, recipe_data.ingredients, current_user.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
         del update_data["ingredients"]
 
     # Handle instructions separately
     if "instructions" in update_data:
-        update_recipe_instructions(db, recipe.id, recipe_data.instructions)
+        try:
+            update_recipe_instructions(db, recipe.id, recipe_data.instructions)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
         del update_data["instructions"]
 
     # Handle tags separately
@@ -462,7 +476,9 @@ async def clone_recipe(
     # Get original recipe
     original = db.query(Recipe).options(
         joinedload(Recipe.ingredients),
-        joinedload(Recipe.instructions),
+        joinedload(Recipe.instructions)
+            .joinedload(RecipeInstruction.ingredient_usages)
+            .joinedload(InstructionIngredientUsage.ingredient),
         joinedload(Recipe.tags),
     ).filter(
         Recipe.id == recipe_id,

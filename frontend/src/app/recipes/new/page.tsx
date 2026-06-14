@@ -9,6 +9,8 @@ import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import { ImageUpload } from '@/components/ui';
 import type { RecipeIngredientInput, RecipeInstructionInput, Tag, ParsedIngredient, RecipeImportResponse, Collection, SubRecipeInput } from '@/types';
 
+const makeKey = (prefix: string) => `${prefix}_${crypto.randomUUID().replaceAll('-', '')}`;
+
 // Form data structure for each recipe tab
 interface RecipeFormData {
   title: string;
@@ -39,8 +41,8 @@ const createEmptyFormData = (): RecipeFormData => ({
   privacyLevel: 'private',
   sourceUrl: '',
   coverImageUrl: '',
-  ingredients: [{ name: '', sort_order: 0 }],
-  instructions: [{ step_number: 1, instruction_text: '' }],
+  ingredients: [{ key: makeKey('ingredient'), name: '', sort_order: 0 }],
+  instructions: [{ key: makeKey('instruction'), step_number: 1, instruction_text: '', ingredient_usages: [] }],
   selectedTagIds: [],
   subRecipeInputs: [],
 });
@@ -71,6 +73,7 @@ const importResponseToFormData = (data: RecipeImportResponse, availableTags: Tag
     videoStartSeconds: data.video_start_seconds,
     ingredients: data.ingredients.length > 0
       ? data.ingredients.map((ing, idx) => ({
+          key: ing.key || makeKey('ingredient'),
           name: ing.name,
           quantity: ing.quantity,
           quantity_max: ing.quantity_max,
@@ -80,14 +83,17 @@ const importResponseToFormData = (data: RecipeImportResponse, availableTags: Tag
           notes: ing.notes,
           sort_order: idx,
         }))
-      : [{ name: '', sort_order: 0 }],
+      : [{ key: makeKey('ingredient'), name: '', sort_order: 0 }],
     instructions: data.instructions.length > 0
       ? data.instructions.map(inst => ({
+          key: inst.key || makeKey('instruction'),
           step_number: inst.step_number,
           instruction_text: inst.instruction_text,
+          instruction_template: inst.instruction_template,
+          ingredient_usages: inst.ingredient_usages || [],
           duration_minutes: inst.duration_minutes,
         }))
-      : [{ step_number: 1, instruction_text: '' }],
+      : [{ key: makeKey('instruction'), step_number: 1, instruction_text: '', ingredient_usages: [] }],
     selectedTagIds: matchedTagIds,
     subRecipeInputs: [],
   };
@@ -171,6 +177,7 @@ function NewRecipeContent() {
   const handleParseIngredients = useCallback(async (text: string): Promise<RecipeIngredientInput[]> => {
     const result = await recipeApi.parseIngredients(text);
     return result.ingredients.map((ing: ParsedIngredient, idx: number) => ({
+      key: makeKey('ingredient'),
       name: ing.name,
       quantity: ing.quantity,
       quantity_max: ing.quantity_max,
@@ -311,7 +318,7 @@ function NewRecipeContent() {
           ...ing,
           sort_order: idx,
         })),
-        instructions: data.instructions.filter(i => i.instruction_text).map((inst, idx) => ({
+        instructions: data.instructions.filter(i => i.instruction_template || i.instruction_text).map((inst, idx) => ({
           ...inst,
           step_number: idx + 1,
         })),
@@ -361,7 +368,7 @@ function NewRecipeContent() {
 
   const canSave = currentFormData.title.length >= 1 &&
     currentFormData.ingredients.some(i => i.name) &&
-    currentFormData.instructions.some(i => i.instruction_text);
+    currentFormData.instructions.some(i => i.instruction_template || i.instruction_text);
 
   // Full-screen loading overlay for importing
   if (importing || recipeParsing) {
@@ -745,6 +752,7 @@ function NewRecipeContent() {
                       <div className="mt-4">
                         <RecipeInstructionsEdit
                           instructions={currentFormData.instructions}
+                          ingredients={currentFormData.ingredients}
                           onChange={instructions => updateCurrentForm('instructions', instructions)}
                         />
                       </div>
@@ -1106,6 +1114,7 @@ function NewRecipeContent() {
               <div className="mt-6">
                 <RecipeInstructionsEdit
                   instructions={currentFormData.instructions}
+                  ingredients={currentFormData.ingredients}
                   onChange={instructions => updateCurrentForm('instructions', instructions)}
                 />
               </div>

@@ -211,9 +211,13 @@ class Recipe(Base):
 
 class RecipeIngredient(Base):
     __tablename__ = "recipe_ingredients"
+    __table_args__ = (
+        UniqueConstraint('recipe_id', 'key', name='uq_recipe_ingredient_key'),
+    )
 
     id = Column(String, primary_key=True, default=generate_uuid)
     recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=False, index=True)
+    key = Column(String(100), nullable=False, default=generate_uuid)
     ingredient_id = Column(String, ForeignKey("ingredients.id", ondelete='SET NULL'), nullable=True)  # Link to master ingredient
     sort_order = Column(Integer, nullable=False, default=0)
     quantity = Column(Float, nullable=True)
@@ -229,20 +233,66 @@ class RecipeIngredient(Base):
     # Relationships
     recipe = relationship("Recipe", back_populates="ingredients")
     ingredient = relationship("Ingredient", back_populates="recipe_ingredients")
+    instruction_usages = relationship(
+        "InstructionIngredientUsage",
+        back_populates="ingredient",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class RecipeInstruction(Base):
     __tablename__ = "recipe_instructions"
+    __table_args__ = (
+        UniqueConstraint('recipe_id', 'key', name='uq_recipe_instruction_key'),
+    )
 
     id = Column(String, primary_key=True, default=generate_uuid)
     recipe_id = Column(String, ForeignKey("recipes.id", ondelete='CASCADE'), nullable=False, index=True)
+    key = Column(String(100), nullable=False, default=generate_uuid)
     step_number = Column(Integer, nullable=False)
     instruction_text = Column(Text, nullable=False)
+    instruction_template = Column(Text, nullable=True)
     duration_minutes = Column(Integer, nullable=True)
     instruction_group = Column(String(100), nullable=True)  # e.g., "Make the dough"
 
     # Relationships
     recipe = relationship("Recipe", back_populates="instructions")
+    ingredient_usages = relationship(
+        "InstructionIngredientUsage",
+        back_populates="instruction",
+        cascade="all, delete-orphan",
+        order_by="InstructionIngredientUsage.sort_order",
+        passive_deletes=True,
+    )
+
+
+class InstructionIngredientUsage(Base):
+    __tablename__ = "instruction_ingredient_usages"
+    __table_args__ = (
+        UniqueConstraint('instruction_id', 'usage_key', name='uq_instruction_usage_key'),
+    )
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    instruction_id = Column(String, ForeignKey("recipe_instructions.id", ondelete='CASCADE'), nullable=False, index=True)
+    ingredient_id = Column(String, ForeignKey("recipe_ingredients.id", ondelete='CASCADE'), nullable=False, index=True)
+    usage_key = Column(String(100), nullable=False)
+    quantity = Column(Float, nullable=False)
+    quantity_max = Column(Float, nullable=True)
+    unit = Column(String(50), nullable=True)
+    base_text = Column(String(100), nullable=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+
+    instruction = relationship("RecipeInstruction", back_populates="ingredient_usages")
+    ingredient = relationship("RecipeIngredient", back_populates="instruction_usages")
+
+    @property
+    def ingredient_key(self):
+        return self.ingredient.key
+
+    @property
+    def ingredient_name(self):
+        return self.ingredient.name
 
 
 class Tag(Base):

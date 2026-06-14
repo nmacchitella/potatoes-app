@@ -7,6 +7,7 @@ import { recipeApi, collectionApi, getErrorMessage } from '@/lib/api';
 import { useStore } from '@/store/useStore';
 import { abbreviateUnit, formatQuantity } from '@/lib/constants';
 import { convertIngredient, type UnitSystem } from '@/lib/unitConversion';
+import { renderInstruction } from '@/lib/instructionUsage';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
 import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit, SubRecipeSelect, YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
@@ -165,6 +166,7 @@ export default function RecipeDetailPage() {
         privacy_level: recipe.privacy_level,
       });
       setEditIngredients(recipe.ingredients.map(ing => ({
+        key: ing.key,
         sort_order: ing.sort_order,
         quantity: ing.quantity,
         quantity_max: ing.quantity_max,
@@ -177,8 +179,11 @@ export default function RecipeDetailPage() {
         notes: ing.notes,
       })));
       setEditInstructions(recipe.instructions.map(inst => ({
+        key: inst.key,
         step_number: inst.step_number,
         instruction_text: inst.instruction_text,
+        instruction_template: inst.instruction_template,
+        ingredient_usages: inst.ingredient_usages,
         duration_minutes: inst.duration_minutes,
         instruction_group: inst.instruction_group,
       })));
@@ -315,7 +320,7 @@ export default function RecipeDetailPage() {
           ...ing,
           sort_order: idx,
         })),
-        instructions: editInstructions.filter(inst => inst.instruction_text.trim()).map((inst, idx) => ({
+        instructions: editInstructions.filter(inst => (inst.instruction_template || inst.instruction_text).trim()).map((inst, idx) => ({
           ...inst,
           step_number: idx + 1,
         })),
@@ -907,6 +912,7 @@ export default function RecipeDetailPage() {
               {isEditing ? (
                 <RecipeInstructionsEdit
                   instructions={editInstructions}
+                  ingredients={editIngredients}
                   onChange={setEditInstructions}
                   compact
                 />
@@ -916,7 +922,7 @@ export default function RecipeDetailPage() {
                     <li key={inst.id} className="flex gap-3">
                       <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold text-white text-xs font-medium flex items-center justify-center">{inst.step_number}</span>
                       <div className="pt-0.5">
-                        <p className="text-charcoal text-sm leading-relaxed">{inst.instruction_text}</p>
+                        <p className="text-charcoal text-sm leading-relaxed">{renderInstruction(inst, scale, unitSystem || undefined)}</p>
                         {inst.duration_minutes != null && inst.duration_minutes > 0 && <span className="text-xs text-warm-gray mt-0.5 block">{inst.duration_minutes} min</span>}
                       </div>
                     </li>

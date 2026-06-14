@@ -45,11 +45,13 @@ class RecipeIngredientBase(BaseModel):
 
 
 class RecipeIngredientCreate(RecipeIngredientBase):
+    key: Optional[str] = Field(None, min_length=1, max_length=100)
     sort_order: int = 0
 
 
 class RecipeIngredient(RecipeIngredientBase):
     id: str
+    key: str
     ingredient_id: Optional[str] = None  # Link to master Ingredient entity
     sort_order: int
 
@@ -61,19 +63,53 @@ class RecipeIngredient(RecipeIngredientBase):
 # INSTRUCTION SCHEMAS
 # ============================================================================
 
+class InstructionIngredientUsageBase(BaseModel):
+    usage_key: str = Field(..., min_length=1, max_length=100, pattern=r'^[A-Za-z0-9_-]+$')
+    ingredient_key: str = Field(..., min_length=1, max_length=100)
+    quantity: float = Field(..., gt=0)
+    quantity_max: Optional[float] = Field(None, gt=0)
+    unit: Optional[str] = None
+    base_text: Optional[str] = Field(None, max_length=100)
+    sort_order: int = 0
+
+    @model_validator(mode='after')
+    def validate_quantity_range(self):
+        if self.quantity_max is not None and self.quantity_max <= self.quantity:
+            raise ValueError('quantity_max must be greater than quantity')
+        return self
+
+
+class InstructionIngredientUsageCreate(InstructionIngredientUsageBase):
+    pass
+
+
+class InstructionIngredientUsage(InstructionIngredientUsageBase):
+    id: str
+    ingredient_id: str
+    ingredient_name: str
+
+    class Config:
+        from_attributes = True
+
+
 class RecipeInstructionBase(BaseModel):
     instruction_text: str
+    instruction_template: Optional[str] = None
     duration_minutes: Optional[int] = None
     instruction_group: Optional[str] = None
 
 
 class RecipeInstructionCreate(RecipeInstructionBase):
+    key: Optional[str] = Field(None, min_length=1, max_length=100)
     step_number: int
+    ingredient_usages: List[InstructionIngredientUsageCreate] = []
 
 
 class RecipeInstruction(RecipeInstructionBase):
     id: str
+    key: str
     step_number: int
+    ingredient_usages: List[InstructionIngredientUsage] = []
 
     class Config:
         from_attributes = True
@@ -454,6 +490,7 @@ class RecipeParseTextRequest(BaseModel):
 
 
 class ImportedIngredient(BaseModel):
+    key: Optional[str] = None
     name: str
     quantity: Optional[float] = None
     quantity_max: Optional[float] = None
@@ -463,9 +500,22 @@ class ImportedIngredient(BaseModel):
     notes: Optional[str] = None
 
 
+class ImportedInstructionUsage(BaseModel):
+    usage_key: str
+    ingredient_key: str
+    quantity: float
+    quantity_max: Optional[float] = None
+    unit: Optional[str] = None
+    base_text: Optional[str] = None
+    sort_order: int = 0
+
+
 class ImportedInstruction(BaseModel):
+    key: Optional[str] = None
     step_number: int
     instruction_text: str
+    instruction_template: Optional[str] = None
+    ingredient_usages: List[ImportedInstructionUsage] = []
     duration_minutes: Optional[int] = None
 
 

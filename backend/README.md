@@ -14,6 +14,22 @@ uvicorn main:app --reload --port 8000
 
 **Access:** http://localhost:8000/docs
 
+## Instruction Amount Backfill
+
+After applying migrations, inspect existing recipes before writing scalable instruction amounts:
+
+```bash
+alembic upgrade head
+python scripts/backfill_instruction_usages.py --dry-run
+python scripts/backfill_instruction_usages.py --apply
+```
+
+Use repeated `--recipe-id ID` arguments or `--limit N` to process a subset. Apply mode records resumable progress and writes a JSON report. To remove generated templates and usages while preserving the original instruction prose:
+
+```bash
+python scripts/backfill_instruction_usages.py --clear
+```
+
 ## Documentation
 
 See the main [documentation](../documentation/) for detailed guides:

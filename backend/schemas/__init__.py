@@ -38,6 +38,8 @@ from schemas.recipe import (
     RecipeIngredientBase,
     RecipeIngredientCreate,
     RecipeIngredient,
+    InstructionIngredientUsageCreate,
+    InstructionIngredientUsage,
     RecipeInstructionBase,
     RecipeInstructionCreate,
     RecipeInstruction,
@@ -80,6 +82,7 @@ from schemas.recipe import (
     RecipeImportRequest,
     RecipeParseTextRequest,
     ImportedIngredient,
+    ImportedInstructionUsage,
     ImportedInstruction,
     RecipeImportResponse,
     RecipeImportMultiResponse,
@@ -151,6 +154,7 @@ __all__ = [
     "UserSettingsUpdate", "UserSettings",
     # recipe
     "RecipeIngredientBase", "RecipeIngredientCreate", "RecipeIngredient",
+    "InstructionIngredientUsageCreate", "InstructionIngredientUsage",
     "RecipeInstructionBase", "RecipeInstructionCreate", "RecipeInstruction",
     "TagBase", "TagCreate", "Tag", "CollectionBase", "CollectionCreate",
     "CollectionUpdate", "Collection", "CollectionWithRecipes",
@@ -163,7 +167,7 @@ __all__ = [
     "ParsedIngredient", "IngredientParseRequest", "IngredientParseResponse",
     "PaginatedResponse", "RecipeListResponse", "RecipeImportRequest",
     "RecipeParseTextRequest", "ImportedIngredient", "ImportedInstruction",
-    "RecipeImportResponse", "RecipeImportMultiResponse",
+    "RecipeImportResponse", "RecipeImportMultiResponse", "ImportedInstructionUsage",
     # meal_plan
     "MealPlanCalendarCreate", "MealPlanCalendarUpdate", "MealPlanCalendarSummary",
     "MealPlanCreate", "MealPlanUpdate", "MealPlanMove", "MealPlanCopy",

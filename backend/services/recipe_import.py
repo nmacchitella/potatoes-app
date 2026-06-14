@@ -30,7 +30,7 @@ from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFoun
 
 from config import settings, logger
 from database import SessionLocal
-from models import URLCheck
+from models import URLCheck, Recipe
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +92,7 @@ def clean_quantity_max(quantity, quantity_max) -> Optional[float]:
 INGREDIENT_SCHEMA = {
     "type": "object",
     "properties": {
+        "key": {"type": "string"},
         "name": {"type": "string"},
         "quantity": {"type": "number", "nullable": True},
         "quantity_max": {"type": "number", "nullable": True},
@@ -100,23 +101,41 @@ INGREDIENT_SCHEMA = {
         "is_optional": {"type": "boolean"},
         "notes": {"type": "string", "nullable": True},
     },
-    "required": ["name"],
+    "required": ["key", "name"],
+}
+
+INSTRUCTION_USAGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "usage_key": {"type": "string"},
+        "ingredient_key": {"type": "string"},
+        "quantity": {"type": "number"},
+        "quantity_max": {"type": "number", "nullable": True},
+        "unit": {"type": "string", "nullable": True},
+        "base_text": {"type": "string", "nullable": True},
+        "sort_order": {"type": "integer"},
+    },
+    "required": ["usage_key", "ingredient_key", "quantity", "base_text"],
 }
 
 INSTRUCTION_SCHEMA = {
     "type": "object",
     "properties": {
+        "key": {"type": "string"},
         "step_number": {"type": "integer"},
         "instruction_text": {"type": "string"},
+        "instruction_template": {"type": "string", "nullable": True},
+        "ingredient_usages": {"type": "array", "items": INSTRUCTION_USAGE_SCHEMA},
         "duration_minutes": {"type": "integer"},
     },
-    "required": ["step_number", "instruction_text"],
+    "required": ["key", "step_number", "instruction_text", "instruction_template", "ingredient_usages"],
 }
 
 
 @dataclass
 class ImportedIngredient:
     name: str
+    key: Optional[str] = None
     quantity: Optional[float] = None
     quantity_max: Optional[float] = None
     unit: Optional[str] = None
@@ -126,10 +145,28 @@ class ImportedIngredient:
 
 
 @dataclass
+class ImportedInstructionUsage:
+    usage_key: str
+    ingredient_key: str
+    quantity: float
+    quantity_max: Optional[float] = None
+    unit: Optional[str] = None
+    base_text: Optional[str] = None
+    sort_order: int = 0
+
+
+@dataclass
 class ImportedInstruction:
     step_number: int
     instruction_text: str
+    key: Optional[str] = None
+    instruction_template: Optional[str] = None
+    ingredient_usages: List[ImportedInstructionUsage] = None
     duration_minutes: Optional[int] = None
+
+    def __post_init__(self):
+        if self.ingredient_usages is None:
+            self.ingredient_usages = []
 
 
 @dataclass
@@ -156,6 +193,154 @@ class ImportedRecipe:
             self.instructions = []
         if self.tags is None:
             self.tags = []
+
+
+def _parse_instruction_usage(data: dict, index: int) -> ImportedInstructionUsage:
+    return ImportedInstructionUsage(
+        usage_key=data.get('usage_key') or f"usage_{index + 1}",
+        ingredient_key=data.get('ingredient_key', ''),
+        quantity=clean_quantity(data.get('quantity')),
+        quantity_max=clean_quantity_max(
+            clean_quantity(data.get('quantity')),
+            clean_quantity(data.get('quantity_max')),
+        ),
+        unit=clean_unit(data.get('unit')),
+        base_text=clean_str(data.get('base_text')),
+        sort_order=data.get('sort_order', index),
+    )
+
+
+def _parse_imported_instruction(data: dict, index: int) -> ImportedInstruction:
+    return ImportedInstruction(
+        key=data.get('key'),
+        step_number=data.get('step_number', index + 1),
+        instruction_text=data.get('instruction_text', ''),
+        instruction_template=data.get('instruction_template'),
+        ingredient_usages=[
+            _parse_instruction_usage(usage, usage_index)
+            for usage_index, usage in enumerate(data.get('ingredient_usages', []))
+        ],
+        duration_minutes=data.get('duration_minutes'),
+    )
+
+
+def validate_imported_instruction_usages(recipe: ImportedRecipe, strict: bool = False) -> None:
+    """Keep only complete AI usage templates that reproduce the fallback prose."""
+    from services.instruction_usage_service import (
+        render_instruction_template,
+        validate_instruction_template,
+    )
+
+    ingredient_keys = {ingredient.key for ingredient in recipe.ingredients if ingredient.key}
+    for instruction in recipe.instructions:
+        if not instruction.instruction_template:
+            instruction.ingredient_usages = []
+            continue
+        try:
+            validate_instruction_template(
+                instruction.instruction_template,
+                instruction.ingredient_usages,
+                ingredient_keys,
+            )
+            rendered = render_instruction_template(
+                instruction.instruction_template,
+                instruction.ingredient_usages,
+            )
+            if rendered != instruction.instruction_text:
+                raise ValueError("Rendered template does not reproduce instruction text")
+            if not instruction.ingredient_usages:
+                instruction.instruction_template = None
+        except ValueError as exc:
+            if strict:
+                raise
+            logger.warning("Discarding invalid instruction usages for step %s: %s", instruction.step_number, exc)
+            instruction.instruction_template = None
+            instruction.ingredient_usages = []
+
+
+async def annotate_instruction_usages_with_gemini(recipe: Recipe) -> List[ImportedInstruction]:
+    """Annotate existing instruction prose without allowing Gemini to rewrite it."""
+    if not settings.gemini_api_key:
+        raise ValueError("Gemini API key not configured")
+
+    annotation_schema = {
+        "type": "object",
+        "properties": {
+            "instructions": {"type": "array", "items": INSTRUCTION_SCHEMA},
+        },
+        "required": ["instructions"],
+    }
+    ingredient_context = [
+        {
+            "key": ingredient.key,
+            "name": ingredient.name,
+            "quantity": ingredient.quantity,
+            "quantity_max": ingredient.quantity_max,
+            "unit": ingredient.unit,
+        }
+        for ingredient in recipe.ingredients
+    ]
+    instruction_context = [
+        {
+            "key": instruction.key,
+            "step_number": instruction.step_number,
+            "instruction_text": instruction.instruction_text,
+            "duration_minutes": instruction.duration_minutes,
+        }
+        for instruction in recipe.instructions
+    ]
+    prompt = f"""Annotate explicit ingredient amounts in these existing recipe instructions.
+
+Ingredients:
+{json.dumps(ingredient_context)}
+
+Instructions:
+{json.dumps(instruction_context)}
+
+Return every instruction with its key, original step_number, original instruction_text, original duration_minutes,
+and either:
+- instruction_template containing the exact original prose with only explicit ingredient amount text replaced by
+  {{{{usage:USAGE_KEY}}}}, plus matching ingredient_usages; or
+- instruction_template null and ingredient_usages [] when no explicit ingredient amount exists.
+
+Never rewrite instruction_text. Never tokenize times, temperatures, pan sizes, servings, or relative wording such
+as "half", "remaining", or "to taste". Every ingredient_key must match the supplied ingredient list."""
+
+    client = genai.Client(api_key=settings.gemini_api_key)
+    response = client.models.generate_content(
+        model='gemini-3-flash-preview',
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=annotation_schema,
+            temperature=0,
+        ),
+    )
+    data = json.loads(response.text)
+    annotated = [_parse_imported_instruction(item, idx) for idx, item in enumerate(data.get("instructions", []))]
+    imported_recipe = ImportedRecipe(
+        title=recipe.title,
+        ingredients=[
+            ImportedIngredient(
+                key=ingredient.key,
+                name=ingredient.name,
+                quantity=ingredient.quantity,
+                quantity_max=ingredient.quantity_max,
+                unit=ingredient.unit,
+            )
+            for ingredient in recipe.ingredients
+        ],
+        instructions=annotated,
+    )
+    validate_imported_instruction_usages(imported_recipe, strict=True)
+
+    originals = {instruction.key: instruction.instruction_text for instruction in recipe.instructions}
+    if len(annotated) != len(originals) or set(originals) != {instruction.key for instruction in annotated}:
+        raise ValueError("Annotation response did not contain every original instruction")
+    for instruction in annotated:
+        if instruction.instruction_text != originals[instruction.key]:
+            raise ValueError(f"Annotation rewrote instruction {instruction.key}")
+    return annotated
 
 
 async def fetch_url_content(url: str) -> tuple[str, str]:
@@ -915,8 +1100,8 @@ The attached audio file. Use this as the PRIMARY source for:
 For EACH recipe found, provide a JSON object with:
 - title: Recipe name
 - description: Brief description (1-2 sentences)
-- ingredients: Array of {{name, quantity (number or null), quantity_max (number or null, only for ranges like "1-2 cups"), unit (string or null), preparation (string or null), is_optional (boolean), notes (string or null)}}
-- instructions: Array of {{step_number, instruction_text, duration_minutes (estimated minutes for this step, based on the action described)}}
+- ingredients: Array of {{key (stable short identifier), name, quantity (number or null), quantity_max (number or null, only for ranges like "1-2 cups"), unit (string or null), preparation (string or null), is_optional (boolean), notes (string or null)}}
+- instructions: Array of {{key, step_number, instruction_text, instruction_template, ingredient_usages, duration_minutes}}. For each explicit ingredient amount in instruction_text, replace only the amount in instruction_template with {{{{usage:USAGE_KEY}}}} and add {{usage_key, ingredient_key, quantity, quantity_max, unit, base_text, sort_order}}, where base_text is the exact replaced amount text. Keep times, temperatures, pan sizes, servings, "half", "remaining", and "to taste" as plain text. If no explicit ingredient amounts exist, set instruction_template to null and ingredient_usages to [].
 - yield_quantity: Number of servings (number or null if not mentioned)
 - yield_unit: Usually "servings" or "portions" (or null if not mentioned)
 - prep_time_minutes: Preparation time (number or null)
@@ -936,6 +1121,7 @@ IMPORTANT - How to combine sources:
 - video_start_seconds: Identify when each recipe section begins in the audio (in seconds from start)
 - Return ONLY valid JSON, no markdown or explanations
 - CRITICAL for ingredients: If a quantity or unit is unknown, unspecified, or "to taste", set quantity to null and unit to null. Do NOT use placeholder text like "amount needed", "as needed", "to taste", or similar phrases as the unit value.
+- CRITICAL for instruction usages: ingredient_key must match one of the recipe ingredient keys, every usage marker must appear exactly once, and rendering the base amounts into instruction_template must reproduce instruction_text without changing any other prose.
 
 Respond with a JSON array of recipe objects."""
 
@@ -992,6 +1178,7 @@ Respond with a JSON array of recipe objects."""
             logger.debug(f"Recipe data: title={data.get('title')}, yield_quantity={data.get('yield_quantity')}")
             ingredients = [
                 ImportedIngredient(
+                    key=ing.get('key'),
                     name=ing.get('name', ''),
                     quantity=clean_quantity(ing.get('quantity')),
                     quantity_max=clean_quantity_max(
@@ -1007,11 +1194,7 @@ Respond with a JSON array of recipe objects."""
             ]
 
             instructions = [
-                ImportedInstruction(
-                    step_number=inst.get('step_number', idx + 1),
-                    instruction_text=inst.get('instruction_text', ''),
-                    duration_minutes=inst.get('duration_minutes')
-                )
+                _parse_imported_instruction(inst, idx)
                 for idx, inst in enumerate(data.get('instructions', []))
             ]
 
@@ -1108,6 +1291,7 @@ The JSON should be an object with a "recipes" array:
       "video_start_seconds": 120,
       "ingredients": [
         {{
+          "key": "ingredient_onion",
           "name": "ingredient name",
           "quantity": 1.5,
           "quantity_max": null,
@@ -1119,8 +1303,11 @@ The JSON should be an object with a "recipes" array:
       ],
       "instructions": [
         {{
+          "key": "instruction_1",
           "step_number": 1,
-          "instruction_text": "Step description",
+          "instruction_text": "Add 1 cup onion and simmer for 5 minutes.",
+          "instruction_template": "Add {{{{usage:onion_step_1}}}} onion and simmer for 5 minutes.",
+          "ingredient_usages": [{{"usage_key": "onion_step_1", "ingredient_key": "ingredient_onion", "quantity": 1, "quantity_max": null, "unit": "cup", "base_text": "1 cup", "sort_order": 0}}],
           "duration_minutes": 5
         }}
       ],
@@ -1143,6 +1330,7 @@ Rules:
   Use 0 if it's the first/only recipe or if no timestamps are available.
 - If information is not available, use null
 - Parse ALL ingredients and ALL instructions for each recipe
+- Give every ingredient and instruction a stable unique key. Tokenize only explicit ingredient amounts in instruction_template and ingredient_usages; never tokenize times, temperatures, pan sizes, servings, or relative wording. Set instruction_template to null and ingredient_usages to [] when there is no explicit ingredient amount.
 - Even if there's only one recipe, still return it in the recipes array
 - CRITICAL: If a quantity or unit is unknown, unspecified, or "to taste", set quantity to null and unit to null. Do NOT use placeholder text like "amount needed", "as needed", "to taste", or similar phrases as unit values.
 
@@ -1166,6 +1354,7 @@ The JSON should be an object with a "recipes" array containing one recipe:
       "difficulty": "easy",
       "ingredients": [
         {{
+          "key": "ingredient_onion",
           "name": "ingredient name",
           "quantity": 1.5,
           "quantity_max": null,
@@ -1177,8 +1366,11 @@ The JSON should be an object with a "recipes" array containing one recipe:
       ],
       "instructions": [
         {{
+          "key": "instruction_1",
           "step_number": 1,
-          "instruction_text": "Step description",
+          "instruction_text": "Add 1 cup onion and simmer for 5 minutes.",
+          "instruction_template": "Add {{{{usage:onion_step_1}}}} onion and simmer for 5 minutes.",
+          "ingredient_usages": [{{"usage_key": "onion_step_1", "ingredient_key": "ingredient_onion", "quantity": 1, "quantity_max": null, "unit": "cup", "base_text": "1 cup", "sort_order": 0}}],
           "duration_minutes": 5
         }}
       ],
@@ -1197,6 +1389,7 @@ Rules:
 - tags should be relevant categories like meal type, cuisine, dietary info (maximum 5 tags)
 - If information is not available, use null
 - Parse ALL ingredients and ALL instructions from the recipe
+- Give every ingredient and instruction a stable unique key. Tokenize only explicit ingredient amounts in instruction_template and ingredient_usages; never tokenize times, temperatures, pan sizes, servings, or relative wording. Set instruction_template to null and ingredient_usages to [] when there is no explicit ingredient amount.
 - CRITICAL: If a quantity or unit is unknown, unspecified, or "to taste", set quantity to null and unit to null. Do NOT use placeholder text like "amount needed", "as needed", "to taste", or similar phrases as unit values.
 
 Webpage content:
@@ -1242,6 +1435,7 @@ Return ONLY the JSON, no other text."""
             qty = clean_quantity(ing.get('quantity'))
             qty_max = clean_quantity(ing.get('quantity_max'))
             ingredients.append(ImportedIngredient(
+                key=ing.get('key'),
                 name=ing.get('name', ''),
                 quantity=qty,
                 quantity_max=clean_quantity_max(qty, qty_max),
@@ -1258,11 +1452,11 @@ Return ONLY the JSON, no other text."""
             return round(val) if isinstance(val, (int, float)) else None
 
         instructions = [
-            ImportedInstruction(
-                step_number=safe_int(inst.get('step_number')) or (idx + 1),
-                instruction_text=inst.get('instruction_text', ''),
-                duration_minutes=safe_int(inst.get('duration_minutes')),
-            )
+            _parse_imported_instruction({
+                **inst,
+                'step_number': safe_int(inst.get('step_number')) or (idx + 1),
+                'duration_minutes': safe_int(inst.get('duration_minutes')),
+            }, idx)
             for idx, inst in enumerate(recipe_data.get('instructions', []))
         ]
 
@@ -1554,6 +1748,7 @@ async def import_recipe_from_url(url: str, use_audio_fallback: bool = True) -> L
 
 def recipe_to_dict(recipe: ImportedRecipe) -> dict:
     """Convert ImportedRecipe to a dictionary for JSON response."""
+    validate_imported_instruction_usages(recipe)
     return {
         'title': recipe.title,
         'description': recipe.description,

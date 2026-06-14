@@ -11,9 +11,16 @@ import logging
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from models import Recipe, RecipeIngredient, RecipeInstruction, Tag, Collection, Ingredient, recipe_sub_recipes
+from models import (
+    Recipe, RecipeIngredient, RecipeInstruction, InstructionIngredientUsage,
+    Tag, Collection, Ingredient, recipe_sub_recipes, generate_uuid,
+)
 from schemas import RecipeIngredientCreate, RecipeInstructionCreate, SubRecipeInput
 from routers.ingredient_router import find_or_create_ingredient
+from services.instruction_usage_service import (
+    format_usage_amount,
+    validate_and_render_instruction,
+)
 
 logger = logging.getLogger("potatoes.recipe_service")
 
@@ -37,6 +44,9 @@ def create_recipe_ingredients(
         List of created RecipeIngredient objects
     """
     created_ingredients = []
+    provided_keys = [ingredient.key for ingredient in ingredients_data if ingredient.key]
+    if len(provided_keys) != len(set(provided_keys)):
+        raise ValueError("Recipe ingredient keys must be unique")
 
     for idx, ing_data in enumerate(ingredients_data):
         # Find or create the master ingredient entity
@@ -48,6 +58,7 @@ def create_recipe_ingredients(
 
         ingredient = RecipeIngredient(
             recipe_id=recipe_id,
+            key=ing_data.key or generate_uuid(),
             ingredient_id=master_ingredient.id,
             sort_order=ing_data.sort_order if ing_data.sort_order else idx,
             quantity=ing_data.quantity,
@@ -63,6 +74,7 @@ def create_recipe_ingredients(
         db.add(ingredient)
         created_ingredients.append(ingredient)
 
+    db.flush()
     logger.debug(f"Created {len(created_ingredients)} ingredients for recipe {recipe_id}")
     return created_ingredients
 
@@ -84,16 +96,44 @@ def create_recipe_instructions(
         List of created RecipeInstruction objects
     """
     created_instructions = []
+    provided_keys = [instruction.key for instruction in instructions_data if instruction.key]
+    if len(provided_keys) != len(set(provided_keys)):
+        raise ValueError("Recipe instruction keys must be unique")
+    ingredient_by_key = {
+        ingredient.key: ingredient
+        for ingredient in db.query(RecipeIngredient).filter(RecipeIngredient.recipe_id == recipe_id).all()
+    }
+    ingredient_keys = set(ingredient_by_key)
 
     for idx, inst_data in enumerate(instructions_data):
+        template = inst_data.instruction_template if inst_data.ingredient_usages else None
         instruction = RecipeInstruction(
             recipe_id=recipe_id,
+            key=inst_data.key or generate_uuid(),
             step_number=inst_data.step_number if inst_data.step_number else idx + 1,
-            instruction_text=inst_data.instruction_text,
+            instruction_text=validate_and_render_instruction(
+                template,
+                inst_data.ingredient_usages,
+                ingredient_keys,
+                inst_data.instruction_text,
+            ),
+            instruction_template=template,
             duration_minutes=inst_data.duration_minutes,
             instruction_group=inst_data.instruction_group,
         )
         db.add(instruction)
+        db.flush()
+        for usage_idx, usage_data in enumerate(inst_data.ingredient_usages):
+            db.add(InstructionIngredientUsage(
+                instruction_id=instruction.id,
+                ingredient_id=ingredient_by_key[usage_data.ingredient_key].id,
+                usage_key=usage_data.usage_key,
+                quantity=usage_data.quantity,
+                quantity_max=usage_data.quantity_max,
+                unit=usage_data.unit,
+                base_text=usage_data.base_text,
+                sort_order=usage_data.sort_order if usage_data.sort_order else usage_idx,
+            ))
         created_instructions.append(instruction)
 
     logger.debug(f"Created {len(created_instructions)} instructions for recipe {recipe_id}")
@@ -107,17 +147,66 @@ def update_recipe_ingredients(
     user_id: str,
 ) -> List[RecipeIngredient]:
     """
-    Replace all ingredients for a recipe.
-
-    Deletes existing ingredients and creates new ones.
+    Upsert ingredients by stable recipe-local key.
     """
-    # Delete existing ingredients
-    db.query(RecipeIngredient).filter(
-        RecipeIngredient.recipe_id == recipe_id
-    ).delete()
+    provided_keys = [ingredient.key for ingredient in ingredients_data if ingredient.key]
+    if len(provided_keys) != len(set(provided_keys)):
+        raise ValueError("Recipe ingredient keys must be unique")
 
-    # Create new ingredients
-    return create_recipe_ingredients(db, recipe_id, ingredients_data, user_id)
+    existing = {
+        ingredient.key: ingredient
+        for ingredient in db.query(RecipeIngredient).filter(RecipeIngredient.recipe_id == recipe_id).all()
+    }
+    kept_keys = set()
+    result = []
+    unused_existing = set(existing) - set(provided_keys)
+
+    for idx, ing_data in enumerate(ingredients_data):
+        key = ing_data.key
+        if not key:
+            match = next((
+                existing_key for existing_key in unused_existing
+                if existing[existing_key].sort_order == idx
+                and existing[existing_key].name.strip().lower() == ing_data.name.strip().lower()
+            ), None)
+            key = match or generate_uuid()
+        unused_existing.discard(key)
+        kept_keys.add(key)
+        master_ingredient = find_or_create_ingredient(db=db, name=ing_data.name, user_id=user_id)
+        ingredient = existing.get(key)
+        if not ingredient:
+            ingredient = RecipeIngredient(recipe_id=recipe_id, key=key)
+            db.add(ingredient)
+        ingredient.ingredient_id = master_ingredient.id
+        ingredient.sort_order = ing_data.sort_order if ing_data.sort_order else idx
+        ingredient.quantity = ing_data.quantity
+        ingredient.quantity_max = ing_data.quantity_max
+        ingredient.unit = ing_data.unit
+        ingredient.name = ing_data.name
+        ingredient.preparation = ing_data.preparation
+        ingredient.is_optional = ing_data.is_optional
+        ingredient.is_staple = ing_data.is_staple
+        ingredient.ingredient_group = ing_data.ingredient_group
+        ingredient.notes = ing_data.notes
+        result.append(ingredient)
+
+    for key, ingredient in existing.items():
+        if key in kept_keys:
+            continue
+        for usage in list(ingredient.instruction_usages):
+            instruction = usage.instruction
+            if instruction.instruction_template:
+                marker = f"{{{{usage:{usage.usage_key}}}}}"
+                instruction.instruction_template = instruction.instruction_template.replace(
+                    marker, format_usage_amount(usage)
+                )
+        db.delete(ingredient)
+
+    db.flush()
+    for instruction in db.query(RecipeInstruction).filter(RecipeInstruction.recipe_id == recipe_id).all():
+        if instruction.instruction_template and not instruction.ingredient_usages:
+            instruction.instruction_template = None
+    return result
 
 
 def update_recipe_instructions(
@@ -126,17 +215,83 @@ def update_recipe_instructions(
     instructions_data: List[RecipeInstructionCreate],
 ) -> List[RecipeInstruction]:
     """
-    Replace all instructions for a recipe.
-
-    Deletes existing instructions and creates new ones.
+    Upsert instructions and their usages by stable recipe-local key.
     """
-    # Delete existing instructions
-    db.query(RecipeInstruction).filter(
-        RecipeInstruction.recipe_id == recipe_id
-    ).delete()
+    provided_keys = [instruction.key for instruction in instructions_data if instruction.key]
+    if len(provided_keys) != len(set(provided_keys)):
+        raise ValueError("Recipe instruction keys must be unique")
 
-    # Create new instructions
-    return create_recipe_instructions(db, recipe_id, instructions_data)
+    existing = {
+        instruction.key: instruction
+        for instruction in db.query(RecipeInstruction).filter(RecipeInstruction.recipe_id == recipe_id).all()
+    }
+    ingredient_by_key = {
+        ingredient.key: ingredient
+        for ingredient in db.query(RecipeIngredient).filter(RecipeIngredient.recipe_id == recipe_id).all()
+    }
+    ingredient_keys = set(ingredient_by_key)
+    kept_keys = set()
+    result = []
+    unused_existing = set(existing) - set(provided_keys)
+
+    for idx, inst_data in enumerate(instructions_data):
+        key = inst_data.key
+        if not key:
+            match = next((
+                existing_key for existing_key in unused_existing
+                if existing[existing_key].step_number == inst_data.step_number
+            ), None)
+            key = match or generate_uuid()
+        unused_existing.discard(key)
+        kept_keys.add(key)
+        instruction = existing.get(key)
+        if not instruction:
+            instruction = RecipeInstruction(recipe_id=recipe_id, key=key)
+            db.add(instruction)
+
+        template = inst_data.instruction_template
+        usages = []
+        for usage_data in inst_data.ingredient_usages:
+            if usage_data.ingredient_key in ingredient_keys:
+                usages.append(usage_data)
+            elif template:
+                template = template.replace(
+                    f"{{{{usage:{usage_data.usage_key}}}}}",
+                    format_usage_amount(usage_data),
+                )
+
+        instruction.step_number = inst_data.step_number if inst_data.step_number else idx + 1
+        instruction.instruction_text = validate_and_render_instruction(
+            template,
+            usages,
+            ingredient_keys,
+            inst_data.instruction_text,
+        )
+        instruction.instruction_template = template if usages else None
+        instruction.duration_minutes = inst_data.duration_minutes
+        instruction.instruction_group = inst_data.instruction_group
+        db.flush()
+
+        instruction.ingredient_usages.clear()
+        db.flush()
+        for usage_idx, usage_data in enumerate(usages):
+            instruction.ingredient_usages.append(InstructionIngredientUsage(
+                ingredient_id=ingredient_by_key[usage_data.ingredient_key].id,
+                usage_key=usage_data.usage_key,
+                quantity=usage_data.quantity,
+                quantity_max=usage_data.quantity_max,
+                unit=usage_data.unit,
+                base_text=usage_data.base_text,
+                sort_order=usage_data.sort_order if usage_data.sort_order else usage_idx,
+            ))
+        result.append(instruction)
+
+    for key, instruction in existing.items():
+        if key not in kept_keys:
+            db.delete(instruction)
+
+    db.flush()
+    return result
 
 
 def clone_recipe_content(
@@ -155,6 +310,7 @@ def clone_recipe_content(
         user_id: ID of the user creating the clone
     """
     # Clone ingredients
+    ingredient_id_map = {}
     for ing in original.ingredients:
         master_ingredient = find_or_create_ingredient(
             db=db,
@@ -164,6 +320,7 @@ def clone_recipe_content(
 
         new_ing = RecipeIngredient(
             recipe_id=clone.id,
+            key=ing.key,
             ingredient_id=master_ingredient.id,
             sort_order=ing.sort_order,
             quantity=ing.quantity,
@@ -177,17 +334,33 @@ def clone_recipe_content(
             notes=ing.notes,
         )
         db.add(new_ing)
+        db.flush()
+        ingredient_id_map[ing.id] = new_ing.id
 
     # Clone instructions
     for inst in original.instructions:
         new_inst = RecipeInstruction(
             recipe_id=clone.id,
+            key=inst.key,
             step_number=inst.step_number,
             instruction_text=inst.instruction_text,
+            instruction_template=inst.instruction_template,
             duration_minutes=inst.duration_minutes,
             instruction_group=inst.instruction_group,
         )
         db.add(new_inst)
+        db.flush()
+        for usage in inst.ingredient_usages:
+            db.add(InstructionIngredientUsage(
+                instruction_id=new_inst.id,
+                ingredient_id=ingredient_id_map[usage.ingredient_id],
+                usage_key=usage.usage_key,
+                quantity=usage.quantity,
+                quantity_max=usage.quantity_max,
+                unit=usage.unit,
+                base_text=usage.base_text,
+                sort_order=usage.sort_order,
+            ))
 
     # Clone tags
     clone.tags = original.tags.copy() if original.tags else []

@@ -24,7 +24,7 @@ export function RecipeIngredientsEdit({
   const [parsing, setParsing] = useState(false);
 
   const addIngredient = () => {
-    onChange([...ingredients, { name: '', sort_order: ingredients.length }]);
+    onChange([...ingredients, { key: `ingredient_${crypto.randomUUID().replaceAll('-', '')}`, name: '', sort_order: ingredients.length }]);
   };
 
   const removeIngredient = (index: number) => {

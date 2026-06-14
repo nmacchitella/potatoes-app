@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { recipeApi, isAxiosError } from '@/lib/api';
 import { formatIngredient } from '@/lib/constants';
+import { renderInstruction } from '@/lib/instructionUsage';
 import { useStore } from '@/store/useStore';
 import { YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
 import type { RecipeWithScale } from '@/types';
@@ -278,7 +279,7 @@ export default function PublicRecipePage() {
                   <li key={inst.id} className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-gold text-white text-xs font-medium flex items-center justify-center">{inst.step_number}</span>
                     <div className="pt-0.5">
-                      <p className="text-charcoal text-sm leading-relaxed">{inst.instruction_text}</p>
+                      <p className="text-charcoal text-sm leading-relaxed">{renderInstruction(inst, scale)}</p>
                       {inst.duration_minutes != null && inst.duration_minutes > 0 && <span className="text-xs text-warm-gray mt-0.5 block">{inst.duration_minutes} min</span>}
                     </div>
                   </li>

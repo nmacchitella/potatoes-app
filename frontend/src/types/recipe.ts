@@ -6,6 +6,7 @@ import type { ShareableUser } from './user';
 
 export interface RecipeIngredient {
   id: string;
+  key: string;
   sort_order: number;
   quantity?: number;
   quantity_max?: number;
@@ -19,6 +20,7 @@ export interface RecipeIngredient {
 }
 
 export interface RecipeIngredientInput {
+  key?: string;
   sort_order?: number;
   quantity?: number;
   quantity_max?: number;
@@ -31,17 +33,36 @@ export interface RecipeIngredientInput {
   notes?: string;
 }
 
+export interface InstructionIngredientUsage {
+  id?: string;
+  usage_key: string;
+  ingredient_id?: string;
+  ingredient_key: string;
+  ingredient_name?: string;
+  quantity: number;
+  quantity_max?: number;
+  unit?: string;
+  base_text?: string;
+  sort_order?: number;
+}
+
 export interface RecipeInstruction {
   id: string;
+  key: string;
   step_number: number;
   instruction_text: string;
+  instruction_template?: string;
+  ingredient_usages: InstructionIngredientUsage[];
   duration_minutes?: number;
   instruction_group?: string;
 }
 
 export interface RecipeInstructionInput {
+  key?: string;
   step_number: number;
   instruction_text: string;
+  instruction_template?: string;
+  ingredient_usages?: InstructionIngredientUsage[];
   duration_minutes?: number;
   instruction_group?: string;
 }
@@ -293,6 +314,7 @@ export interface MeasurementUnit {
 // ============================================================================
 
 export interface ImportedIngredient {
+  key?: string;
   name: string;
   quantity?: number;
   quantity_max?: number;
@@ -303,8 +325,11 @@ export interface ImportedIngredient {
 }
 
 export interface ImportedInstruction {
+  key?: string;
   step_number: number;
   instruction_text: string;
+  instruction_template?: string;
+  ingredient_usages?: InstructionIngredientUsage[];
   duration_minutes?: number;
 }
 
