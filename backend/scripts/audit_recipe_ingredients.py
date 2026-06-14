@@ -26,6 +26,7 @@ def parse_args():
     mode.add_argument("--apply", action="store_true", help="Apply conservative fixes")
     mode.add_argument("--dry-run", action="store_true", help="Report without changing data (default)")
     parser.add_argument("--recipe-id", action="append", dest="recipe_ids")
+    parser.add_argument("--active-only", action="store_true", help="Exclude soft-deleted recipes")
     parser.add_argument("--report", default="recipe-ingredient-audit.json")
     return parser.parse_args()
 
@@ -57,7 +58,9 @@ def run():
     }
     db = SessionLocal()
     try:
-        query = db.query(RecipeIngredient).join(Recipe).filter(Recipe.deleted_at.is_(None))
+        query = db.query(RecipeIngredient).join(Recipe)
+        if args.active_only:
+            query = query.filter(Recipe.deleted_at.is_(None))
         if args.recipe_ids:
             query = query.filter(Recipe.id.in_(args.recipe_ids))
         rows = query.order_by(Recipe.title, RecipeIngredient.sort_order).all()
