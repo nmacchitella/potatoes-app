@@ -1,11 +1,9 @@
 #!/bin/bash
+set -euo pipefail
 
 echo "Running database migrations..."
-if alembic upgrade head; then
-    echo "Migrations completed successfully."
-else
-    echo "WARNING: Migrations failed (non-fatal, continuing startup)"
-fi
+alembic upgrade head
+echo "Migrations completed successfully."
 
 echo "Starting application..."
 # NOTE: Running with a single worker (default). For production with higher traffic,

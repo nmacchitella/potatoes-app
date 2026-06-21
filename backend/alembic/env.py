@@ -1,7 +1,6 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool, text
 
 from alembic import context
 
@@ -24,6 +23,23 @@ if config.config_file_name is not None:
 
 # Use our Base's metadata for autogenerate support
 target_metadata = Base.metadata
+
+MIGRATION_LOCK_ID = 17813001
+
+
+def run_migrations_with_lock(connection):
+    if connection.dialect.name != "postgresql":
+        with context.begin_transaction():
+            context.run_migrations()
+        return
+
+    connection.execute(text("select pg_advisory_lock(:lock_id)"), {"lock_id": MIGRATION_LOCK_ID})
+    try:
+        with context.begin_transaction():
+            context.run_migrations()
+    finally:
+        connection.execute(text("select pg_advisory_unlock(:lock_id)"), {"lock_id": MIGRATION_LOCK_ID})
+
 
 
 def run_migrations_offline() -> None:
@@ -71,8 +87,7 @@ def run_migrations_online() -> None:
             render_as_batch=True,  # Required for SQLite ALTER TABLE support
         )
 
-        with context.begin_transaction():
-            context.run_migrations()
+        run_migrations_with_lock(connection)
 
 
 if context.is_offline_mode():

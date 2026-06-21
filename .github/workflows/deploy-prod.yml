@@ -43,4 +43,4 @@ jobs:
               -o StrictHostKeyChecking=accept-new \
               -o ServerAliveInterval=15 \
               nicola@giaggi.tail66af38.ts.net \
-              'bash /home/nicola/server/scripts/auto-pull.sh'
+              'bash /home/nicola/server/scripts/auto-pull.sh potatoes'
