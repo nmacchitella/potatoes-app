@@ -8,3 +8,4 @@ export { RecipeInstructionsEdit } from './RecipeInstructionsEdit';
 export { RecipeTagsEdit } from './RecipeTagsEdit';
 export { SubRecipeSelect } from './SubRecipeSelect';
 export { YouTubeEmbed, isYouTubeUrl, extractYouTubeVideoId } from './YouTubeEmbed';
+export { IngredientGroceryButton } from './IngredientGroceryButton';

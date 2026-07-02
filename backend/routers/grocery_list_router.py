@@ -15,7 +15,7 @@ from config import settings
 
 from database import get_db
 from auth import get_current_user, get_current_user_optional
-from models import User, GroceryList, GroceryListItem, GroceryListShare, Recipe, Notification, Ingredient
+from models import User, GroceryList, GroceryListItem, GroceryListShare, Recipe, RecipeIngredient, Notification, Ingredient
 from schemas import (
     GroceryListResponse, GroceryListItemCreate, GroceryListItemUpdate,
     GroceryListItemResponse, GroceryListGenerateRequest, GroceryListBulkCheckRequest,
@@ -26,7 +26,8 @@ from schemas import (
     GroceryListAcceptPublicShareResponse,
 )
 from services.grocery_list_service import (
-    add_recipe_to_grocery_list, clear_grocery_list, generate_from_meal_plan, group_items_by_category,
+    add_recipe_to_grocery_list, add_ingredient_to_grocery_list, clear_grocery_list,
+    generate_from_meal_plan, group_items_by_category,
     DEFAULT_CATEGORY, normalize_ingredient_name
 )
 from services.email_service import EmailService
@@ -423,6 +424,39 @@ async def add_recipe(
         raise HTTPException(status_code=403, detail="Cannot add this recipe to grocery list")
 
     add_recipe_to_grocery_list(db, grocery_list, recipe, servings)
+
+    grocery_list = db.query(GroceryList).options(
+        joinedload(GroceryList.items),
+        joinedload(GroceryList.shares).joinedload(GroceryListShare.user)
+    ).filter(GroceryList.id == grocery_list.id).first()
+    return build_grocery_list_response(grocery_list, db)
+
+
+@router.post("/{list_id}/recipes/{recipe_id}/ingredients/{ingredient_id}", response_model=GroceryListResponse)
+async def add_recipe_ingredient(
+    list_id: str,
+    recipe_id: str,
+    ingredient_id: str,
+    scale: float = Query(1, gt=0, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Add a single ingredient from a recipe to a grocery list."""
+    grocery_list, permission = require_grocery_list_access(db, list_id, current_user, "editor")
+    recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    if recipe.author_id != current_user.id and recipe.privacy_level != "public":
+        raise HTTPException(status_code=403, detail="Cannot add this recipe to grocery list")
+
+    ingredient = db.query(RecipeIngredient).filter(
+        RecipeIngredient.id == ingredient_id,
+        RecipeIngredient.recipe_id == recipe_id
+    ).first()
+    if not ingredient:
+        raise HTTPException(status_code=404, detail="Ingredient not found")
+
+    add_ingredient_to_grocery_list(db, grocery_list, ingredient, scale)
 
     grocery_list = db.query(GroceryList).options(
         joinedload(GroceryList.items),

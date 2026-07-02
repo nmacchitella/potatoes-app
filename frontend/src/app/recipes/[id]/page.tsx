@@ -10,9 +10,10 @@ import { convertIngredient, type UnitSystem } from '@/lib/unitConversion';
 import { renderInstruction } from '@/lib/instructionUsage';
 import Navbar from '@/components/layout/Navbar';
 import MobileNavWrapper from '@/components/layout/MobileNavWrapper';
-import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit, SubRecipeSelect, YouTubeEmbed, isYouTubeUrl } from '@/components/recipes';
+import { RecipeIngredientsEdit, RecipeInstructionsEdit, RecipeTagsEdit, SubRecipeSelect, YouTubeEmbed, isYouTubeUrl, IngredientGroceryButton } from '@/components/recipes';
 import { ImageUpload } from '@/components/ui';
 import { AddToMealPlanModal } from '@/components/calendar';
+import { AddToGroceryListModal } from '@/components/grocery';
 import type { RecipeWithScale, Collection, RecipeIngredient, RecipeIngredientInput, RecipeInstructionInput, SubRecipeInput } from '@/types';
 
 /**
@@ -126,6 +127,9 @@ export default function RecipeDetailPage() {
 
   // Add to meal plan modal
   const [isMealPlanModalOpen, setIsMealPlanModalOpen] = useState(false);
+
+  // Add to grocery list modal
+  const [isGroceryModalOpen, setIsGroceryModalOpen] = useState(false);
 
   const recipeId = params.id as string;
 
@@ -675,6 +679,19 @@ export default function RecipeDetailPage() {
                   </button>
                 )}
 
+                {/* Add to Grocery List */}
+                {user && (
+                  <button
+                    onClick={() => setIsGroceryModalOpen(true)}
+                    className="flex items-center gap-1.5 text-xs text-warm-gray hover:text-gold transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Grocery List
+                  </button>
+                )}
+
                 {/* Save to My Recipes (for other users' recipes) */}
                 {!isOwner && user && (
                   recipe.cloned_by_me ? (
@@ -898,9 +915,25 @@ export default function RecipeDetailPage() {
               ) : (
                 <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-1.5 pl-4">
                   {recipe.ingredients.map(ing => (
-                    <li key={ing.id} className="text-xs text-charcoal leading-relaxed list-disc marker:text-gold">
+                    <li key={ing.id} className="group relative text-xs text-charcoal leading-relaxed list-disc marker:text-gold pr-6">
                       {formatIngredientWithUnit(ing, unitSystem || undefined, scale)}
                       {ing.is_optional && <span className="text-warm-gray"> (optional)</span>}
+                      {user && (
+                        <IngredientGroceryButton
+                          recipeId={recipeId}
+                          ingredientId={ing.id}
+                          ingredientName={ing.name}
+                          scale={scale}
+                          onAdded={(name) => {
+                            setToastMessage(`Added ${name} to grocery list`);
+                            setTimeout(() => setToastMessage(''), 3000);
+                          }}
+                          onError={(msg) => {
+                            setToastMessage(msg);
+                            setTimeout(() => setToastMessage(''), 3000);
+                          }}
+                        />
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -982,6 +1015,21 @@ export default function RecipeDetailPage() {
           recipeTitle={recipe.title}
           onSuccess={() => {
             setToastMessage('Added to meal plan!');
+            setTimeout(() => setToastMessage(''), 3000);
+          }}
+        />
+      )}
+
+      {/* Add to Grocery List Modal */}
+      {recipe && (
+        <AddToGroceryListModal
+          isOpen={isGroceryModalOpen}
+          onClose={() => setIsGroceryModalOpen(false)}
+          recipeId={recipeId}
+          recipeTitle={recipe.title}
+          recipeYield={recipe.yield_quantity}
+          onSuccess={(listName, servings) => {
+            setToastMessage(`Added ${servings} serving${servings === 1 ? '' : 's'} to ${listName}`);
             setTimeout(() => setToastMessage(''), 3000);
           }}
         />

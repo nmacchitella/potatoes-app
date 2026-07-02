@@ -379,6 +379,25 @@ def add_recipe_to_grocery_list(
     return grocery_list
 
 
+def add_ingredient_to_grocery_list(
+    db: Session,
+    grocery_list: GroceryList,
+    ingredient: RecipeIngredient,
+    scale: float = 1.0,
+) -> GroceryList:
+    """Add a single recipe ingredient to an existing grocery list.
+
+    Reuses the same aggregation/merge logic as adding a whole recipe, so the
+    item picks up its master-ingredient category, dedupes against existing
+    items, and records its source recipe.
+    """
+    aggregated = aggregate_ingredients([(ingredient, scale, ingredient.recipe_id)])
+    _merge_aggregated_items(db, grocery_list, aggregated)
+    db.commit()
+    db.refresh(grocery_list)
+    return grocery_list
+
+
 def _merge_aggregated_items(
     db: Session,
     grocery_list: GroceryList,
